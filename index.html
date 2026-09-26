@@ -397,6 +397,78 @@ footer a{color:var(--accent)}
   .pr .md table{font-size:10.5px}
   mark.sym.neg{text-decoration:line-through}
 }
+
+/* ---- patient link bar + history (v10) ---- */
+.pt-link{padding:8px 12px;border-bottom:1px solid var(--line);background:#fbfdfc;position:relative}
+.pt-find{display:flex;gap:6px;align-items:center;position:relative}
+.pt-find input{flex:1;min-width:0;font-size:14px;padding:7px 10px}
+.pt-results{position:absolute;left:0;right:0;top:100%;margin:4px 0 0;padding:4px;list-style:none;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:40;max-height:min(60vh,380px);overflow:auto}
+.pt-results li{padding:8px 10px;border-radius:8px;cursor:pointer;min-height:40px}
+.pt-results li.sel,.pt-results li[data-link-pt]:hover{background:var(--accent-2)}
+.pt-results .pr-name{font-weight:600}.pt-results .pr-meta{font-size:12px;color:var(--muted)}
+.pt-results .pr-head{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);cursor:default;min-height:0;padding:4px 10px}
+.pt-results .pr-empty{color:var(--muted);cursor:default}
+.pt-results .pr-new{color:var(--accent);font-weight:600;border-top:1px solid var(--line);border-radius:0 0 8px 8px}
+.pt-linked{display:flex;align-items:center;gap:8px}
+.pt-linked .pt-ico{font-size:18px}
+.pt-linked .pt-main{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
+.pt-linked .pt-main b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pt-linked .pt-meta{font-size:12px;color:var(--muted)}
+.section.history{background:#fcfdfa}
+.section.history.flash{box-shadow:inset 0 0 0 3px #a9d2c4}
+.hv-card{border:1px solid #d6e6e0;border-radius:10px;padding:8px 10px;background:#fff}
+.hv-card-old{border-style:dashed;margin:4px 0 6px}
+.hv-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap}
+.hv-ago{color:var(--muted);font-size:12.5px}
+.hv-row{display:grid;grid-template-columns:72px minmax(0,1fr);gap:6px;font-size:12.5px;line-height:1.4;padding:1px 0}
+.hv-k{color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;padding-top:1px}
+.hv-v{overflow-wrap:anywhere}
+.hv-rx{font-size:12px;background:#f3faf7;border-radius:6px;padding:2px 6px;margin:1px 0}
+.hv-links{margin-top:4px}
+.hv-block{margin-top:8px}
+.hv-sub{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;margin-bottom:3px}
+.hv-none{font-size:12.5px}
+.hv-counts{font-size:12.5px;margin-bottom:3px}.cnt-new{color:#9a5b00}.cnt-still{color:#445}.cnt-res{color:#1d6b4f}
+.hv-grp{display:flex;gap:6px;align-items:flex-start;margin:3px 0}
+.hv-gl{flex:0 0 92px;font-size:11.5px;color:var(--muted);padding-top:2px}
+.hv-chips{display:flex;flex-wrap:wrap;gap:3px}
+.pc{display:inline-block;font-size:11.5px;border-radius:999px;padding:1px 8px;border:1px solid var(--line);background:#fff;line-height:1.5}
+.pc small{font-size:10px;opacity:.8}
+.pc-new{background:#fff4e0;border-color:#f0cf99;color:#7a4700}
+.pc-still{background:#f2f4f5;color:#3c4a4f}
+.pc-den{background:#e3f5ec;border-color:#a8dcc0;color:#17613f}
+.pc-nm{background:#fff;border-style:dashed;color:#6b7a76;font-style:italic}
+.hv-tp{font-size:12px;color:#44524f;margin-top:2px}
+.hv-trend{list-style:none;margin:0;padding:0}
+.hv-trend li{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:2px 0;border-bottom:1px dotted #e3ebe8}
+.hv-trend .tr-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hv-trend .tr-val{white-space:nowrap;font-variant-numeric:tabular-nums}
+.hv-trend .tr-ind{display:inline-block;min-width:34px;text-align:right;font-size:11.5px;font-weight:700}
+.tr-up .tr-ind{color:#b35c00}.tr-down .tr-ind{color:#1d5fa8}.tr-same .tr-ind{color:#888}
+.hv-trend li.was-top{color:#556}
+details.hv-older{margin-top:8px;font-size:12.5px}
+details.hv-older>summary,details.hv-ov>summary{cursor:pointer;color:var(--accent);padding:3px 0}
+details.hv-ov{margin-left:8px}
+.ai-split{display:inline-flex;gap:0}
+.ai-split .ai-btn:first-child{border-top-right-radius:0;border-bottom-right-radius:0}
+.ai-split .ai-more{border-top-left-radius:0;border-bottom-left-radius:0;border-left:none;padding-left:8px;padding-right:8px}
+.ai-opts{display:flex;flex-wrap:wrap;gap:4px 16px;margin:8px 0 4px}
+.ai-edit-label{font-size:12px;color:var(--muted);display:block;margin-top:4px}
+#aiPromptText{width:100%;min-height:260px;height:42vh;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;resize:vertical}
+.ai-edit-meta{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:2px}
+.direct-toggle{margin:6px 0}
+fieldset.direct-fields{border:1px solid var(--line);border-radius:8px;padding:8px;margin:4px 0}
+fieldset.direct-fields.off{opacity:.5}
+@media (max-width:760px){
+  .pt-link{padding:6px 8px}
+  .pt-find input{font-size:16px}
+  .pt-linked button{padding:6px 9px}
+  .hv-row{grid-template-columns:62px minmax(0,1fr);font-size:13px}
+  .hv-gl{flex-basis:78px}
+  .pc{font-size:12px}
+  .pattern-strip .ps-ai{margin-left:auto}
+  #aiPromptText{height:46vh;font-size:12.5px}
+}
 </style>
 </head>
 <body>
@@ -421,7 +493,7 @@ footer a{color:var(--accent)}
       <div class="menu-list">
         <button id="printBtn">🖨 Print / PDF summary of this visit</button>
         <button id="patternsRefBtn">📖 Patterns reference (knowledge base)</button>
-        <button id="aiSettingsBtn">⚙ AI settings (xAI Grok)…</button>
+        <button id="aiSettingsBtn">⚙ AI settings (Copy for AI / optional Grok)…</button>
         <button id="exportBtn">⬇ Export all data (JSON backup)</button>
         <button id="importBtn">⬆ Import data from JSON…</button>
         <button id="accountMenuBtn">☁ Google account &amp; Drive sync…</button>
@@ -444,6 +516,16 @@ footer a{color:var(--accent)}
 
   <!-- CENTER: transcript -->
   <section class="panel" id="centerPanel">
+    <div class="pt-link" id="ptLink">
+      <div class="pt-linked" id="ptLinked" hidden></div>
+      <div class="pt-find" id="ptFind">
+        <label class="sr-only" for="ptLinkSearch">Link this session to a patient</label>
+        <input type="search" id="ptLinkSearch" placeholder="Link patient — search name or phone…" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="search" role="combobox" aria-expanded="false" aria-controls="ptLinkResults">
+        <button type="button" class="small" id="ptLinkNewBtn" title="Create a new patient and link this session">+ New</button>
+        <button type="button" class="small" id="ptLinkCancelBtn" hidden>Cancel</button>
+        <ul class="pt-results" id="ptLinkResults" role="listbox" hidden></ul>
+      </div>
+    </div>
     <div class="panel-head">
       <h2>Live transcript</h2>
       <div class="listen-state" id="listenState">Not listening</div>
@@ -467,13 +549,17 @@ footer a{color:var(--accent)}
   <!-- RIGHT: findings & patterns -->
   <aside class="panel" id="rightPanel">
     <div class="panel-body">
+      <div class="section history" id="historySection" hidden>
+        <div class="section-head"><h2 id="historyTitle">Last visit &amp; progress</h2></div>
+        <div id="historyBody"></div>
+      </div>
       <div class="section">
         <div class="section-head"><h2>Detected symptoms</h2><button class="small" id="addSymptomBtn">+ Add symptom</button></div>
         <div class="chips" id="symptomChips"></div>
         <div id="negatedWrap"></div>
       </div>
       <div class="section patterns">
-        <div class="section-head"><h2>Likely patterns</h2><button class="small ai-btn" id="askAiBtn" title="Ask xAI Grok for a differentiation, formula and acupuncture suggestions (de-identified)">✦ Ask AI</button></div>
+        <div class="section-head"><h2>Likely patterns</h2><span class="ai-split"><button class="small ai-btn" id="copyAiBtn" data-copy-ai title="Copy a de-identified prompt for your AI: instructions + case + previous visits">📋 Copy for AI</button><button class="small ai-btn ai-more" id="copyAiPreviewBtn" data-copy-ai-preview title="Preview / edit before copying" aria-label="Preview and edit before copying">✎</button></span></div>
         <div class="disclaimer">Pattern fit score — decision support only, not a diagnosis. <button class="link-btn" id="patternsRefBtn2" title="Browse all patterns, signs, principles and formulas">📖 All patterns</button></div>
         <div id="patternList"></div>
       </div>
@@ -537,9 +623,11 @@ footer a{color:var(--accent)}
 <!-- AI settings -->
 <dialog id="aiSettingsDialog">
   <form id="aiSettingsForm">
-    <div class="dlg-head"><h3>AI settings — xAI Grok</h3><button type="button" class="link" data-close>✕</button></div>
+    <div class="dlg-head"><h3>AI settings</h3><button type="button" class="link" data-close>✕</button></div>
     <div class="dlg-body">
-      <div class="form-grid">
+      <p class="hint" style="margin-top:0"><b>Copy for AI</b> builds a de-identified prompt that you paste into any AI chat yourself — no API key needed, and the app sends nothing to any AI service.</p>
+      <label class="check direct-toggle"><input type="checkbox" id="aiDirectInput"> Also allow sending directly to <b>xAI Grok</b> from the app (optional, needs your xAI API key)</label>
+      <fieldset class="form-grid direct-fields" id="aiDirectFields">
         <label class="full">xAI API key
           <span class="key-row"><input type="password" id="aiKeyInput" autocomplete="off" spellcheck="false" placeholder="xai-…"><button type="button" class="small" id="aiKeyShowBtn">Show</button><button type="button" class="small danger" id="aiKeyClearBtn">Clear</button></span>
         </label>
@@ -547,30 +635,31 @@ footer a{color:var(--accent)}
           <input type="text" id="aiModelInput" list="aiModelList" autocomplete="off" spellcheck="false">
           <datalist id="aiModelList"><option value="grok-4.7"><option value="grok-4.6"><option value="grok-4.3"><option value="grok-4.20-0309-reasoning"><option value="grok-4.20-0309-non-reasoning"></datalist>
         </label>
-      </div>
-      <p class="hint">Get a key at <b>console.x.ai</b>. The key is stored <b>only in this browser's localStorage</b> (never in exported backups) and is sent only to <code>api.x.ai</code>. Anyone using this browser profile could read it — use Clear on shared devices.</p>
+      </fieldset>
+      <p class="hint">Direct sending is <b>off by default</b>; while it is off the app never contacts api.x.ai. Get a key at <b>console.x.ai</b>. The key is stored <b>only in this browser's localStorage</b> (never in exported backups) and is sent only to <code>api.x.ai</code>. Anyone using this browser profile could read it — use Clear on shared devices.</p>
       <p class="hint" id="aiSettingsMsg"></p>
     </div>
     <div class="dlg-foot"><button type="button" data-close>Cancel</button><button type="submit" class="primary">Save</button></div>
   </form>
 </dialog>
 
-<!-- Ask AI -->
+<!-- Copy for AI (optional direct Grok sending) -->
 <dialog id="askAiDialog" class="wide">
-  <div class="dlg-head"><h3>✦ Ask AI — xAI Grok</h3><button type="button" class="link" data-close>✕</button></div>
+  <div class="dlg-head"><h3>📋 Copy for AI</h3><button type="button" class="link" data-close>✕</button></div>
   <div class="dlg-body">
     <div id="aiSetup">
       <div class="ai-note">
-        <b>What is sent to xAI:</b> age, sex, present and denied symptoms, tongue and pulse findings, the app's top 5 pattern scores, practitioner notes<span id="aiNoteTranscript"> and the transcript</span>.
-        <b>Not sent:</b> patient name, contact details, date of birth. Names, phone numbers and e-mail addresses found in the text are replaced with placeholders.
-        <br><b>Grok is asked to return:</b> (1) pattern differentiation — primary and secondary patterns with reasoning and differentials, (2) treatment principle, (3) a recommended herbal formula with an ingredient table, modifications and doses in grams, plus cautions, (4) an acupuncture point prescription with rationale and needling technique, (5) lifestyle &amp; diet advice, and (6) red flags for referral.<br>
-        The request goes directly from this browser to <code>api.x.ai</code> using your API key. The answer is decision support for a licensed practitioner — not a diagnosis or prescription.
+        One prompt for any AI chat (ChatGPT, Grok, Gemini, Claude…): the instructions, the de-identified case<span id="aiNoteTranscript">, the transcript</span><span id="aiNoteHistory"> and a summary of the previous visit(s)</span>, and the request — including suggested changes to the previous formula on follow-ups.
+        <b>Not included:</b> name, contact, date of birth or visit dates (shown as “6 weeks ago”); names, phone numbers, e-mails and dates found in the text are replaced with placeholders. Nothing is sent anywhere — you paste it yourself.
       </div>
-      <label class="check"><input type="checkbox" id="aiIncludeTranscript" checked> Include transcript</label>
-      <details class="ai-preview" id="aiPreviewWrap"><summary>Preview exactly what will be sent (instructions + case)</summary>
-        <details class="ai-preview-part" id="aiPreviewSysWrap"><summary>Instructions to Grok (system prompt — what Grok is asked to return)</summary><pre id="aiPreviewSystem"></pre></details>
-        <span class="ai-preview-label">Case sent (de-identified user message)</span><pre id="aiPreview"></pre>
-      </details>
+      <div class="ai-opts">
+        <label class="check"><input type="checkbox" id="aiIncludeTranscript" checked> Include transcript</label>
+        <label class="check"><input type="checkbox" id="aiIncludeHistory" checked> Include previous visits <span id="aiHistCount" class="muted"></span></label>
+      </div>
+      <label class="ai-edit-label" for="aiPromptText">Prompt — you can edit it before copying</label>
+      <textarea id="aiPromptText" spellcheck="false"></textarea>
+      <div class="ai-edit-meta"><span id="aiPromptMeta"></span><button type="button" class="link-btn" id="aiPromptResetBtn">Rebuild</button></div>
+      <div class="hint" id="aiDirectHint" hidden>Send to Grok uses the generated prompt (edits apply to copying only).</div>
     </div>
     <div id="aiStatus" class="ai-status" hidden></div>
     <div id="aiResultWrap" hidden>
@@ -580,10 +669,11 @@ footer a{color:var(--accent)}
   </div>
   <div class="dlg-foot">
     <button type="button" id="aiDlgSettingsBtn" style="margin-right:auto">⚙ Settings</button>
-    <button type="button" id="aiCopyBtn" hidden>Copy</button>
+    <button type="button" id="aiCopyBtn" hidden>Copy response</button>
     <button type="button" id="aiCancelBtn" hidden>Cancel request</button>
     <button type="button" data-close>Close</button>
-    <button type="button" class="primary" id="aiSendBtn">Send to Grok</button>
+    <button type="button" id="aiSendBtn" hidden>Send to Grok</button>
+    <button type="button" class="primary" id="aiCopyPromptBtn">📋 Copy prompt</button>
   </div>
 </dialog>
 
@@ -2272,7 +2362,7 @@ function refreshAnalysis() {
   const live = liveContext();
   state.live = live;
   state.analysis = analyzeSession(state.session, live ? live.liveMatches : null);
-  renderTranscript(); renderSymptoms(); renderPatterns();
+  renderTranscript(); renderSymptoms(); renderPatterns(); renderHistory();
 }
 // throttle for high-frequency speech events
 function scheduleRefresh(ms = 150) {
@@ -2534,7 +2624,7 @@ function renderPatterns() {
   const EMPTY = "Patterns will appear once symptoms are detected.";
   setHTML(strip, `<span class="ps-label">Top patterns</span>` + (list.length
     ? list.slice(0, 3).map((r, i) => `<button class="ps-item${i === 0 ? " first" : ""}" data-goto-pattern="${r.id}" title="${esc(r.name)} — ${r.pct}% fit (tap for details)"><span class="ps-name">${esc(r.name.replace(/ \(.*\)$/, ""))}</span><span class="ps-pct">${r.pct}%</span><span class="ps-bar"><i style="width:${r.pct}%"></i></span></button>`).join("")
-    : `<span class="ps-empty">${EMPTY}</span>`) + `<span class="ps-note">decision support only</span><button class="small ai-btn ps-ai" data-ask-ai>✦ Ask AI</button>`);
+    : `<span class="ps-empty">${EMPTY}</span>`) + `<span class="ps-note">decision support only</span><span class="ai-split ps-ai"><button class="small ai-btn" data-copy-ai title="Copy a de-identified prompt (case + previous visits) for your AI">📋 Copy for AI</button><button class="small ai-btn ai-more" data-copy-ai-preview title="Preview / edit before copying" aria-label="Preview and edit before copying">✎</button></span>`);
   if (!list.length) { setHTML(el, `<div class="empty">${EMPTY}<br><small>Scores update live from the transcript, manual symptoms, tongue and pulse.</small></div>`); return; }
   // keep <details> that the user opened open across live re-renders
   const openKeys = new Set([...el.querySelectorAll("details[data-dkey]")].filter(d => d.open).map(d => d.dataset.dkey));
@@ -2682,6 +2772,7 @@ function startNewSession(patientId) {
   if (!confirmDiscard()) return false;
   state.session = newSession(patientId ?? state.selectedPatientId);
   state.interim = "";
+  state.ptChanging = false;
   clearDraft();
   renderAll();
   return true;
@@ -2696,7 +2787,7 @@ function openVisit(vid) {
   ["entries", "tongue", "pulse"].forEach(k => state.session[k] = state.session[k] || []);
   state.session.entries = mergeLegacyEntries(state.session.entries);
   state.session.overrides = state.session.overrides || {};
-  state.selectedPatientId = v.patientId;
+  state.selectedPatientId = v.patientId; state.ptChanging = false;
   clearDraft();
   renderAll();
   toast("Opened visit from " + fmtDateTime(v.startedAt));
@@ -2712,6 +2803,9 @@ function buildVisitRecord() {
     symptoms: a.symptoms.filter(x => x.status !== "removed").map(x => ({ id: x.id, name: SYMPTOM_BY_ID[x.id].name, category: SYMPTOM_BY_ID[x.id].cat, status: x.status, mentions: x.pos, negatedMentions: x.neg, manual: !!x.manual, phrases: x.phrases })),
     tongue: [...s.tongue], pulse: [...s.pulse],
     patterns: a.patterns.slice(0, SCORING.topN).map(r => ({ id: r.id, name: r.name, pct: r.pct, matched: r.hits.map(h => h.id), contra: r.contraHits.map(h => h.id) })),
+    patternScores: Object.fromEntries(a.patterns.filter(r => r.pct > 0).map(r => [r.id, r.pct])),   // full snapshot for trends
+    prevVisitId: (priorVisits(s)[0] || {}).id || null,
+    carriedFrom: s.carriedFrom || null,
     notes: s.notes, diagnosis: s.diagnosis,
     ai: s.ai || null
   };
@@ -2732,7 +2826,7 @@ async function saveSession() {
     s.savedAt = rec.savedAt; s.dirty = false;
     state.selectedPatientId = s.patientId;
     await clearDraft();
-    renderSessionInfo(); renderPatients(); renderProfile();
+    renderSessionInfo(); renderPatients(); renderProfile(); renderHistory();
     toast("Session saved to " + patientById(s.patientId).name);
   } catch (e) { console.error(e); alert("Could not save: " + e.message); }
 }
@@ -2759,14 +2853,16 @@ async function savePatientFromForm() {
   await dataPut("patients", p);
   const i = state.patients.findIndex(x => x.id === p.id);
   if (i >= 0) state.patients[i] = p; else state.patients.push(p);
-  selectPatient(p.id);
+  if (state.ptLinkPending && !editingPatientId) linkPatient(p.id); else selectPatient(p.id);
+  state.ptLinkPending = false;
+  if (editingPatientId) renderHistory();
   toast(editingPatientId ? "Patient updated" : "Patient created");
   return true;
 }
 function selectPatient(id) {
   state.selectedPatientId = id;
   if (!state.session.patientId && id) { state.session.patientId = id; if (sessionHasContent(state.session)) markDirty(); }
-  renderPatients(); renderProfile(); renderSessionInfo();
+  renderPatients(); renderProfile(); renderSessionInfo(); renderHistory(); renderHistory();
 }
 async function deletePatient(id) {
   const p = patientById(id); if (!p) return;
@@ -2787,8 +2883,285 @@ async function deleteVisit(vid) {
   await dataDel("visits", vid);
   state.visits = state.visits.filter(x => x.id !== vid);
   if (state.session.id === vid) state.session.dirty = true;
-  renderPatients(); renderProfile(); renderSessionInfo();
+  renderPatients(); renderProfile(); renderSessionInfo(); renderHistory();
   toast("Visit deleted");
+}
+
+/* =====================================================================
+   PATIENT HISTORY — link the session to a patient, last-visit card,
+   progress comparison, pattern trend, carry forward of the last Rx.
+   Visits store a full pattern-score snapshot (patternScores); older visits
+   without it fall back to their saved top-5 list, then to a recalculation
+   from their saved findings (marked ≈).
+   ===================================================================== */
+const digitsOf = s => String(s || "").replace(/\D/g, "");
+const phoneKey = s => { let d = digitsOf(s); if (d.startsWith("63")) d = d.slice(2); return d.replace(/^0+/, ""); };
+const foldTxt = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const fmtDate = iso => iso ? new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "";
+const shortPat = n => String(n || "").replace(/ \(.*\)$/, "");
+function patientVisits(pid) { return state.visits.filter(v => v.patientId === pid).sort((a, b) => (b.startedAt || "").localeCompare(a.startedAt || "")); }
+function priorVisits(s = state.session) {
+  if (!s || !s.patientId) return [];
+  const ref = s.startedAt || new Date().toISOString();
+  return patientVisits(s.patientId).filter(v => v.id !== s.id && (v.startedAt || "") < ref);
+}
+function relAgo(iso, ref) {
+  if (!iso) return "";
+  const day = d => { const x = new Date(d); return Date.UTC(x.getFullYear(), x.getMonth(), x.getDate()); };
+  const d = Math.round((day(ref || Date.now()) - day(iso)) / 864e5);
+  if (!isFinite(d)) return "";
+  if (d < 0) return "later";
+  if (d === 0) return "today";
+  if (d === 1) return "yesterday";
+  if (d < 14) return d + " days ago";
+  if (d < 63) return Math.round(d / 7) + " weeks ago";
+  if (d < 730) { const m = Math.max(2, Math.round(d / 30.44)); return m + " months ago"; }
+  return Math.round(d / 365.25) + " years ago";
+}
+const rxLinesOf = text => String(text || "").split("\n").map(l => l.trim()).filter(l => RX_LINE.test(l));
+const dxLinesOf = text => String(text || "").split("\n").map(l => l.trim()).filter(l => l && !RX_LINE.test(l));
+function visitFindings(v) {
+  const sy = (v && v.symptoms) || [];
+  return {
+    present: sy.filter(x => x.status === "present" && SYMPTOM_BY_ID[x.id]).map(x => x.id),
+    negated: sy.filter(x => x.status === "negated" && SYMPTOM_BY_ID[x.id]).map(x => x.id),
+    tongue: ((v && v.tongue) || []).filter(id => TONGUE_BY_ID[id]),
+    pulse: ((v && v.pulse) || []).filter(id => PULSE_BY_ID[id])
+  };
+}
+const _scoreCache = new Map();
+function visitPct(v, id) {   // → { pct, approx } | null
+  if (v.patternScores && typeof v.patternScores === "object") return { pct: v.patternScores[id] || 0, approx: false };
+  const top = (v.patterns || []).find(p => p.id === id);
+  if (top) return { pct: top.pct, approx: false };
+  const key = v.id + "@" + (v.updatedAt || v.savedAt || "");
+  let rec = _scoreCache.get(key);
+  if (rec === undefined) {
+    const f = visitFindings(v);
+    rec = (f.present.length || f.tongue.length || f.pulse.length)
+      ? Object.fromEntries(scorePatterns([...f.present, ...f.tongue, ...f.pulse], f.negated).filter(r => r.pct > 0).map(r => [r.id, r.pct])) : null;
+    _scoreCache.set(key, rec);
+  }
+  return rec ? { pct: rec[id] || 0, approx: true } : null;
+}
+function progressCompare(v, a = state.analysis, s = state.session) {
+  const f = visitFindings(v);
+  const last = new Set(f.present), now = new Set(a.presentSym), neg = new Set(a.negatedSym);
+  const diff = (then, cur) => ({ added: cur.filter(x => !then.includes(x)), gone: then.filter(x => !cur.includes(x)), same: cur.filter(x => then.includes(x)) });
+  return {
+    nw: a.presentSym.filter(id => !last.has(id)),
+    still: a.presentSym.filter(id => last.has(id)),
+    resDenied: f.present.filter(id => !now.has(id) && neg.has(id)),
+    resNm: f.present.filter(id => !now.has(id) && !neg.has(id)),
+    tongue: diff(f.tongue, s.tongue || []), pulse: diff(f.pulse, s.pulse || []),
+    then: f, hasToday: !!(a.presentSym.length || a.negatedSym.length || (s.tongue || []).length || (s.pulse || []).length)
+  };
+}
+function patternTrend(v, a = state.analysis) {
+  const rows = a.patterns.slice(0, SCORING.topN).map(r => ({ id: r.id, name: r.name, now: r.pct, then: visitPct(v, r.id) }));
+  const lt = (v.patterns || [])[0];
+  if (lt && !rows.some(x => x.id === lt.id)) { const cur = a.patterns.find(r => r.id === lt.id); rows.push({ id: lt.id, name: lt.name, now: cur ? cur.pct : 0, then: { pct: lt.pct, approx: false }, wasTop: true }); }
+  return rows;
+}
+const tName = id => (TONGUE_BY_ID[id] || {}).name || id, pName = id => (PULSE_BY_ID[id] || {}).name || id, sName = id => (SYMPTOM_BY_ID[id] || {}).name || id;
+
+/* ---------- patient link bar (session start) ---------- */
+function searchPatients(q, limit = 8) {
+  const raw = String(q || "").trim(), t = foldTxt(raw), qd = phoneKey(raw), phoneLike = /^[\d\s+().-]+$/.test(raw);
+  const last = id => (patientVisits(id)[0] || {}).startedAt || "";
+  let list = state.patients.map(p => ({ p, last: last(p.id), score: 0 }));
+  if (t) {
+    const words = t.split(/\s+/);
+    for (const x of list) {
+      const name = foldTxt(x.p.name), nw = name.split(/[\s,.-]+/);
+      if (phoneLike) { if (qd.length >= 3 && phoneKey(x.p.contact).includes(qd)) x.score = 3; continue; }
+      if (name.startsWith(t)) x.score = 4;
+      else if (words.every(w => nw.some(n => n.startsWith(w)))) x.score = 3;
+      else if (name.includes(t)) x.score = 2;
+      else if (t.length >= 3 && foldTxt(x.p.contact).includes(t)) x.score = 1;
+    }
+    list = list.filter(x => x.score);
+  }
+  list.sort((a, b) => (b.score - a.score) || b.last.localeCompare(a.last) || a.p.name.localeCompare(b.p.name));
+  return list.slice(0, limit);
+}
+function renderPtLink() {
+  const s = state.session, p = patientById(s.patientId), linked = $("#ptLinked"), find = $("#ptFind");
+  if (!linked) return;
+  if (p && !state.ptChanging) {
+    const prior = priorVisits(s), age = ageOf(p);
+    const meta = [age !== "" ? age + " y" : "", p.sex].filter(Boolean).join(" · ");
+    setHTML(linked, `<span class="pt-ico" aria-hidden="true">👤</span><span class="pt-main"><b>${esc(p.name)}</b><span class="pt-meta">${esc(meta)}${meta ? " · " : ""}${prior.length ? `${prior.length} previous visit${prior.length === 1 ? "" : "s"} · last ${esc(relAgo(prior[0].startedAt, s.startedAt))}` : "first visit"}</span></span>`
+      + (prior.length ? `<button type="button" class="small" data-hist-jump title="Show the last visit and progress">Last visit ↓</button>` : "")
+      + `<button type="button" class="small" data-pt-change title="Link this session to a different patient">Change</button>`);
+    linked.hidden = false; find.hidden = true;
+  } else {
+    linked.hidden = true; find.hidden = false;
+    $("#ptLinkCancelBtn").hidden = !(p && state.ptChanging);
+  }
+}
+function renderPtResults() {
+  const q = $("#ptLinkSearch").value, ul = $("#ptLinkResults");
+  const res = searchPatients(q);
+  state.ptSel = 0;
+  const raw = q.trim();
+  let html = res.map((x, i) => {
+    const age = ageOf(x.p), n = patientVisits(x.p.id).length;
+    const meta = [age !== "" ? age + " y" : "", x.p.sex, x.p.contact, n ? `${n} visit${n === 1 ? "" : "s"} · last ${relAgo(x.last)}` : "no visits yet"].filter(Boolean).join(" · ");
+    return `<li role="option" data-link-pt="${x.p.id}" class="${i === 0 ? "sel" : ""}"><div class="pr-name">${esc(x.p.name)}</div><div class="pr-meta">${esc(meta)}</div></li>`;
+  }).join("");
+  if (!res.length) html = `<li class="pr-empty">${state.patients.length ? `No patient matches “${esc(raw)}”.` : "No patients yet."}</li>`;
+  html += `<li class="pr-new" data-pt-new role="option">+ New patient${raw && !/^[\d\s+().-]+$/.test(raw) ? ` “${esc(raw)}”` : ""}</li>`;
+  if (!raw && res.length) html = `<li class="pr-head">Recent patients</li>` + html;
+  ul.innerHTML = html; ul.hidden = false;
+}
+function hidePtResults() { const ul = $("#ptLinkResults"); if (ul) ul.hidden = true; }
+function linkPatient(id) {
+  const s = state.session, p = patientById(id); if (!p) return false;
+  const saved = state.visits.some(v => v.id === s.id);
+  if (s.patientId && s.patientId !== id && saved && !confirm(`This is a saved visit of ${(patientById(s.patientId) || {}).name || "another patient"}. Move it to ${p.name}? (takes effect when you save)`)) return false;
+  const changed = s.patientId !== id;
+  s.patientId = id; state.selectedPatientId = id; state.ptChanging = false;
+  $("#ptLinkSearch").value = ""; hidePtResults();
+  if (changed && (sessionHasContent(s) || saved)) markDirty();
+  renderPatients(); renderProfile(); renderSessionInfo(); renderHistory(); renderAISection();
+  if (changed) { const pr = priorVisits(s); toast(`Session linked to ${p.name}` + (pr.length ? ` — last visit ${relAgo(pr[0].startedAt, s.startedAt)}` : " — first visit")); }
+  return true;
+}
+function newPatientFromPicker() {
+  const raw = $("#ptLinkSearch").value.trim();
+  hidePtResults();
+  state.ptLinkPending = true;
+  openPatientDialog(null);
+  const f = $("#patientForm");
+  if (raw) { if (/^[\d\s+().-]+$/.test(raw)) f.elements.contact.value = raw; else f.elements.name.value = raw; }
+}
+
+/* ---------- history section (last visit, progress, trend, older visits) ---------- */
+function visitSummaryHTML(v, ref) {
+  const dx = dxLinesOf(v.diagnosis), rx = rxLinesOf(v.diagnosis), f = visitFindings(v), tops = (v.patterns || []).slice(0, 3);
+  const row = (k, html) => `<div class="hv-row"><span class="hv-k">${k}</span><span class="hv-v">${html}</span></div>`;
+  return row("Diagnosis", dx.length ? esc(dx.join(" · ")) : `<i class="muted">not recorded</i>`)
+    + row("Rx", rx.length ? rx.map(l => `<div class="hv-rx">${esc(l)}</div>`).join("") : `<i class="muted">none recorded</i>`)
+    + row("Tongue", f.tongue.length ? esc(f.tongue.map(tName).join(", ")) : `<i class="muted">—</i>`)
+    + row("Pulse", f.pulse.length ? esc(f.pulse.map(pName).join(", ")) : `<i class="muted">—</i>`)
+    + row("Patterns", tops.length ? tops.map(p => `${esc(shortPat(p.name))} <b>${p.pct}%</b>`).join(", ") : `<i class="muted">—</i>`);
+}
+function trendHTML(rows) {
+  if (!rows.length) return `<div class="muted hv-none">Pattern scores will be compared once today's findings are scored.</div>`;
+  return `<ul class="hv-trend">${rows.map(r => {
+    const t = r.then;
+    if (!t) return `<li><span class="tr-name">${esc(shortPat(r.name))}</span><span class="tr-val"><span class="muted" title="The last visit has no saved findings to compare">—</span> → <b>${r.now}%</b></span></li>`;
+    const d = r.now - t.pct, cls = Math.abs(d) < 3 ? "same" : d > 0 ? "up" : "down";
+    const ind = cls === "same" ? "≈" : (d > 0 ? "▲" : "▼") + Math.abs(d);
+    return `<li class="tr-${cls}${r.wasTop ? " was-top" : ""}" title="${esc(r.name)}: ${t.pct}% at the last visit${t.approx ? " (estimated from its saved findings — that visit was saved before scores were stored)" : ""} → ${r.now}% today${r.wasTop ? " (last visit's top pattern)" : ""}"><span class="tr-name">${esc(shortPat(r.name))}${r.wasTop ? ` <small>(last top)</small>` : ""}</span><span class="tr-val">${t.approx ? "≈" : ""}${t.pct}% → <b>${r.now}%</b> <span class="tr-ind">${ind}</span></span></li>`;
+  }).join("")}</ul>`;
+}
+function progressHTML(c) {
+  const chips = (ids, cls, sym, extra = "") => ids.map(id => `<span class="pc ${cls}" title="${esc(sName(id))}">${sym}${esc(shortIndicatorName(id))}${extra}</span>`).join("");
+  if (!c.hasToday) return `<div class="muted hv-none">Nothing recorded yet today — findings are compared as they are detected.</div>`
+    + (c.then.present.length ? `<div class="hv-grp"><span class="hv-gl">Last visit</span><span class="hv-chips">${chips(c.then.present, "pc-still", "")}</span></div>` : "");
+  const grp = (label, n, html, cls) => n ? `<div class="hv-grp ${cls}"><span class="hv-gl">${label} <b>${n}</b></span><span class="hv-chips">${html}</span></div>` : "";
+  const nRes = c.resDenied.length + c.resNm.length;
+  const tp = (lbl, d, nm) => (d.added.length || d.gone.length) ? `<div class="hv-tp"><b>${lbl}:</b> ${d.added.length ? "now " + esc(d.added.map(nm).join(", ")) : ""}${d.added.length && d.gone.length ? "; " : ""}${d.gone.length ? "no longer " + esc(d.gone.map(nm).join(", ")) : ""}</div>` : "";
+  return `<div class="hv-counts"><span class="cnt-new">${c.nw.length} new</span> · <span class="cnt-still">${c.still.length} still present</span> · <span class="cnt-res">${nRes} resolved</span></div>`
+    + grp("New", c.nw.length, chips(c.nw, "pc-new", "+ "), "g-new")
+    + grp("Still present", c.still.length, chips(c.still, "pc-still", ""), "g-still")
+    + grp("Resolved", nRes, chips(c.resDenied, "pc-den", "✓ ", ` <small>denied</small>`) + chips(c.resNm, "pc-nm", "", ` <small>not mentioned</small>`), "g-res")
+    + tp("Tongue", c.tongue, tName) + tp("Pulse", c.pulse, pName);
+}
+function renderHistory() {
+  renderPtLink();
+  const sec = $("#historySection"); if (!sec) return;
+  const s = state.session, p = patientById(s.patientId), body = $("#historyBody");
+  if (!p) { sec.hidden = true; setHTML(body, ""); return; }
+  sec.hidden = false;
+  const prior = priorVisits(s);
+  $("#historyTitle").textContent = prior.length ? "Last visit & progress" : "Patient history";
+  if (!prior.length) { setHTML(body, `<div class="empty">First recorded visit for ${esc(p.name)} — nothing to compare yet.</div>`); return; }
+  const openKeys = new Set([...body.querySelectorAll("details[data-dkey]")].filter(d => d.open).map(d => d.dataset.dkey));
+  const op = (k, def = false) => (openKeys.has(k) || (def && !body._init)) ? " open" : "";
+  const v = prior[0], ref = s.startedAt, rx = rxLinesOf(v.diagnosis);
+  const cmp = progressCompare(v), trend = patternTrend(v);
+  const html = `<div class="hv-card" data-vid="${v.id}">
+      <div class="hv-head"><span><b>${esc(fmtDate(v.startedAt))}</b> <span class="hv-ago">· ${esc(relAgo(v.startedAt, ref))}</span></span>
+        <button type="button" class="small primary" id="carryRxBtn" data-carry="${v.id}"${rx.length ? "" : " disabled"} title="${rx.length ? "Copy the last visit's Rx lines into today's Final diagnosis / treatment" : "The last visit has no Rx lines"}">⤵ Carry forward Rx</button></div>
+      ${visitSummaryHTML(v, ref)}
+      <div class="hv-links"><button type="button" class="link-btn" data-open-visit="${v.id}">Open this visit</button></div>
+    </div>
+    <div class="hv-block"><div class="hv-sub">Progress since last visit</div>${progressHTML(cmp)}</div>
+    <div class="hv-block"><div class="hv-sub">Pattern trend <span class="muted">(last visit → today)</span></div>${trendHTML(trend)}</div>
+    ${prior.length > 1 ? `<details class="hv-older" data-dkey="older"${op("older")}><summary>Older visits (${prior.length - 1})</summary>
+      ${prior.slice(1).map(o => `<details class="hv-ov" data-dkey="ov:${o.id}"${op("ov:" + o.id)}><summary><b>${esc(fmtDate(o.startedAt))}</b> · ${esc(relAgo(o.startedAt, ref))}${o.patterns && o.patterns[0] ? " · " + esc(shortPat(o.patterns[0].name)) + " " + o.patterns[0].pct + "%" : ""}</summary>
+        <div class="hv-card hv-card-old">${visitSummaryHTML(o, ref)}<div class="hv-links"><button type="button" class="link-btn" data-open-visit="${o.id}">Open this visit</button>${rxLinesOf(o.diagnosis).length ? ` <button type="button" class="link-btn" data-carry="${o.id}">Carry forward this Rx</button>` : ""}</div></div></details>`).join("")}
+    </details>` : ""}`;
+  setHTML(body, html);
+  body._init = true;
+}
+
+/* ---------- carry forward ---------- */
+const herbsInLine = line => { const l = line.replace(RX_LINE, ":"); return Object.keys(HERBS).filter(n => new RegExp("(?:^|[:,;]\\s*)" + escapeRegExp(n) + "\\s+\\d", "i").test(l)); };
+function carryForwardRx(vid) {
+  const v = state.visits.find(x => x.id === vid) || priorVisits()[0];
+  if (!v) return 0;
+  const lines = rxLinesOf(v.diagnosis);
+  if (!lines.length) { toast("That visit has no Rx lines to carry forward"); return 0; }
+  let cur = state.session.diagnosis || "", added = 0;
+  for (const line of lines) {
+    const curLines = cur.split("\n").map(l => l.trim());
+    if (curLines.includes(line)) continue;
+    const herbs = herbsInLine(line);
+    if (/^Rx \(custom\):/i.test(line)) {
+      const items = line.replace(/^Rx \(custom\):\s*/i, "").split(/\s*,\s*/).filter(Boolean);
+      const missing = items.filter(it => { const n = herbs.find(h => it.toLowerCase().startsWith(h.toLowerCase() + " ")); return !(n && herbInRx(n, cur)); });
+      if (!missing.length) continue;
+      const ls = cur ? cur.replace(/\s+$/, "").split("\n") : [];
+      const i = ls.findIndex(l => /^\s*Rx \(custom\):/i.test(l));
+      if (i >= 0) ls[i] = ls[i].replace(/[\s,]+$/, "") + ", " + missing.join(", "); else ls.push("Rx (custom): " + missing.join(", "));
+      cur = ls.join("\n"); added++; continue;
+    }
+    if (herbs.length && herbs.every(h => herbInRx(h, cur))) continue;   // same herbs already prescribed today
+    cur = cur ? cur.replace(/\s+$/, "") + "\n" + line : line; added++;
+  }
+  const when = relAgo(v.startedAt, state.session.startedAt);
+  if (!added) { toast(`The Rx from ${when} is already in today's Final diagnosis / treatment`); return 0; }
+  state.session.diagnosis = cur; state.session.carriedFrom = v.id;
+  const inp = $("#diagnosisInput"); if (inp) inp.value = cur;
+  markDirty(); refreshHerbButtons();
+  toast(`Carried forward ${added} Rx line${added === 1 ? "" : "s"} from ${when} — adjust to today's findings`);
+  return added;
+}
+
+/* ---------- de-identified history for "Copy for AI" ---------- */
+function buildHistorySummary(session, a, n = 2) {
+  const p = patientById(session.patientId), prior = priorVisits(session).slice(0, n);
+  if (!prior.length) return [];
+  const ref = session.startedAt, L = [], list = ids => ids.length ? ids.map(sName).join(", ") : "none recorded";
+  L.push(`PREVIOUS VISITS (same patient, de-identified; ${prior.length === 1 ? "the most recent visit" : "the 2 most recent visits, newest first"}):`);
+  prior.forEach((v, i) => {
+    const f = visitFindings(v), dx = dxLinesOf(v.diagnosis), rx = rxLinesOf(v.diagnosis);
+    L.push(`${i === 0 ? "Previous visit" : "Visit before that"} — ${relAgo(v.startedAt, ref)}:`);
+    L.push(`- Practitioner's diagnosis: ${dx.length ? deidentify(dx.join("; "), p) : "not recorded"}`);
+    L.push(`- Prescription given: ${rx.length ? deidentify(rx.join(" | "), p) : "none recorded"}`);
+    L.push(`- Key symptoms then: ${list(f.present.slice(0, 15))}`);
+    if (f.negated.length) L.push(`- Denied then: ${list(f.negated.slice(0, 10))}`);
+    L.push(`- Tongue: ${f.tongue.length ? f.tongue.map(tName).join(", ") : "not recorded"}; Pulse: ${f.pulse.length ? f.pulse.map(pName).join(", ") : "not recorded"}`);
+    const tops = (v.patterns || []).slice(0, 3);
+    L.push(`- App pattern fit then: ${tops.length ? tops.map(t => `${t.name} ${t.pct}%`).join(", ") : "not recorded"}`);
+  });
+  const v = prior[0], c = progressCompare(v, a, session);
+  L.push("");
+  L.push(`CHANGES SINCE THE PREVIOUS VISIT (${relAgo(v.startedAt, ref)} → today):`);
+  L.push(`- New today: ${list(c.nw)}`);
+  L.push(`- Still present: ${list(c.still)}`);
+  L.push(`- Resolved — denied today: ${list(c.resDenied)}`);
+  L.push(`- Resolved? — not mentioned today (may not have been asked): ${list(c.resNm)}`);
+  const tp = (then, now, nm) => `${then.length ? then.map(nm).join(", ") : "not recorded"} → ${now.length ? now.map(nm).join(", ") : "not recorded"}`;
+  L.push(`- Tongue then → now: ${tp(c.then.tongue, session.tongue || [], tName)}`);
+  L.push(`- Pulse then → now: ${tp(c.then.pulse, session.pulse || [], pName)}`);
+  const tr = patternTrend(v, a).filter(r => r.then);
+  if (tr.length) L.push(`- Pattern fit then → now: ${tr.map(r => `${r.name} ${r.then.approx ? "≈" : ""}${r.then.pct}% → ${r.now}%`).join("; ")}`);
+  return L;
 }
 
 /* ---------- export / import / print ---------- */
@@ -3044,8 +3417,12 @@ const AI = {
   get key() { try { return localStorage.getItem(AI.keyName) || ""; } catch { return ""; } },
   set key(v) { try { v ? localStorage.setItem(AI.keyName, v) : localStorage.removeItem(AI.keyName); } catch {} },
   get model() { try { return localStorage.getItem("tcm_xai_model") || AI.defaultModel; } catch { return AI.defaultModel; } },
-  set model(v) { try { localStorage.setItem("tcm_xai_model", v || AI.defaultModel); } catch {} }
+  set model(v) { try { localStorage.setItem("tcm_xai_model", v || AI.defaultModel); } catch {} },
+  // optional direct sending to xAI — OFF by default; when off the app never contacts api.x.ai
+  get direct() { return lsGet("tcm_ai_direct") === "1"; },
+  set direct(v) { lsSet("tcm_ai_direct", v ? "1" : null); }
 };
+const AI_FOLLOWUP_LINE = "Follow-up: this is a follow-up visit. Briefly comment on progress since the previous visit(s) summarised above and, where appropriate, suggest specific modifications to the previous formula (herbs to add or remove, dose changes in grams) rather than starting from scratch — or say clearly if a change of formula is warranted and why.";
 
 const AI_SYSTEM_PROMPT = `You are an experienced Traditional Chinese Medicine (TCM) clinical assistant supporting a licensed TCM practitioner in the Philippines during or after a consultation. You reason in the style of standard TCM textbooks (e.g. Maciocia, Bensky/Clavey herbal references, Deadman acupuncture) and you are careful and clinically conservative.
 
@@ -3090,6 +3467,10 @@ function deidentify(text, patient) {
   if (!text) return "";
   let out = String(text);
   out = out.replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "[email]");
+  out = out.replace(/\b(19|20)\d{2}[-/.](0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])\b/g, "[date]");
+  out = out.replace(/\b(0?[1-9]|[12]\d|3[01])[-/.](0?[1-9]|1[0-2])[-/.](19|20)\d{2}\b/g, "[date]");
+  out = out.replace(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(st|nd|rd|th)?,?\s+(19|20)\d{2}\b/gi, "[date]");
+  out = out.replace(/\b\d{1,2}(st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?,?\s+(19|20)\d{2}\b/gi, "[date]");
   out = out.replace(/(\+?63[\s-]?|0)9\d{2}[\s-]?\d{3}[\s-]?\d{4}\b/g, "[phone]");
   out = out.replace(/\b\d{3,4}[\s-]\d{3,4}[\s-]?\d{0,4}\b/g, m => (m.replace(/\D/g, "").length >= 7 ? "[phone]" : m));
   if (patient) {
@@ -3103,7 +3484,7 @@ function deidentify(text, patient) {
   return out;
 }
 
-function buildAICaseSummary(session, includeTranscript) {
+function buildAICaseSummary(session, includeTranscript, includeHistory = true) {
   const a = analyzeSession(session), p = patientById(session.patientId);
   const age = p ? ageOf(p) : "";
   const byCat = ids => ids.map(id => `${SYMPTOM_BY_ID[id].name} [${CATEGORIES[SYMPTOM_BY_ID[id].cat].label}]`);
@@ -3111,6 +3492,8 @@ function buildAICaseSummary(session, includeTranscript) {
   lines.push("DE-IDENTIFIED TCM CASE SUMMARY");
   lines.push(`Age: ${age !== "" ? age : "unknown"}`);
   lines.push(`Sex: ${p && p.sex ? p.sex : "unknown"}`);
+  const prior = includeHistory ? priorVisits(session) : [];
+  if (p && includeHistory) lines.push(`Visit: ${prior.length ? `follow-up (previous visit ${relAgo(prior[0].startedAt, session.startedAt)})` : "first recorded visit"}`);
   lines.push("");
   lines.push("Symptoms reported as PRESENT:");
   lines.push(...(a.presentSym.length ? byCat(a.presentSym).map(x => "- " + x) : ["- none recorded"]));
@@ -3134,9 +3517,16 @@ function buildAICaseSummary(session, includeTranscript) {
     const t = session.entries.map(e => (e.src === "typed" ? "[typed] " : "") + e.text).join("\n\n");
     lines.push(deidentify(t, p).trim() || "(empty)");
   }
+  const hist = includeHistory ? buildHistorySummary(session, a) : [];
+  if (hist.length) { lines.push(""); lines.push(...hist); }
   lines.push("");
+  if (hist.length) lines.push(AI_FOLLOWUP_LINE);
   lines.push(AI_REQUEST_LINE);
   return lines.join("\n");
+}
+function buildCopyPrompt(session, includeTranscript, includeHistory = true) {
+  return ["The text below comes from a TCM practitioner's consultation app. Follow the INSTRUCTIONS, then answer the REQUEST at the end of the CASE.", "",
+    "=== INSTRUCTIONS ===", AI_SYSTEM_PROMPT, "", "=== CASE ===", buildAICaseSummary(session, includeTranscript, includeHistory)].join("\n");
 }
 
 // --- safe markdown rendering (escape first, then add a small set of tags) --
@@ -3194,7 +3584,9 @@ function renderMarkdownSafe(md) {
 }
 
 // --- UI ------------------------------------------------------------------
+function syncDirectFields() { const on = $("#aiDirectInput").checked; $("#aiDirectFields").disabled = !on; $("#aiDirectFields").classList.toggle("off", !on); }
 function openAISettings(msg) {
+  $("#aiDirectInput").checked = AI.direct; syncDirectFields();
   $("#aiKeyInput").value = AI.key;
   $("#aiKeyInput").type = "password"; $("#aiKeyShowBtn").textContent = "Show";
   $("#aiModelInput").value = AI.model;
@@ -3221,25 +3613,60 @@ function renderAISection() {
   $("#aiPanelMeta").textContent = `${ai.model} · ${fmtDateTime(ai.at)} — decision support only, verify before use`;
   setHTML($("#aiPanelBody"), renderMarkdownSafe(ai.content));
 }
-function updateAIPreview() {
-  const inc = $("#aiIncludeTranscript").checked;
-  $("#aiNoteTranscript").textContent = inc ? " and the transcript" : "";
-  $("#aiPreviewSystem").textContent = AI_SYSTEM_PROMPT;
-  $("#aiPreview").textContent = buildAICaseSummary(state.session, inc);
+const aiPrefs = () => ({ inc: lsGet("tcm_ai_inc_transcript") !== "0", hist: lsGet("tcm_ai_inc_history") !== "0" });
+let aiPromptEdited = false;
+function regenPrompt() {
+  const inc = $("#aiIncludeTranscript").checked, hist = $("#aiIncludeHistory").checked && !$("#aiIncludeHistory").disabled;
+  const t = buildCopyPrompt(state.session, inc, hist);
+  $("#aiPromptText").value = t; aiPromptEdited = false;
+  $("#aiNoteTranscript").textContent = inc ? ", the transcript" : "";
+  $("#aiNoteHistory").textContent = hist ? " and a summary of the previous visit(s)" : "";
+  $("#aiPromptMeta").textContent = `${t.length.toLocaleString()} characters · de-identified`;
 }
-function openAskAI() {
+function openCopyAI(selectAll) {
+  const pr = aiPrefs(), n = Math.min(2, priorVisits().length);
+  $("#aiIncludeTranscript").checked = pr.inc;
+  $("#aiIncludeHistory").checked = pr.hist && n > 0; $("#aiIncludeHistory").disabled = !n;
+  $("#aiHistCount").textContent = n ? `(last ${n})` : state.session.patientId ? "(no previous visits)" : "(link a patient first)";
+  regenPrompt();
   if (!AI.busy) aiStatus("");
   $("#aiSetup").hidden = false;
-  updateAIPreview();
   showAIResult(state.session.ai);
-  if (state.session.ai && state.session.ai.content) $("#aiResultMeta").textContent = "Previous response: " + $("#aiResultMeta").textContent;
-  $("#aiSendBtn").textContent = state.session.ai ? "Ask again" : "Send to Grok";
-  $("#askAiDialog").showModal();
+  if (state.session.ai && state.session.ai.content) $("#aiResultMeta").textContent = "Previous Grok response: " + $("#aiResultMeta").textContent;
+  $("#aiSendBtn").hidden = !AI.direct;
+  $("#aiSendBtn").textContent = state.session.ai ? "Ask Grok again" : "Send to Grok";
+  $("#aiDirectHint").hidden = !AI.direct;
+  if (!$("#askAiDialog").open) $("#askAiDialog").showModal();
+  if (selectAll) setTimeout(() => { const ta = $("#aiPromptText"); ta.focus(); ta.select(); }, 30);
 }
-async function copyText(text) {
-  try { await navigator.clipboard.writeText(text); }
-  catch { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
-  toast("Copied to clipboard");
+// Clipboard: async API first; fallback for Android Chrome / non-secure origins (hidden textarea + execCommand)
+function legacyCopy(text) {
+  const host = document.querySelector("dialog[open]") || document.body;   // outside an open modal dialog focus is blocked
+  const ta = document.createElement("textarea");
+  ta.value = text; ta.setAttribute("readonly", ""); ta.setAttribute("aria-hidden", "true");
+  ta.style.cssText = "position:fixed;top:0;left:0;width:2px;height:2px;padding:0;border:0;opacity:0;font-size:16px;";
+  host.appendChild(ta);
+  const prev = document.activeElement;
+  ta.focus(); ta.select(); try { ta.setSelectionRange(0, text.length); } catch {}
+  let ok = false; try { ok = document.execCommand("copy"); } catch { ok = false; }
+  ta.remove(); if (prev && prev.focus) try { prev.focus({ preventScroll: true }); } catch {}
+  return ok;
+}
+async function copyText(text, okMsg = "Copied to clipboard") {
+  let ok = false;
+  if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext !== false) {
+    try { await navigator.clipboard.writeText(text); ok = true; } catch { ok = false; }
+  }
+  if (!ok) ok = legacyCopy(text);
+  toast(ok ? okMsg : "Couldn't copy automatically — select the text and copy it manually", ok ? 2600 : 5000);
+  return ok;
+}
+async function copyForAI() {
+  const pr = aiPrefs();
+  const text = buildCopyPrompt(state.session, pr.inc, pr.hist);
+  const ok = await copyText(text, "Copied — paste into your AI");
+  if (!ok) openCopyAI(true);   // show the prompt selected for manual copy
+  return ok;
 }
 function aiErrorMessage(status, bodyText, model) {
   let msg = "";
@@ -3255,10 +3682,12 @@ function aiErrorMessage(status, bodyText, model) {
 }
 async function askAI() {
   if (AI.busy) return;
+  if (!AI.direct) { toast("Direct sending is off — use Copy for AI (or turn it on in AI settings)"); return; }
   const key = AI.key.trim();
   if (!key) { openAISettings("Add your xAI API key first."); return; }
   const includeTranscript = $("#aiIncludeTranscript").checked;
-  const summary = buildAICaseSummary(state.session, includeTranscript);
+  const includeHistory = $("#aiIncludeHistory").checked && !$("#aiIncludeHistory").disabled;
+  const summary = buildAICaseSummary(state.session, includeTranscript, includeHistory);
   const model = AI.model;
   const body = {
     model, temperature: 0.3, stream: false,
@@ -3272,7 +3701,7 @@ async function askAI() {
   const t0 = Date.now();
   aiStatus(`<span class="spinner"></span><span>Asking ${esc(model)}… <span id="aiElapsed">0</span> s (reasoning models can take up to a minute or two)</span>`);
   const tick = setInterval(() => { const e = $("#aiElapsed"); if (e) e.textContent = Math.round((Date.now() - t0) / 1000); }, 1000);
-  $("#aiSendBtn").disabled = true; $("#aiCancelBtn").hidden = false; $("#askAiBtn").disabled = true;
+  $("#aiSendBtn").disabled = true; $("#aiCancelBtn").hidden = false;
   try {
     let res;
     try {
@@ -3301,7 +3730,7 @@ async function askAI() {
   } finally {
     clearTimeout(timer); clearInterval(tick);
     AI.busy = false; AI.controller = null;
-    $("#aiSendBtn").disabled = false; $("#aiCancelBtn").hidden = true; $("#askAiBtn").disabled = false;
+    $("#aiSendBtn").disabled = false; $("#aiCancelBtn").hidden = true;
   }
 }
 function bindAIEvents() {
@@ -3309,17 +3738,31 @@ function bindAIEvents() {
   $("#aiDlgSettingsBtn").onclick = () => openAISettings();
   $("#aiKeyShowBtn").onclick = () => { const i = $("#aiKeyInput"); const show = i.type === "password"; i.type = show ? "text" : "password"; $("#aiKeyShowBtn").textContent = show ? "Hide" : "Show"; };
   $("#aiKeyClearBtn").onclick = () => { $("#aiKeyInput").value = ""; AI.key = ""; $("#aiSettingsMsg").style.color = ""; $("#aiSettingsMsg").textContent = "Key removed from this browser."; };
+  $("#aiDirectInput").onchange = syncDirectFields;
   $("#aiSettingsForm").addEventListener("submit", e => {
     e.preventDefault();
+    AI.direct = $("#aiDirectInput").checked;
+    if ($("#askAiDialog").open) { $("#aiSendBtn").hidden = !AI.direct; $("#aiDirectHint").hidden = !AI.direct; }
     AI.key = $("#aiKeyInput").value.trim();
     AI.model = $("#aiModelInput").value.trim() || AI.defaultModel;
     saveSettings();
     $("#aiSettingsDialog").close();
-    toast(AI.key ? "AI settings saved" : "AI settings saved (no key)");
+    toast(!AI.direct ? "AI settings saved — Copy for AI only (no xAI calls)" : AI.key ? "AI settings saved — direct sending on" : "AI settings saved — direct sending on, but no API key yet");
   });
-  $("#askAiBtn").onclick = openAskAI;
-  $("#aiOpenBtn").onclick = openAskAI;
-  $("#aiIncludeTranscript").onchange = updateAIPreview;
+  // "Copy for AI" (one tap) and ✎ preview/edit — header of Likely patterns and the phone pattern strip
+  document.addEventListener("click", e => {
+    const c = e.target.closest("[data-copy-ai]"); if (c) { e.preventDefault(); copyForAI(); return; }
+    const pv = e.target.closest("[data-copy-ai-preview]"); if (pv) { e.preventDefault(); openCopyAI(); }
+  });
+  $("#aiOpenBtn").onclick = () => openCopyAI();
+  const optChange = (el, key) => { el.onchange = () => {
+    if (aiPromptEdited && !confirm("Rebuild the prompt? Your edits will be replaced.")) { el.checked = !el.checked; return; }
+    lsSet(key, el.checked ? null : "0"); regenPrompt(); }; };
+  optChange($("#aiIncludeTranscript"), "tcm_ai_inc_transcript");
+  optChange($("#aiIncludeHistory"), "tcm_ai_inc_history");
+  $("#aiPromptText").oninput = () => { aiPromptEdited = true; $("#aiPromptMeta").textContent = `${$("#aiPromptText").value.length.toLocaleString()} characters · edited`; };
+  $("#aiPromptResetBtn").onclick = () => { if (!aiPromptEdited || confirm("Discard your edits and rebuild the prompt?")) regenPrompt(); };
+  $("#aiCopyPromptBtn").onclick = async () => { if (await copyText($("#aiPromptText").value, "Copied — paste into your AI")) $("#askAiDialog").close(); else { const ta = $("#aiPromptText"); ta.focus(); ta.select(); } };
   $("#aiSendBtn").onclick = () => { $("#aiSetup").hidden = false; askAI(); };
   $("#aiCancelBtn").onclick = () => { if (AI.controller) AI.controller.abort("user"); };
   $("#aiCopyBtn").onclick = () => state.session.ai && copyText(state.session.ai.content);
@@ -3548,7 +3991,7 @@ async function applyToLocal(merged) {
   if (changed) {
     await loadData();
     if (state.selectedPatientId && !patientById(state.selectedPatientId)) state.selectedPatientId = null;
-    renderPatients(); renderProfile(); renderSessionInfo();
+    renderPatients(); renderProfile(); renderSessionInfo(); renderHistory();
   }
   return changed;
 }
@@ -3878,7 +4321,7 @@ function bindEvents() {
     state.stickToBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
   }, { passive: true });
   $("#patternStrip").onclick = e => {
-    if (e.target.closest("[data-ask-ai]")) { openAskAI(); return; }
+    if (e.target.closest("[data-copy-ai],[data-copy-ai-preview]")) return;   // handled globally
     const b = e.target.closest("[data-goto-pattern]");
     const target = b ? document.querySelector(`#patternList [data-pattern="${b.dataset.gotoPattern}"]`) : $("#patternList");
     if (target) { target.scrollIntoView({ behavior: "smooth", block: "start" }); const d = target.querySelector && target.querySelector("details"); if (d) d.open = true; }
@@ -3890,6 +4333,38 @@ function bindEvents() {
   };
   $("#notesInput").oninput = e => { state.session.notes = e.target.value; markDirty(); };
   $("#diagnosisInput").oninput = e => { state.session.diagnosis = e.target.value; markDirty(); clearTimeout(refreshHerbButtons._t); refreshHerbButtons._t = setTimeout(() => refreshHerbButtons(), 250); };
+
+  // patient link bar
+  const pls = $("#ptLinkSearch");
+  pls.addEventListener("input", renderPtResults);
+  pls.addEventListener("focus", renderPtResults);
+  pls.addEventListener("blur", () => setTimeout(hidePtResults, 180));
+  pls.addEventListener("keydown", e => {
+    const items = [...$("#ptLinkResults").querySelectorAll("li[data-link-pt],li[data-pt-new]")];
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault(); if (!items.length) return;
+      state.ptSel = (state.ptSel + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+      items.forEach((li, i) => li.classList.toggle("sel", i === state.ptSel)); items[state.ptSel].scrollIntoView({ block: "nearest" });
+    } else if (e.key === "Enter") {
+      e.preventDefault(); const li = items[state.ptSel || 0]; if (!li) return;
+      if (li.dataset.linkPt) linkPatient(li.dataset.linkPt); else newPatientFromPicker();
+    } else if (e.key === "Escape") { hidePtResults(); if (state.ptChanging) { state.ptChanging = false; renderPtLink(); } }
+  });
+  $("#ptLinkResults").addEventListener("pointerdown", e => e.preventDefault());   // keep focus → no blur before click
+  $("#ptLinkResults").addEventListener("click", e => {
+    const li = e.target.closest("li[data-link-pt]"); if (li) { linkPatient(li.dataset.linkPt); return; }
+    if (e.target.closest("[data-pt-new]")) newPatientFromPicker();
+  });
+  $("#ptLinkNewBtn").onclick = newPatientFromPicker;
+  $("#ptLinkCancelBtn").onclick = () => { state.ptChanging = false; pls.value = ""; hidePtResults(); renderPtLink(); };
+  $("#ptLinked").addEventListener("click", e => {
+    if (e.target.closest("[data-pt-change]")) { state.ptChanging = true; renderPtLink(); setTimeout(() => pls.focus(), 20); }
+    else if (e.target.closest("[data-hist-jump]")) { const h = $("#historySection"); h.scrollIntoView({ behavior: "smooth", block: "start" }); h.classList.add("flash"); setTimeout(() => h.classList.remove("flash"), 1600); }
+  });
+  $("#historySection").addEventListener("click", e => {
+    const c = e.target.closest("[data-carry]"); if (c) { e.stopPropagation(); carryForwardRx(c.dataset.carry); return; }
+    const o = e.target.closest("[data-open-visit]"); if (o) { e.stopPropagation(); openVisit(o.dataset.openVisit); }
+  });
 
   $("#rightPanel").onclick = e => {
     const t = e.target.closest("button"); if (!t) return;
@@ -3941,7 +4416,7 @@ async function init() {
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { herbInRx, addHerb, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>

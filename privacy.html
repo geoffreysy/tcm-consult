@@ -34,7 +34,8 @@ h1{font-size:24px;margin-bottom:4px}h2{font-size:17px;margin-top:28px}
 <ul>
   <li><b>Nothing is sent to the developer.</b> The app has no analytics, advertising or tracking.</li>
   <li><b>Google</b>: when you are signed in, your data file is sent to and from your own Google Drive using Google's APIs.</li>
-  <li><b>xAI (optional “Ask AI” feature)</b>: only when you press <i>Ask AI</i>, a de-identified case summary (patient name and contact details removed; transcript only if you tick that option) is sent directly from your browser to xAI's API using <i>your own</i> xAI API key. Your API key is stored only on your device (never in Google Drive). See xAI's privacy policy for how xAI handles requests.</li>
+  <li><b>AI assistance — “Copy for AI” (default)</b>: the app builds a de-identified prompt (case summary and, for returning patients, a short summary of the last one or two visits with relative dates such as “6 weeks ago”; patient name, contact details, date of birth and exact dates removed; transcript only if you tick that option) and puts it on your device’s clipboard. Nothing is sent to any AI service by the app — you decide where to paste it.</li>
+  <li><b>xAI (optional direct sending, off by default)</b>: only if you turn on direct sending in AI settings and press <i>Send to Grok</i>, the same de-identified prompt is sent directly from your browser to xAI’s API using <i>your own</i> xAI API key. Your API key is stored only on your device (never in Google Drive). See xAI's privacy policy for how xAI handles requests.</li>
   <li><b>Speech recognition</b>: live transcription uses your browser's built-in speech service (for example Google in Chrome), which processes the audio to produce text. The app does not record or store audio.</li>
 </ul>
 
