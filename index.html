@@ -146,6 +146,31 @@ details.more{font-size:12px;color:var(--muted);margin-top:3px}
 details.more summary{cursor:pointer}
 .p-score-meta{font-size:11px;color:var(--muted)}
 
+
+/* flowing transcript paragraphs */
+.para{position:relative;margin:0 0 12px;padding:2px 30px 2px 0;border-radius:6px;white-space:pre-wrap;word-wrap:break-word}
+.para .pts{display:inline-block;font-size:10.5px;color:#a3aeab;margin-right:8px;user-select:none;font-variant-numeric:tabular-nums;vertical-align:1px}
+.para.typed{background:#f7faf9;border-left:3px solid #cfe0db;padding-left:9px}
+.para.typed .pts{color:var(--accent)}
+.para .del{position:absolute;right:2px;top:2px;opacity:0;border:none;background:none;color:var(--muted);font-size:15px;padding:0 6px}
+.para:hover .del{opacity:1}
+@media (hover:none){.para .del{opacity:.45}}
+.interim{color:#8f9c98}
+.caret{display:inline-block;width:2px;height:1em;background:var(--danger);margin-left:3px;vertical-align:-2px;animation:blink 1s infinite}
+mark.sym.live{background:color-mix(in srgb,var(--c) 10%,white);border-bottom:2px dotted var(--c);color:#6d7b77}
+.chip.sym.live{border-style:dashed;opacity:.8}
+/* compact top-pattern strip under the transcript (shown on tablet / phone) */
+.pattern-strip{display:none;align-items:center;gap:6px;padding:7px 12px;border-top:1px solid var(--line);background:#f7fbfa;overflow-x:auto;white-space:nowrap}
+.pattern-strip .ps-label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
+.pattern-strip .ps-item{display:inline-grid;grid-template-columns:auto auto;grid-template-rows:auto 4px;gap:1px 8px;align-items:center;padding:4px 9px;border-radius:8px;background:#fff;border:1px solid var(--line);font-size:12.5px;text-align:left}
+.pattern-strip .ps-item.first{border-color:#a9d2c4;background:#eef7f4}
+.pattern-strip .ps-name{max-width:170px;overflow:hidden;text-overflow:ellipsis}
+.pattern-strip .ps-pct{font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+.pattern-strip .ps-bar{grid-column:1/-1;height:4px;background:#e3ebe8;border-radius:3px;overflow:hidden}
+.pattern-strip .ps-bar i{display:block;height:100%;background:var(--accent)}
+.pattern-strip .ps-empty{font-size:12.5px;color:var(--muted)}
+.pattern-strip .ps-note{font-size:10.5px;color:#9a7b2c;margin-left:auto;padding-left:6px}
+.mobile-only{display:none}
 footer{padding:6px 14px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;border-top:1px solid var(--line);background:#fff}
 
 /* dialogs */
@@ -180,9 +205,27 @@ dialog::backdrop{background:rgba(20,35,30,.35)}
   #centerPanel{min-height:560px}
   #rightPanel .panel-body{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
   #rightPanel .section.patterns{grid-column:2;grid-row:1/span 3;border-bottom:none}
+  .pattern-strip{display:flex}
 }
 @media (max-width:760px){
-  .layout{grid-template-columns:1fr}
+  .layout{grid-template-columns:1fr;grid-template-rows:none;padding:8px;gap:8px}
+  #centerPanel{order:1;min-height:0}
+  #rightPanel{order:2}
+  #leftPanel{order:3}
+  .transcript{flex:none;height:42vh;min-height:200px;font-size:15px}
+  .mobile-only{display:inline-block}
+  .topbar{gap:6px;padding:6px 8px}
+  .controls{gap:5px}
+  .controls button,.controls select{padding:5px 8px}
+  .mic{min-width:0}
+  #langSel{max-width:150px}
+  .pattern-strip{flex-wrap:wrap;white-space:normal}
+  .pattern-strip{gap:4px}
+  .pattern-strip .ps-label{flex-basis:100%}
+  .pattern-strip .ps-item{flex:1 1 100%;min-width:0;grid-template-columns:1fr auto}
+  .pattern-strip .ps-name{max-width:none;white-space:nowrap}
+  .legend{display:none}
+  .pattern-strip .ps-note{flex-basis:100%;margin-left:0;padding-left:0}
   #leftPanel{max-height:none}
   #rightPanel .panel-body{display:block}
   .notes{grid-template-columns:1fr}
@@ -221,6 +264,7 @@ dialog::backdrop{background:rgba(20,35,30,.35)}
     </select>
     <button id="micBtn" class="mic" title="Start / stop live transcription"><span class="dot"></span><span class="lbl">Start listening</span></button>
     <button id="newSessionBtn" title="Start a new, empty session">New session</button>
+    <button id="jumpPatientsBtn" class="mobile-only" title="Go to patient list">Patients</button>
     <button id="saveBtn" class="primary" title="Save session to patient record (Ctrl+S)">Save session</button>
     <div class="menu" id="menu">
       <button id="menuBtn" title="More">⋯ Data</button>
@@ -252,6 +296,7 @@ dialog::backdrop{background:rgba(20,35,30,.35)}
     </div>
     <div class="legend" id="legend"></div>
     <div class="transcript" id="transcript" aria-live="polite"></div>
+    <div class="pattern-strip" id="patternStrip" title="Top pattern fit scores — decision support only"></div>
     <div class="manual">
       <textarea id="manualInput" placeholder="Type or paste notes / patient statements here — they go through the same symptom detection. (Ctrl+Enter to add)"></textarea>
       <div class="col">
@@ -507,7 +552,7 @@ const SYMPTOMS = [
 ];
 
 /* Phrases that should be consumed but NOT counted (avoid false positives in typed notes). */
-const IGNORE_PHRASES = ["pale tongue", "tongue is pale", "tongue pale", "weak pulse", "pulse is weak", "no problem", "no problems", "not bad", "hindi naman masama", "gas station", "cold drinks are fine"];
+const IGNORE_PHRASES = ["pale tongue", "tongue is pale", "tongue pale", "tongue looks pale", "weak pulse", "pulse is weak", "no problem", "no problems", "not bad", "hindi naman masama", "gas station", "cold drinks are fine"];
 
 const TONGUE_FINDINGS = [
   { id: "t_pale", name: "Pale body" },
@@ -677,7 +722,7 @@ const Matcher = (function build() {
    while "I don't sleep well, tired all day" does not negate "tired". */
 const NEG_CUE = /(?<![\p{L}\p{N}'])(no|not|never|without|none|nor|neither|dont|don't|doesnt|doesn't|didnt|didn't|havent|haven't|hasnt|hasn't|hadnt|hadn't|isnt|isn't|arent|aren't|wasnt|wasn't|werent|weren't|wont|won't|denies|denied|deny|negative\s+for|free\s+of|hindi|hinde|di|wala|walang|wla|ni\s+minsan)(?![\p{L}\p{N}])/iu;
 const PSEUDO_NEG = /\b(don'?t\s+know|not\s+sure|no\s+idea|not\s+only|not\s+just|no\s+matter|no\s+wonder|hindi\s+ko\s+alam|di\s+ko\s+alam|hindi\s+lang|not\s+as\s+much)\b/giu;
-const CLAUSE_BREAK = /[.;!?\n]|(?<![\p{L}\p{N}])(but|pero|however|although|though|except|yet|kaso|kaya\s+lang|tapos|also|plus|i|i'm|im|i've|ive|i'd|my|she|he|we|it's|kasi|sometimes|minsan)(?![\p{L}\p{N}'])/giu;
+const CLAUSE_BREAK = /[.;!?\n]|(?<![\p{L}\p{N}])(but|pero|however|although|though|except|yet|kaso|kaya\s+lang|tapos|also|plus|just|only|so|because|and\s+then|then|tsaka|saka|i|i'm|im|i've|ive|i'd|my|she|he|we|it's|kasi|sometimes|minsan|lately|now)(?![\p{L}\p{N}'])/giu;
 
 function isNegated(maskedBefore) {
   let scope = maskedBefore;
@@ -724,19 +769,19 @@ function entryDetections(entry) {
   if (!c || c.text !== entry.text) { c = { text: entry.text, matches: detectText(entry.text) }; detCache.set(entry, c); }
   return c.matches;
 }
-function computeSymptoms(session) {
+function computeSymptoms(session, liveMatches) {
   const agg = {};
-  for (const e of session.entries) {
-    for (const m of entryDetections(e)) {
-      const a = agg[m.id] || (agg[m.id] = { id: m.id, pos: 0, neg: 0, phrases: new Set(), detected: true });
-      if (m.negated) a.neg++; else a.pos++;
-      a.phrases.add(m.text.toLowerCase());
-    }
-  }
+  const addMatch = (m, live) => {
+    const a = agg[m.id] || (agg[m.id] = { id: m.id, pos: 0, neg: 0, livePos: 0, phrases: new Set(), detected: true });
+    if (m.negated) a.neg++; else { a.pos++; if (live) a.livePos++; }
+    a.phrases.add(m.text.toLowerCase());
+  };
+  for (const e of session.entries) for (const m of entryDetections(e)) addMatch(m, false);
+  for (const m of (liveMatches || [])) addMatch(m, true);
   const ov = session.overrides || {};
   for (const [id, v] of Object.entries(ov)) {
     if (!SYMPTOM_BY_ID[id]) continue;
-    if (!agg[id]) agg[id] = { id, pos: 0, neg: 0, phrases: new Set(), detected: false };
+    if (!agg[id]) agg[id] = { id, pos: 0, neg: 0, livePos: 0, phrases: new Set(), detected: false };
     agg[id].override = v;
   }
   const list = Object.values(agg).map(a => {
@@ -744,7 +789,7 @@ function computeSymptoms(session) {
     if (a.override === "present") status = "present";
     else if (a.override === "removed") status = "removed";
     else if (a.override === "negated") status = "negated";
-    return { ...a, phrases: [...a.phrases], status, manual: !a.detected || (a.override === "present" && a.pos === 0) };
+    return { ...a, phrases: [...a.phrases], status, live: a.pos > 0 && a.pos === a.livePos && a.override !== "present", manual: !a.detected || (a.override === "present" && a.pos === 0) };
   });
   return list;
 }
@@ -779,8 +824,8 @@ function scorePatterns(presentIds, negatedIds) {
   return results.filter(r => r.matched > 0).sort((a, b) => (b.fit - a.fit) || (b.matched - a.matched));
 }
 
-function analyzeSession(session) {
-  const symptoms = computeSymptoms(session);
+function analyzeSession(session, liveMatches) {
+  const symptoms = computeSymptoms(session, liveMatches);
   const presentSym = symptoms.filter(s => s.status === "present").map(s => s.id);
   const negatedSym = symptoms.filter(s => s.status === "negated").map(s => s.id);
   const present = [...presentSym, ...(session.tongue || []), ...(session.pulse || [])];
@@ -866,7 +911,7 @@ const fmtTime = iso => new Date(iso).toLocaleTimeString(undefined, { hour: "2-di
 
 const state = {
   patients: [], visits: [], selectedPatientId: null,
-  session: null, analysis: null, interim: "", listening: false, search: ""
+  session: null, analysis: null, interim: "", live: null, listening: false, search: "", stickToBottom: true
 };
 
 function newSession(patientId) {
@@ -895,10 +940,33 @@ async function saveDraft() {
 }
 async function clearDraft() { try { await DB.del("meta", "draft"); } catch {} }
 
+/* Live (interim) speech: detection runs over "current paragraph + interim" so
+   negation context carries across, but only matches inside the interim tail
+   are treated as live. */
+function liveContext() {
+  const interim = state.interim;
+  if (!interim) return null;
+  const last = state.session.entries[state.session.entries.length - 1];
+  const para = (last && last.src === "speech" && !speech.breakPara) ? last : null;
+  const prefix = para ? para.text + " " : "";
+  const full = prefix + interim;
+  const matches = detectText(full).map(m => ({ ...m, live: m.end > prefix.length }));
+  return { para, prefix, full, boundary: prefix.length, matches, liveMatches: matches.filter(m => m.live) };
+}
 function refreshAnalysis() {
-  state.analysis = analyzeSession(state.session);
+  clearTimeout(refreshAnalysis._t); refreshAnalysis._t = null;
+  const live = liveContext();
+  state.live = live;
+  state.analysis = analyzeSession(state.session, live ? live.liveMatches : null);
   renderTranscript(); renderSymptoms(); renderPatterns();
 }
+// throttle for high-frequency speech events
+function scheduleRefresh(ms = 150) {
+  if (refreshAnalysis._t) return;
+  refreshAnalysis._t = setTimeout(refreshAnalysis, ms);
+}
+// only touch the DOM when the markup actually changed (keeps clicks/scroll/open <details> stable)
+function setHTML(el, html) { if (el._html !== html) { el._html = html; el.innerHTML = html; return true; } return false; }
 
 /* =====================================================================
    RENDERING
@@ -969,32 +1037,42 @@ function renderProfile() {
     </ul>`;
 }
 
+function highlightHTML(text, matches, boundary = Infinity) {
+  // boundary: char offset where interim (not yet final) text begins
+  const statusById = Object.fromEntries((state.analysis?.symptoms || []).map(x => [x.id, x.status]));
+  const plain = (a, b) => {
+    if (b <= a) return "";
+    if (b <= boundary) return esc(text.slice(a, b));
+    if (a >= boundary) return `<span class="interim">${esc(text.slice(a, b))}</span>`;
+    return esc(text.slice(a, boundary)) + `<span class="interim">${esc(text.slice(boundary, b))}</span>`;
+  };
+  let out = "", pos = 0;
+  for (const m of matches) {
+    out += plain(pos, m.start);
+    const sym = SYMPTOM_BY_ID[m.id], cat = CATEGORIES[sym.cat];
+    const removed = statusById[m.id] === "removed";
+    const live = m.end > boundary;
+    const cls = "sym" + (m.negated ? " neg" : "") + (removed ? " removed" : "") + (live ? " live" : "");
+    const title = sym.name + " — " + cat.label + (m.negated ? " (negated)" : "") + (removed ? " (dismissed)" : "") + (live ? " (listening…)" : "");
+    out += `<mark class="${cls}" style="--c:${cat.color}" title="${esc(title)}" data-sym="${m.id}">${esc(text.slice(m.start, m.end))}</mark>`;
+    pos = m.end;
+  }
+  return out + plain(pos, text.length);
+}
 function renderTranscript() {
   const el = $("#transcript");
-  const s = state.session;
-  const statusById = Object.fromEntries((state.analysis?.symptoms || []).map(x => [x.id, x.status]));
+  const s = state.session, live = state.live;
   if (!s.entries.length && !state.interim) {
-    el.innerHTML = `<div class="placeholder">Press <b>Start listening</b> to transcribe the consultation live, or type / paste text below.<br>Detected symptoms are highlighted by category; negated mentions (e.g. “no headaches”) are struck through.</div>`;
+    setHTML(el, `<div class="placeholder">Press <b>Start listening</b> to transcribe the consultation live, or type / paste text below.<br>Detected symptoms are highlighted by category as they are heard; negated mentions (e.g. “no headaches”) are struck through.</div>`);
     return;
   }
-  const html = s.entries.map(e => {
-    const ms = entryDetections(e);
-    let out = "", pos = 0;
-    for (const m of ms) {
-      out += esc(e.text.slice(pos, m.start));
-      const sym = SYMPTOM_BY_ID[m.id], cat = CATEGORIES[sym.cat];
-      const removed = statusById[m.id] === "removed";
-      const cls = "sym" + (m.negated ? " neg" : "") + (removed ? " removed" : "");
-      const title = sym.name + " — " + cat.label + (m.negated ? " (negated)" : "") + (removed ? " (dismissed)" : "");
-      out += `<mark class="${cls}" style="--c:${cat.color}" title="${esc(title)}" data-sym="${m.id}">${esc(e.text.slice(m.start, m.end))}</mark>`;
-      pos = m.end;
-    }
-    out += esc(e.text.slice(pos));
-    return `<div class="entry" data-eid="${e.id}"><span class="ts">${esc(fmtTime(e.ts))}</span><span class="src">${e.src === "speech" ? "voice" : "typed"}</span>${out}<button class="del" data-deleid="${e.id}" title="Remove this line">×</button></div>`;
+  const paraHTML = (e, body) => `<div class="para${e.src === "typed" ? " typed" : ""}" data-eid="${e.id}"><span class="pts" title="${esc(fmtDateTime(e.ts))}">${esc(fmtTime(e.ts))}${e.src === "typed" ? " · typed" : ""}</span><button class="del" data-deleid="${e.id}" title="Remove this paragraph">×</button>${body}</div>`;
+  let html = s.entries.map(e => {
+    if (live && live.para === e) return paraHTML(e, highlightHTML(live.full, live.matches, live.boundary) + '<span class="caret"></span>');
+    return paraHTML(e, highlightHTML(e.text, entryDetections(e)));
   }).join("");
-  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
-  el.innerHTML = html + (state.interim ? `<div class="entry interim">${esc(state.interim)}…</div>` : "");
-  if (atBottom) el.scrollTop = el.scrollHeight;
+  if (live && !live.para) html += `<div class="para pending"><span class="pts">${esc(fmtTime(new Date().toISOString()))}</span>${highlightHTML(live.full, live.matches, 0)}<span class="caret"></span></div>`;
+  if (setHTML(el, html) && state.stickToBottom) el.scrollTop = el.scrollHeight;
 }
 
 function renderSymptoms() {
@@ -1003,15 +1081,15 @@ function renderSymptoms() {
   const byCat = (a, b) => catOrder.indexOf(SYMPTOM_BY_ID[a.id].cat) - catOrder.indexOf(SYMPTOM_BY_ID[b.id].cat) || SYMPTOM_BY_ID[a.id].name.localeCompare(SYMPTOM_BY_ID[b.id].name);
   const present = syms.filter(s => s.status === "present").sort(byCat);
   const negated = syms.filter(s => s.status === "negated").sort(byCat);
-  $("#symptomChips").innerHTML = present.length ? present.map(s => {
+  setHTML($("#symptomChips"), present.length ? present.map(s => {
     const sym = SYMPTOM_BY_ID[s.id], c = CATEGORIES[sym.cat];
     const tip = `${sym.name} (${c.label})` + (s.phrases.length ? `\nHeard: “${s.phrases.join("”, “")}”` : "\nAdded manually");
-    return `<span class="chip sym${s.manual ? " manual" : ""}" style="--c:${c.color}" title="${esc(tip)}">${esc(sym.name)}${s.pos > 1 ? ` <span class="cnt">×${s.pos}</span>` : ""}<button class="x" data-remove="${s.id}" title="Remove (false positive)">×</button></span>`;
-  }).join("") : `<span class="empty" style="padding:2px 0">None yet.</span>`;
-  $("#negatedWrap").innerHTML = negated.length ? `<div class="subhead">Negated / denied</div><div class="chips">${negated.map(s => {
+    return `<span class="chip sym${s.manual ? " manual" : ""}${s.live ? " live" : ""}" style="--c:${c.color}" title="${esc(tip)}${s.live ? "\n(heard just now — not final yet)" : ""}">${esc(sym.name)}${s.pos > 1 ? ` <span class="cnt">×${s.pos}</span>` : ""}<button class="x" data-remove="${s.id}" title="Remove (false positive)">×</button></span>`;
+  }).join("") : `<span class="empty" style="padding:2px 0">None yet — symptoms are picked up from the transcript as they are heard.</span>`);
+  setHTML($("#negatedWrap"), negated.length ? `<div class="subhead">Negated / denied</div><div class="chips">${negated.map(s => {
     const sym = SYMPTOM_BY_ID[s.id];
     return `<span class="chip neg" title="${esc(sym.name)} — patient denied\nHeard: “${esc(s.phrases.join("”, “"))}”">${esc(sym.name)}<button class="ok" data-present="${s.id}" title="Actually present — mark as present">✓</button><button class="x" data-remove="${s.id}" title="Dismiss">×</button></span>`;
-  }).join("")}</div>` : "";
+  }).join("")}</div>` : "");
 }
 
 function renderFindings() {
@@ -1023,8 +1101,13 @@ function renderFindings() {
 function renderPatterns() {
   const list = state.analysis.patterns.slice(0, SCORING.topN);
   const el = $("#patternList");
-  if (!list.length) { el.innerHTML = `<div class="empty">Patterns appear here as symptoms, tongue and pulse findings are recorded.</div>`; return; }
-  el.innerHTML = list.map((r, i) => `
+  const strip = $("#patternStrip");
+  const EMPTY = "Patterns will appear once symptoms are detected.";
+  setHTML(strip, `<span class="ps-label">Top patterns</span>` + (list.length
+    ? list.slice(0, 3).map((r, i) => `<button class="ps-item${i === 0 ? " first" : ""}" data-goto-pattern="${r.id}" title="${esc(r.name)} — ${r.pct}% fit (tap for details)"><span class="ps-name">${esc(r.name.replace(/ \(.*\)$/, ""))}</span><span class="ps-pct">${r.pct}%</span><span class="ps-bar"><i style="width:${r.pct}%"></i></span></button>`).join("")
+    : `<span class="ps-empty">${EMPTY}</span>`) + `<span class="ps-note">decision support only</span>`);
+  if (!list.length) { setHTML(el, `<div class="empty">${EMPTY}<br><small>Scores update live from the transcript, manual symptoms, tongue and pulse.</small></div>`); return; }
+  setHTML(el, list.map((r, i) => `
     <div class="pattern${i === 0 ? " p-rank1" : ""}" data-pattern="${r.id}">
       <div class="p-head"><span class="p-name">${i + 1}. ${esc(r.name)}</span><span class="p-pct">${r.pct}%</span></div>
       <div class="bar"><div style="width:${r.pct}%"></div></div>
@@ -1037,7 +1120,7 @@ function renderPatterns() {
         <div class="p-score-meta">Matched weight ${r.matched}/${r.total}${r.contraPen ? `, contra −${r.contraPen}` : ""}${r.negPen ? `, denied −${r.negPen}` : ""} · key signs ${r.cardHit}/${r.cardTotal}</div>
         <div>Principle: ${esc(r.principle)}</div><div>Reference formulas: ${esc(r.formulas)}</div>
       </details>
-    </div>`).join("");
+    </div>`).join(""));
 }
 
 function renderAll() {
@@ -1050,11 +1133,42 @@ function renderAll() {
 /* =====================================================================
    SESSION ACTIONS
    ===================================================================== */
+const PARA_GAP_MS = 5000;   // a pause longer than this starts a new paragraph
 function addEntry(text, src) {
   text = (text || "").replace(/\s+/g, " ").trim();
   if (!text) return;
-  state.session.entries.push({ id: uid(), ts: new Date().toISOString(), src, text });
+  if (src === "speech") return appendSpeech(text);
+  const now = new Date().toISOString();
+  state.session.entries.push({ id: uid(), ts: now, lastTs: now, src, text });
+  speech.breakPara = true;   // speech after a typed note starts a new paragraph
+  state.stickToBottom = true;
   markDirty(); refreshAnalysis();
+}
+// Speech is appended to the current paragraph (one flowing text) unless there was a long pause.
+function appendSpeech(text) {
+  text = (text || "").replace(/\s+/g, " ").trim();
+  if (!text) return;
+  const entries = state.session.entries, last = entries[entries.length - 1], now = new Date().toISOString();
+  if (last && last.src === "speech" && !speech.breakPara) {
+    last.text = (last.text + " " + text).trim();
+    last.lastTs = now;
+  } else {
+    entries.push({ id: uid(), ts: now, lastTs: now, src: "speech", text });
+  }
+  speech.breakPara = false;
+  markDirty();
+}
+// Older saved visits stored one line per speech result: merge consecutive lines into paragraphs.
+function mergeLegacyEntries(entries) {
+  const out = [];
+  for (const e of entries || []) {
+    const prev = out[out.length - 1];
+    const gap = prev ? new Date(e.ts) - new Date(prev.lastTs || prev.ts) : Infinity;
+    if (prev && prev.src === "speech" && e.src === "speech" && gap >= 0 && gap < PARA_GAP_MS) {
+      prev.text = (prev.text + " " + e.text).trim(); prev.lastTs = e.lastTs || e.ts;
+    } else out.push({ ...e, lastTs: e.lastTs || e.ts });
+  }
+  return out;
 }
 function confirmDiscard() {
   return !(state.session.dirty && sessionHasContent(state.session)) || confirm("The current session has unsaved changes. Discard them?");
@@ -1075,6 +1189,7 @@ function openVisit(vid) {
   } else if (!confirmDiscard()) return;
   state.session = { ...newSession(v.patientId), ...JSON.parse(JSON.stringify(v)), dirty: false };
   ["entries", "tongue", "pulse"].forEach(k => state.session[k] = state.session[k] || []);
+  state.session.entries = mergeLegacyEntries(state.session.entries);
   state.session.overrides = state.session.overrides || {};
   state.selectedPatientId = v.patientId;
   clearDraft();
@@ -1086,8 +1201,8 @@ function buildVisitRecord() {
   const s = state.session, a = analyzeSession(s);
   return {
     id: s.id, patientId: s.patientId, startedAt: s.startedAt, savedAt: new Date().toISOString(), lang: s.lang,
-    transcript: s.entries.map(e => e.text).join("\n"),
-    entries: s.entries.map(e => ({ id: e.id, ts: e.ts, src: e.src, text: e.text })),
+    transcript: s.entries.map(e => e.text).join("\n\n"),
+    entries: s.entries.map(e => ({ id: e.id, ts: e.ts, lastTs: e.lastTs || e.ts, src: e.src, text: e.text })),
     overrides: s.overrides,
     symptoms: a.symptoms.filter(x => x.status !== "removed").map(x => ({ id: x.id, name: SYMPTOM_BY_ID[x.id].name, category: SYMPTOM_BY_ID[x.id].cat, status: x.status, mentions: x.pos, negatedMentions: x.neg, manual: !!x.manual, phrases: x.phrases })),
     tongue: [...s.tongue], pulse: [...s.pulse],
@@ -1199,8 +1314,8 @@ function printVisit() {
   const transcriptHtml = s.entries.map(e => {
     const ms = entryDetections(e); let out = "", pos = 0;
     for (const m of ms) { out += esc(e.text.slice(pos, m.start)); out += `<mark class="sym${m.negated ? " neg" : ""}">${esc(e.text.slice(m.start, m.end))}</mark>`; pos = m.end; }
-    return `[${fmtTime(e.ts)}] ` + out + esc(e.text.slice(pos));
-  }).join("\n");
+    return `[${fmtTime(e.ts)}${e.src === "typed" ? ", typed" : ""}] ` + out + esc(e.text.slice(pos));
+  }).join("\n\n");
   $("#printArea").innerHTML = `<div class="pr">
     <h1>Consultation summary</h1>
     <div class="muted">${esc(fmtDateTime(s.startedAt))}${s.savedAt ? " · saved " + esc(fmtDateTime(s.savedAt)) : " · (not yet saved)"}</div>
@@ -1228,6 +1343,93 @@ function printVisit() {
    ===================================================================== */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognizer = null, restartTimes = [];
+
+/* Robust result handling ---------------------------------------------------
+   Chrome's continuous recognition behaves differently across platforms:
+   - Desktop: event.results is cumulative for the recognition session; only
+     results from event.resultIndex changed. Identical events can repeat.
+   - Android: results are often all final and each one REPEATS the earlier
+     text ("i've been" → "i've been feeling tired"), resultIndex may stay 0,
+     and interim text repeats already-final words.
+   - After an auto-restart ('end' → start()) a new session begins and may
+     re-send the tail of what was already said.
+   So instead of appending every final result, we rebuild the full final text
+   of the current recognition session from ALL results (idempotent), merge
+   overlapping/cumulative pieces word-by-word, and append only the words that
+   were not committed before. */
+const speech = {
+  recTokens: [],      // words already committed from the current recognition session
+  freshRec: true,     // no commit yet in this recognition session (restart guard active)
+  lastHeard: 0,       // time of last speech event (for paragraph breaks)
+  breakPara: false    // next speech starts a new paragraph (long pause / typed note)
+};
+const tokNorm = w => w.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+const toTokens = t => (t || "").trim().split(/\s+/).filter(Boolean);
+function startsWithSeq(A, B) { if (B.length > A.length) return false; for (let i = 0; i < B.length; i++) if (A[i] !== B[i]) return false; return true; }
+function indexOfSeq(A, B, from = 0) {
+  outer: for (let i = Math.max(0, from); i + B.length <= A.length; i++) { for (let j = 0; j < B.length; j++) if (A[i + j] !== B[j]) continue outer; return i; }
+  return -1;
+}
+// Merge token list `next` onto `acc`, removing repetition. Returns the merged token list.
+function mergeTokens(acc, next) {
+  if (!next.length) return acc;
+  if (!acc.length) return next.slice();
+  const A = acc.map(tokNorm), N = next.map(tokNorm);
+  if (startsWithSeq(N, A)) return next.slice();                     // cumulative: next repeats acc and extends it
+  const tail = Math.max(0, A.length - N.length);
+  if (A.slice(tail).join(" ") === N.join(" ")) return acc;          // exact repeat of the tail
+  if (N.length >= 5 && indexOfSeq(A, N, A.length - 40 - N.length) >= 0) return acc;   // repeat of a recent phrase (5+ words)
+  for (let k = Math.min(A.length, N.length - 1); k >= 3; k--) {     // suffix/prefix overlap of >= 3 words
+    if (A.slice(A.length - k).join(" ") === N.slice(0, k).join(" ")) return acc.concat(next.slice(k));
+  }
+  return acc.concat(next);
+}
+// Words of `next` that are new relative to the committed paragraph tail (used right after a restart).
+function newPartAfter(committedTokens, next) {
+  const tail = committedTokens.slice(-40);
+  const merged = mergeTokens(tail, next);
+  return merged === tail ? [] : (startsWithSeq(merged.map(tokNorm), tail.map(tokNorm)) ? merged.slice(tail.length) : next);
+}
+function currentParaTokens() {
+  const last = state.session.entries[state.session.entries.length - 1];
+  return last && last.src === "speech" && !speech.breakPara ? toTokens(last.text) : [];
+}
+function commitFinalTokens(finalTokens) {
+  // finalTokens: full final text of this recognition session so far
+  const R = speech.recTokens;
+  let delta;
+  if (startsWithSeq(finalTokens.map(tokNorm), R.map(tokNorm))) delta = finalTokens.slice(R.length);
+  else { const merged = mergeTokens(R, finalTokens); delta = merged.slice(R.length); finalTokens = merged; }
+  speech.recTokens = finalTokens.length >= R.length ? finalTokens : R;
+  if (!delta.length) return;
+  if (speech.freshRec) delta = newPartAfter(currentParaTokens(), delta);   // restart re-emission guard
+  if (!delta.length) return;
+  speech.freshRec = false;
+  appendSpeech(delta.join(" "));
+}
+function handleResultEvent(ev) {
+  const now = Date.now();
+  if (speech.lastHeard && now - speech.lastHeard > PARA_GAP_MS) speech.breakPara = true;
+  speech.lastHeard = now;
+  let finals = [], interim = [];
+  for (let i = 0; i < ev.results.length; i++) {           // all results → idempotent even if events repeat
+    const r = ev.results[i], toks = toTokens(r[0] && r[0].transcript);
+    if (r.isFinal) finals = mergeTokens(finals, toks);
+    else interim = interim.concat(toks);
+  }
+  const before = speech.recTokens.length;
+  if (finals.length) commitFinalTokens(finals);
+  // interim: strip anything already committed (Android repeats final words inside interim)
+  let shown = [];
+  if (interim.length) {
+    const base = speech.recTokens.length ? speech.recTokens : currentParaTokens().slice(-40);
+    const merged = mergeTokens(base, interim);
+    shown = merged === base ? [] : (startsWithSeq(merged.map(tokNorm), base.map(tokNorm)) ? merged.slice(base.length) : interim);
+  }
+  state.interim = shown.join(" ");
+  if (speech.recTokens.length !== before) refreshAnalysis(); else scheduleRefresh();
+}
+
 function setListeningUI() {
   const on = state.listening;
   $("#micBtn").classList.toggle("on", on);
@@ -1238,55 +1440,56 @@ function setListeningUI() {
 }
 function startListening() {
   if (!SR) {
-    banner("Live speech recognition is not supported in this browser. Please use <b>Google Chrome</b> or <b>Microsoft Edge</b> on desktop. You can still type or paste notes below.", "error");
+    banner("Live speech recognition is not supported in this browser. Please use <b>Google Chrome</b> or <b>Microsoft Edge</b>. You can still type or paste notes below.", "error");
     return;
   }
   if (!navigator.onLine) toast("You appear to be offline — browser speech recognition usually needs internet.");
-  recognizer = new SR();
-  recognizer.continuous = true;
-  recognizer.interimResults = true;
-  recognizer.maxAlternatives = 1;
-  recognizer.lang = $("#langSel").value;
-  recognizer.onresult = ev => {
-    let interim = "";
-    for (let i = ev.resultIndex; i < ev.results.length; i++) {
-      const r = ev.results[i];
-      if (r.isFinal) addEntry(r[0].transcript, "speech");
-      else interim += r[0].transcript;
-    }
-    state.interim = interim.trim();
-    renderTranscript();
-  };
-  recognizer.onerror = ev => {
-    if (ev.error === "no-speech" || ev.error === "aborted") return;  // normal; onend will restart
-    if (ev.error === "not-allowed" || ev.error === "service-not-allowed") {
-      state.listening = false; setListeningUI();
-      banner("Microphone access was blocked. Allow microphone access for this page (click the camera/mic icon in the address bar), then press Start listening again. If opened from a file and it keeps failing, serve the file from <code>http://localhost</code>.", "error");
-    } else if (ev.error === "network") {
-      banner("Speech service network error — the browser's speech recognition needs an internet connection. Retrying…");
-    } else if (ev.error === "language-not-supported") {
-      state.listening = false; setListeningUI();
-      banner(`The language “${esc(recognizer.lang)}” is not supported by this browser's speech service. Choose another language.`, "error");
-    } else if (ev.error === "audio-capture") {
-      state.listening = false; setListeningUI();
-      banner("No microphone was found. Check that a microphone is connected and enabled.", "error");
-    } else console.warn("Speech error", ev.error);
-  };
-  recognizer.onend = () => {
-    if (state.interim) { addEntry(state.interim, "speech"); state.interim = ""; }  // keep any unfinalised words
-    renderTranscript();
-    if (!state.listening) return;
-    const now = Date.now();
-    restartTimes = restartTimes.filter(t => now - t < 10000); restartTimes.push(now);
-    const delay = restartTimes.length > 5 ? 3000 : 250;   // back off if it keeps ending immediately
-    setTimeout(() => {
+  if (!recognizer) {
+    recognizer = new SR();
+    recognizer.continuous = true;
+    recognizer.interimResults = true;
+    recognizer.maxAlternatives = 1;
+    recognizer.onresult = handleResultEvent;
+    recognizer.onerror = ev => {
+      if (ev.error === "no-speech" || ev.error === "aborted") return;  // normal; onend will restart
+      if (ev.error === "not-allowed" || ev.error === "service-not-allowed") {
+        state.listening = false; setListeningUI();
+        banner("Microphone access was blocked. Allow microphone access for this site (tap the lock / mic icon in the address bar), then press Start listening again.", "error");
+      } else if (ev.error === "network") {
+        banner("Speech service network error — the browser's speech recognition needs an internet connection. Retrying…");
+      } else if (ev.error === "language-not-supported") {
+        state.listening = false; setListeningUI();
+        banner(`The language “${esc(recognizer.lang)}” is not supported by this browser's speech service. Choose another language.`, "error");
+      } else if (ev.error === "audio-capture") {
+        state.listening = false; setListeningUI();
+        banner("No microphone was found. Check that a microphone is connected and enabled.", "error");
+      } else console.warn("Speech error", ev.error);
+    };
+    recognizer.onstart = () => {
+      speech.recTokens = []; speech.freshRec = true;          // new recognition session
+      if (!$("#banner").classList.contains("error")) banner();
+    };
+    recognizer.onend = () => {
+      // keep words that were still interim when the session ended (restart guard prevents re-adding them)
+      if (state.interim) { commitFinalTokens(mergeTokens(speech.recTokens, toTokens(state.interim))); state.interim = ""; }
+      speech.recTokens = []; speech.freshRec = true;
+      refreshAnalysis();
       if (!state.listening) return;
-      try { recognizer.lang = $("#langSel").value; recognizer.start(); } catch (e) { console.warn("restart failed", e); }
-    }, delay);
-  };
-  recognizer.onstart = () => { if (!$("#banner").classList.contains("error")) banner(); };
+      const now = Date.now();
+      restartTimes = restartTimes.filter(t => now - t < 10000); restartTimes.push(now);
+      const delay = restartTimes.length > 5 ? 3000 : 250;   // back off if it keeps ending immediately
+      setTimeout(() => {
+        if (!state.listening) return;
+        try { recognizer.lang = $("#langSel").value; recognizer.start(); } catch (e) { console.warn("restart failed", e); }
+      }, delay);
+    };
+  }
+  recognizer.lang = $("#langSel").value;
+  speech.recTokens = []; speech.freshRec = true;
+  if (speech.lastHeard && Date.now() - speech.lastHeard > PARA_GAP_MS) speech.breakPara = true;
   try { recognizer.start(); state.listening = true; }
-  catch (e) { console.warn(e); state.listening = false; }
+  catch (e) { console.warn(e); state.listening = /already/i.test(e.message || ""); }
+  state.stickToBottom = true;
   setListeningUI();
 }
 function stopListening() {
@@ -1357,8 +1560,18 @@ function bindEvents() {
   $("#clearTranscriptBtn").onclick = () => {
     if (!state.session.entries.length) return;
     if (!confirm("Clear the whole transcript of this session? (Tongue/pulse, manual symptoms and notes are kept.)")) return;
-    state.session.entries = []; state.interim = ""; markDirty(); refreshAnalysis();
+    state.session.entries = []; state.interim = ""; speech.recTokens = []; speech.breakPara = false; markDirty(); refreshAnalysis();
   };
+  $("#transcript").addEventListener("scroll", e => {
+    const el = e.currentTarget;
+    state.stickToBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+  }, { passive: true });
+  $("#patternStrip").onclick = e => {
+    const b = e.target.closest("[data-goto-pattern]");
+    const target = b ? document.querySelector(`#patternList [data-pattern="${b.dataset.gotoPattern}"]`) : $("#patternList");
+    if (target) { target.scrollIntoView({ behavior: "smooth", block: "start" }); const d = target.querySelector && target.querySelector("details"); if (d) d.open = true; }
+  };
+  $("#jumpPatientsBtn").onclick = () => $("#leftPanel").scrollIntoView({ behavior: "smooth", block: "start" });
   $("#transcript").onclick = e => {
     const id = e.target.dataset.deleid;
     if (id) { state.session.entries = state.session.entries.filter(x => x.id !== id); markDirty(); refreshAnalysis(); }
@@ -1402,6 +1615,7 @@ async function init() {
     const d = await DB.get("meta", "draft");
     if (d && d.session && sessionHasContent(d.session)) {
       state.session = { ...newSession(null), ...d.session, dirty: true };
+      state.session.entries = mergeLegacyEntries(state.session.entries);
       state.selectedPatientId = state.session.patientId || null;
       toast("Restored unsaved session draft from " + fmtDateTime(d.at), 4000);
     }
@@ -1413,7 +1627,8 @@ async function init() {
 }
 
 // Exposed for testing / console use
-window.TCM = { detectText, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.speechDebug = speech;
+window.TCM = { detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>
