@@ -12,6 +12,7 @@
   font-size:14px;
 }
 *{box-sizing:border-box}
+[hidden]{display:none !important}
 html,body{height:100%;margin:0}
 body{font-family:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;line-height:1.4}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -171,6 +172,39 @@ mark.sym.live{background:color-mix(in srgb,var(--c) 10%,white);border-bottom:2px
 .pattern-strip .ps-empty{font-size:12.5px;color:var(--muted)}
 .pattern-strip .ps-note{font-size:10.5px;color:#9a7b2c;margin-left:auto;padding-left:6px}
 .mobile-only{display:none}
+
+/* AI assist */
+.ai-btn{border-color:#b9a4e0;color:#5b3fa6;background:#f7f3ff;font-weight:600}
+.ai-btn:hover{background:#efe7ff;border-color:#9f86d6}
+.ai-section .ai-panel-body{max-height:380px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#fcfbff}
+.ai-meta{font-size:11.5px;color:var(--muted);margin-bottom:6px}
+dialog.wide{width:min(860px,96vw)}
+.ai-note{font-size:12.5px;background:#f7f3ff;border:1px solid #e0d5f5;border-radius:8px;padding:8px 10px;line-height:1.5}
+.check{display:flex;align-items:center;gap:6px;margin:10px 0 6px;font-size:13px}
+.ai-preview summary{cursor:pointer;font-size:12.5px;color:var(--accent)}
+.ai-preview pre{white-space:pre-wrap;font-size:11.5px;background:#f6f8f7;border:1px solid var(--line);border-radius:6px;padding:8px;max-height:260px;overflow:auto}
+.ai-status{margin:10px 0;padding:10px 12px;border-radius:8px;font-size:13px;background:#f3f6f5;display:flex;align-items:center;gap:10px}
+.ai-status.error{background:#fbeeee;color:#7a2727;border:1px solid #ecc9c9}
+.spinner{width:18px;height:18px;border:3px solid #d9d0ee;border-top-color:#5b3fa6;border-radius:50%;animation:spin .8s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.key-row{display:flex;gap:6px}
+.key-row input{flex:1;font-family:ui-monospace,Consolas,monospace}
+.hint{font-size:12px;color:var(--muted);margin:10px 0 0}
+.md{font-size:13.5px;line-height:1.55;color:var(--ink);overflow-wrap:anywhere}
+.md h1,.md h2,.md h3,.md h4{margin:14px 0 6px;line-height:1.3;color:#1f2d2a;text-transform:none;letter-spacing:0}
+.md h1{font-size:17px}.md h2{font-size:15.5px;border-bottom:1px solid var(--line);padding-bottom:3px}.md h3{font-size:14px}.md h4{font-size:13.5px}
+.md > :first-child{margin-top:0}
+.md p{margin:6px 0}
+.md ul,.md ol{margin:4px 0 8px;padding-left:22px}
+.md li{margin:2px 0}
+.md table{border-collapse:collapse;width:100%;margin:6px 0 10px;font-size:12.5px}
+.md th,.md td{border:1px solid var(--line);padding:4px 7px;text-align:left;vertical-align:top}
+.md th{background:#f3f6f5}
+.md code{background:#f1f3f2;border-radius:4px;padding:0 4px;font-size:12px}
+.md pre{background:#f6f8f7;border:1px solid var(--line);border-radius:6px;padding:8px;white-space:pre-wrap}
+.md blockquote{margin:6px 0;padding:4px 10px;border-left:3px solid #d8cdef;color:#4d4a5a;background:#faf8ff}
+.md hr{border:none;border-top:1px solid var(--line);margin:10px 0}
+.pattern-strip .ps-ai{flex:none;padding:4px 10px}
 footer{padding:6px 14px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;border-top:1px solid var(--line);background:#fff}
 
 /* dialogs */
@@ -225,7 +259,9 @@ dialog::backdrop{background:rgba(20,35,30,.35)}
   .pattern-strip .ps-item{flex:1 1 100%;min-width:0;grid-template-columns:1fr auto}
   .pattern-strip .ps-name{max-width:none;white-space:nowrap}
   .legend{display:none}
-  .pattern-strip .ps-note{flex-basis:100%;margin-left:0;padding-left:0}
+  .pattern-strip .ps-note{flex-basis:auto;margin-left:0;padding-left:0}
+  .pattern-strip .ps-ai{margin-left:auto}
+  dialog.wide .dlg-body{max-height:74vh}
   #leftPanel{max-height:none}
   #rightPanel .panel-body{display:block}
   .notes{grid-template-columns:1fr}
@@ -245,6 +281,9 @@ dialog::backdrop{background:rgba(20,35,30,.35)}
   .pr .transcript-print{white-space:pre-wrap;font-size:11px;line-height:1.5}
   .pr .disc{font-size:10.5px;color:#444;border:1px solid #aaa;padding:4px 6px;margin-top:10px}
   mark.sym{background:none !important;border-bottom:1.5px solid #000;padding:0}
+  .pr .md{font-size:11.5px}
+  .pr .md h2{font-size:12.5px;border:none;margin:10px 0 3px}
+  .pr .md table{font-size:10.5px}
   mark.sym.neg{text-decoration:line-through}
 }
 </style>
@@ -270,6 +309,7 @@ dialog::backdrop{background:rgba(20,35,30,.35)}
       <button id="menuBtn" title="More">⋯ Data</button>
       <div class="menu-list">
         <button id="printBtn">🖨 Print / PDF summary of this visit</button>
+        <button id="aiSettingsBtn">⚙ AI settings (xAI Grok)…</button>
         <button id="exportBtn">⬇ Export all data (JSON backup)</button>
         <button id="importBtn">⬆ Import data from JSON…</button>
       </div>
@@ -318,9 +358,14 @@ dialog::backdrop{background:rgba(20,35,30,.35)}
         <div id="negatedWrap"></div>
       </div>
       <div class="section patterns">
-        <div class="section-head"><h2>Likely patterns</h2></div>
+        <div class="section-head"><h2>Likely patterns</h2><button class="small ai-btn" id="askAiBtn" title="Ask xAI Grok for a differentiation, formula and acupuncture suggestions (de-identified)">✦ Ask AI</button></div>
         <div class="disclaimer">Pattern fit score — decision support only, not a diagnosis.</div>
         <div id="patternList"></div>
+      </div>
+      <div class="section ai-section" id="aiSection" hidden>
+        <div class="section-head"><h2>AI suggestions (Grok)</h2><span><button class="small" id="aiCopyPanelBtn" title="Copy AI response">Copy</button> <button class="small" id="aiOpenBtn">Open</button></span></div>
+        <div class="ai-meta" id="aiPanelMeta"></div>
+        <div class="md ai-panel-body" id="aiPanelBody"></div>
       </div>
       <div class="section">
         <div class="section-head"><h2>Tongue</h2></div>
@@ -355,6 +400,55 @@ dialog::backdrop{background:rgba(20,35,30,.35)}
     </div>
     <div class="dlg-foot"><button type="button" data-close>Cancel</button><button type="submit" class="primary" value="save">Save patient</button></div>
   </form>
+</dialog>
+
+<!-- AI settings -->
+<dialog id="aiSettingsDialog">
+  <form id="aiSettingsForm">
+    <div class="dlg-head"><h3>AI settings — xAI Grok</h3><button type="button" class="link" data-close>✕</button></div>
+    <div class="dlg-body">
+      <div class="form-grid">
+        <label class="full">xAI API key
+          <span class="key-row"><input type="password" id="aiKeyInput" autocomplete="off" spellcheck="false" placeholder="xai-…"><button type="button" class="small" id="aiKeyShowBtn">Show</button><button type="button" class="small danger" id="aiKeyClearBtn">Clear</button></span>
+        </label>
+        <label class="full">Model
+          <input type="text" id="aiModelInput" list="aiModelList" autocomplete="off" spellcheck="false">
+          <datalist id="aiModelList"><option value="grok-4.7"><option value="grok-4.6"><option value="grok-4.3"><option value="grok-4.20-0309-reasoning"><option value="grok-4.20-0309-non-reasoning"></datalist>
+        </label>
+      </div>
+      <p class="hint">Get a key at <b>console.x.ai</b>. The key is stored <b>only in this browser's localStorage</b> (never in exported backups) and is sent only to <code>api.x.ai</code>. Anyone using this browser profile could read it — use Clear on shared devices.</p>
+      <p class="hint" id="aiSettingsMsg"></p>
+    </div>
+    <div class="dlg-foot"><button type="button" data-close>Cancel</button><button type="submit" class="primary">Save</button></div>
+  </form>
+</dialog>
+
+<!-- Ask AI -->
+<dialog id="askAiDialog" class="wide">
+  <div class="dlg-head"><h3>✦ Ask AI — xAI Grok</h3><button type="button" class="link" data-close>✕</button></div>
+  <div class="dlg-body">
+    <div id="aiSetup">
+      <div class="ai-note">
+        <b>What is sent to xAI:</b> age, sex, present and denied symptoms, tongue and pulse findings, the app's top 5 pattern scores, practitioner notes<span id="aiNoteTranscript"> and the transcript</span>.
+        <b>Not sent:</b> patient name, contact details, date of birth. Names, phone numbers and e-mail addresses found in the text are replaced with placeholders.
+        The request goes directly from this browser to <code>api.x.ai</code> using your API key. The answer is decision support for a licensed practitioner — not a diagnosis or prescription.
+      </div>
+      <label class="check"><input type="checkbox" id="aiIncludeTranscript" checked> Include transcript</label>
+      <details class="ai-preview"><summary>Preview exactly what will be sent</summary><pre id="aiPreview"></pre></details>
+    </div>
+    <div id="aiStatus" class="ai-status" hidden></div>
+    <div id="aiResultWrap" hidden>
+      <div class="ai-meta" id="aiResultMeta"></div>
+      <div class="md" id="aiResult"></div>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" id="aiDlgSettingsBtn" style="margin-right:auto">⚙ Settings</button>
+    <button type="button" id="aiCopyBtn" hidden>Copy</button>
+    <button type="button" id="aiCancelBtn" hidden>Cancel request</button>
+    <button type="button" data-close>Close</button>
+    <button type="button" class="primary" id="aiSendBtn">Send to Grok</button>
+  </div>
 </dialog>
 
 <!-- Symptom picker -->
@@ -916,10 +1010,10 @@ const state = {
 
 function newSession(patientId) {
   return { id: uid(), patientId: patientId || null, startedAt: new Date().toISOString(), savedAt: null,
-           lang: $("#langSel") ? $("#langSel").value : "en-PH", entries: [], overrides: {}, tongue: [], pulse: [], notes: "", diagnosis: "", dirty: false };
+           lang: $("#langSel") ? $("#langSel").value : "en-PH", entries: [], overrides: {}, tongue: [], pulse: [], notes: "", diagnosis: "", ai: null, dirty: false };
 }
 function sessionHasContent(s) {
-  return s && (s.entries.length || s.tongue.length || s.pulse.length || s.notes.trim() || s.diagnosis.trim() || Object.keys(s.overrides).length);
+  return s && (s.entries.length || s.tongue.length || s.pulse.length || s.notes.trim() || s.diagnosis.trim() || Object.keys(s.overrides).length || s.ai);
 }
 function patientById(id) { return state.patients.find(p => p.id === id); }
 function ageOf(p) {
@@ -1105,7 +1199,7 @@ function renderPatterns() {
   const EMPTY = "Patterns will appear once symptoms are detected.";
   setHTML(strip, `<span class="ps-label">Top patterns</span>` + (list.length
     ? list.slice(0, 3).map((r, i) => `<button class="ps-item${i === 0 ? " first" : ""}" data-goto-pattern="${r.id}" title="${esc(r.name)} — ${r.pct}% fit (tap for details)"><span class="ps-name">${esc(r.name.replace(/ \(.*\)$/, ""))}</span><span class="ps-pct">${r.pct}%</span><span class="ps-bar"><i style="width:${r.pct}%"></i></span></button>`).join("")
-    : `<span class="ps-empty">${EMPTY}</span>`) + `<span class="ps-note">decision support only</span>`);
+    : `<span class="ps-empty">${EMPTY}</span>`) + `<span class="ps-note">decision support only</span><button class="small ai-btn ps-ai" data-ask-ai>✦ Ask AI</button>`);
   if (!list.length) { setHTML(el, `<div class="empty">${EMPTY}<br><small>Scores update live from the transcript, manual symptoms, tongue and pulse.</small></div>`); return; }
   setHTML(el, list.map((r, i) => `
     <div class="pattern${i === 0 ? " p-rank1" : ""}" data-pattern="${r.id}">
@@ -1128,6 +1222,7 @@ function renderAll() {
   $("#notesInput").value = state.session.notes || "";
   $("#diagnosisInput").value = state.session.diagnosis || "";
   refreshAnalysis();
+  renderAISection();
 }
 
 /* =====================================================================
@@ -1207,7 +1302,8 @@ function buildVisitRecord() {
     symptoms: a.symptoms.filter(x => x.status !== "removed").map(x => ({ id: x.id, name: SYMPTOM_BY_ID[x.id].name, category: SYMPTOM_BY_ID[x.id].cat, status: x.status, mentions: x.pos, negatedMentions: x.neg, manual: !!x.manual, phrases: x.phrases })),
     tongue: [...s.tongue], pulse: [...s.pulse],
     patterns: a.patterns.slice(0, SCORING.topN).map(r => ({ id: r.id, name: r.name, pct: r.pct, matched: r.hits.map(h => h.id), contra: r.contraHits.map(h => h.id) })),
-    notes: s.notes, diagnosis: s.diagnosis
+    notes: s.notes, diagnosis: s.diagnosis,
+    ai: s.ai || null
   };
 }
 async function saveSession() {
@@ -1332,6 +1428,7 @@ function printVisit() {
     <div class="muted" style="font-size:10.5px">* key sign</div>
     <h2>Practitioner notes</h2><p style="white-space:pre-wrap">${esc(s.notes) || "—"}</p>
     <h2>Final diagnosis / treatment</h2><p style="white-space:pre-wrap">${esc(s.diagnosis) || "—"}</p>
+    ${s.ai && s.ai.content ? `<h2>AI suggestions (${esc(s.ai.model)}, ${esc(fmtDateTime(s.ai.at))}) — decision support only, verify before use</h2><div class="md">${renderMarkdownSafe(s.ai.content)}</div>` : ""}
     <h2>Transcript</h2><div class="transcript-print">${transcriptHtml || "—"}</div>
     <div class="disc">Pattern fit scores are generated automatically from the recorded findings and are decision support only — not a diagnosis. Transcript produced by browser speech recognition; no audio was recorded.</div>
   </div>`;
@@ -1517,6 +1614,296 @@ function addSymptomManually(id) {
 }
 
 /* =====================================================================
+   AI ASSIST (xAI Grok, OpenAI-compatible chat completions)
+   - Key + model stored only in localStorage; request goes browser → api.x.ai
+   - Sends a de-identified case summary; response rendered via a safe
+     markdown renderer (all model text is HTML-escaped first).
+   ===================================================================== */
+const AI = {
+  endpoint: "https://api.x.ai/v1/chat/completions",
+  defaultModel: "grok-4.7",
+  timeoutMs: 180000,
+  controller: null, busy: false,
+  get key() { try { return localStorage.getItem("tcm_xai_key") || ""; } catch { return ""; } },
+  set key(v) { try { v ? localStorage.setItem("tcm_xai_key", v) : localStorage.removeItem("tcm_xai_key"); } catch {} },
+  get model() { try { return localStorage.getItem("tcm_xai_model") || AI.defaultModel; } catch { return AI.defaultModel; } },
+  set model(v) { try { localStorage.setItem("tcm_xai_model", v || AI.defaultModel); } catch {} }
+};
+
+const AI_SYSTEM_PROMPT = `You are an experienced Traditional Chinese Medicine (TCM) clinical assistant supporting a licensed TCM practitioner in the Philippines during or after a consultation. You reason in the style of standard TCM textbooks (e.g. Maciocia, Bensky/Clavey herbal references, Deadman acupuncture) and you are careful and clinically conservative.
+
+You receive a de-identified case summary: patient age and sex, symptoms reported as present, symptoms the patient denied, tongue and pulse findings, an automatically computed pattern-fit ranking from the practitioner's app (a rough heuristic you may disagree with), practitioner notes, and sometimes a raw speech-to-text transcript (lowercase, unpunctuated, may contain recognition errors and Tagalog/Taglish).
+
+Respond in well-structured Markdown using exactly these sections and headings:
+
+## 1. Pattern differentiation
+- **Primary pattern:** name (Chinese pinyin in brackets) — then the reasoning: which findings support it, which are missing or contradict it.
+- **Secondary pattern(s):** same format, and how they relate (root/branch, deficiency/excess, cold/heat).
+- Mention important differentials and which extra questions, tongue or pulse details would confirm or exclude them.
+
+## 2. Treatment principle
+Concise principle(s), root vs. branch priority.
+
+## 3. Herbal formula
+- Base classical formula (pinyin + English), why it fits.
+- A Markdown table of ingredients: | Herb (pinyin) | Latin/pharmaceutical name | Typical daily dose (g, decoction) | Role / note |
+- Modifications (additions/removals) tied to specific findings, with doses in grams.
+- Preparation and typical course; granule/patent alternative if appropriate.
+- **Cautions & contraindications:** pregnancy/breastfeeding, relevant herb–drug interactions, toxicity or restricted substances, conditions in which the formula is inappropriate.
+
+## 4. Acupuncture
+- A Markdown table: | Point | Rationale | Needling / technique |
+- Moxibustion, cupping or other notes (when indicated or contraindicated), suggested frequency and number of sessions.
+
+## 5. Lifestyle & diet
+Practical advice adapted to the pattern and to a Filipino diet and climate where relevant.
+
+## 6. Red flags — refer for biomedical assessment if
+Specific warning signs in this presentation that need urgent or routine referral to a physician, and anything in the data that already warrants referral.
+
+End with one line in italics: *Decision support for a licensed practitioner — verify all doses, contraindications and interactions; not a substitute for clinical judgement.*
+
+Rules: base everything on the supplied findings; say clearly when data is insufficient; do not invent findings; never state a biomedical diagnosis as fact; use grams for all herb doses and adult doses unless the age indicates otherwise; do not include any HTML.`;
+
+// --- de-identification --------------------------------------------------
+function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+function deidentify(text, patient) {
+  if (!text) return "";
+  let out = String(text);
+  out = out.replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "[email]");
+  out = out.replace(/(\+?63[\s-]?|0)9\d{2}[\s-]?\d{3}[\s-]?\d{4}\b/g, "[phone]");
+  out = out.replace(/\b\d{3,4}[\s-]\d{3,4}[\s-]?\d{0,4}\b/g, m => (m.replace(/\D/g, "").length >= 7 ? "[phone]" : m));
+  if (patient) {
+    const parts = [];
+    if (patient.name) { parts.push(patient.name.trim()); patient.name.split(/\s+/).forEach(w => { if (w.replace(/\W/g, "").length >= 3) parts.push(w); }); }
+    if (patient.contact) parts.push(patient.contact.trim());
+    parts.filter(Boolean).sort((a, b) => b.length - a.length).forEach(p => {
+      out = out.replace(new RegExp("(?<![\\p{L}\\p{N}])" + escapeRegExp(p) + "(?![\\p{L}\\p{N}])", "giu"), "[patient]");
+    });
+  }
+  return out;
+}
+
+function buildAICaseSummary(session, includeTranscript) {
+  const a = analyzeSession(session), p = patientById(session.patientId);
+  const age = p ? ageOf(p) : "";
+  const byCat = ids => ids.map(id => `${SYMPTOM_BY_ID[id].name} [${CATEGORIES[SYMPTOM_BY_ID[id].cat].label}]`);
+  const lines = [];
+  lines.push("DE-IDENTIFIED TCM CASE SUMMARY");
+  lines.push(`Age: ${age !== "" ? age : "unknown"}`);
+  lines.push(`Sex: ${p && p.sex ? p.sex : "unknown"}`);
+  lines.push("");
+  lines.push("Symptoms reported as PRESENT:");
+  lines.push(...(a.presentSym.length ? byCat(a.presentSym).map(x => "- " + x) : ["- none recorded"]));
+  lines.push("");
+  lines.push("Symptoms DENIED by the patient:");
+  lines.push(...(a.negatedSym.length ? byCat(a.negatedSym).map(x => "- " + x) : ["- none recorded"]));
+  lines.push("");
+  lines.push("Tongue: " + (session.tongue.length ? session.tongue.map(id => TONGUE_BY_ID[id].name).join(", ") : "not recorded"));
+  lines.push("Pulse: " + (session.pulse.length ? session.pulse.map(id => PULSE_BY_ID[id].name).join(", ") : "not recorded"));
+  lines.push("");
+  lines.push("App pattern-fit ranking (heuristic, top 5):");
+  const top = a.patterns.slice(0, SCORING.topN);
+  lines.push(...(top.length ? top.map((r, i) => `${i + 1}. ${r.name} — ${r.pct}% (matched: ${r.hits.map(h => shortIndicatorName(h.id)).join(", ")}${r.contraHits.length ? "; against: " + r.contraHits.map(h => shortIndicatorName(h.id)).join(", ") : ""})`) : ["- no pattern scored yet"]));
+  lines.push("");
+  lines.push("Practitioner notes:");
+  lines.push(deidentify(session.notes, p).trim() || "(none)");
+  if (session.diagnosis && session.diagnosis.trim()) { lines.push(""); lines.push("Practitioner's working diagnosis:"); lines.push(deidentify(session.diagnosis, p).trim()); }
+  if (includeTranscript) {
+    lines.push("");
+    lines.push("Consultation transcript (speech-to-text, may contain recognition errors; typed notes marked [typed]):");
+    const t = session.entries.map(e => (e.src === "typed" ? "[typed] " : "") + e.text).join("\n\n");
+    lines.push(deidentify(t, p).trim() || "(empty)");
+  }
+  return lines.join("\n");
+}
+
+// --- safe markdown rendering (escape first, then add a small set of tags) --
+function mdInline(s) {
+  // s is already HTML-escaped
+  return s
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^\w])__([^_]+)__(?!\w)/g, "$1<strong>$2</strong>")
+    .replace(/(^|[^*\w])\*([^*\n]+)\*(?!\w)/g, "$1<em>$2</em>")
+    .replace(/(^|[^_\w])_([^_\n]+)_(?!\w)/g, "$1<em>$2</em>");
+}
+function renderMarkdownSafe(md) {
+  const lines = esc(String(md || "").replace(/\r\n?/g, "\n")).split("\n");
+  const out = [];
+  let i = 0, para = [];
+  const flush = () => { if (para.length) { out.push("<p>" + mdInline(para.join(" ")) + "</p>"); para = []; } };
+  const isTableSep = l => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(l);
+  const cells = l => l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(c => mdInline(c.trim()));
+  while (i < lines.length) {
+    const l = lines[i];
+    if (/^\s*```/.test(l)) { flush(); const buf = []; i++; while (i < lines.length && !/^\s*```/.test(lines[i])) buf.push(lines[i++]); i++; out.push("<pre>" + buf.join("\n") + "</pre>"); continue; }
+    const h = l.match(/^\s*(#{1,6})\s+(.*)$/);
+    if (h) { flush(); const lvl = Math.min(4, h[1].length); out.push(`<h${lvl}>${mdInline(h[2].replace(/\s*#+\s*$/, ""))}</h${lvl}>`); i++; continue; }
+    if (/^\s*([-*_])\s*\1\s*\1[\s\1]*$/.test(l)) { flush(); out.push("<hr>"); i++; continue; }
+    if (l.includes("|") && i + 1 < lines.length && isTableSep(lines[i + 1])) {
+      flush(); const head = cells(l); i += 2; const rows = [];
+      while (i < lines.length && lines[i].includes("|") && lines[i].trim()) rows.push(cells(lines[i++]));
+      out.push("<table><thead><tr>" + head.map(c => `<th>${c}</th>`).join("") + "</tr></thead><tbody>" + rows.map(r => "<tr>" + r.map(c => `<td>${c}</td>`).join("") + "</tr>").join("") + "</tbody></table>");
+      continue;
+    }
+    if (/^\s*&gt;\s?/.test(l)) { flush(); const buf = []; while (i < lines.length && /^\s*&gt;\s?/.test(lines[i])) buf.push(lines[i++].replace(/^\s*&gt;\s?/, "")); out.push("<blockquote>" + mdInline(buf.join(" ")) + "</blockquote>"); continue; }
+    if (/^\s*([-*+]|\d+[.)])\s+/.test(l)) {
+      flush();
+      // simple (optionally one-level nested) lists
+      const stack = [];
+      while (i < lines.length && /^\s*([-*+]|\d+[.)])\s+/.test(lines[i])) {
+        const m = lines[i].match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
+        const depth = m[1].replace(/\t/g, "    ").length >= 2 ? 1 : 0, type = /\d/.test(m[2]) ? "ol" : "ul";
+        while (stack.length > depth + 1) out.push(`</li></${stack.pop()}>`);
+        if (stack.length === depth) { out.push(`<${type}><li>`); stack.push(type); }
+        else out.push("</li><li>");
+        out.push(mdInline(m[3]));
+        i++;
+        while (i < lines.length && lines[i].trim() && !/^\s*([-*+]|\d+[.)])\s+/.test(lines[i]) && /^\s{2,}/.test(lines[i])) out.push(" " + mdInline(lines[i++].trim()));
+      }
+      while (stack.length) out.push(`</li></${stack.pop()}>`);
+      continue;
+    }
+    if (!l.trim()) { flush(); i++; continue; }
+    para.push(l.trim()); i++;
+  }
+  flush();
+  return out.join("\n");
+}
+
+// --- UI ------------------------------------------------------------------
+function openAISettings(msg) {
+  $("#aiKeyInput").value = AI.key;
+  $("#aiKeyInput").type = "password"; $("#aiKeyShowBtn").textContent = "Show";
+  $("#aiModelInput").value = AI.model;
+  $("#aiSettingsMsg").textContent = msg || "";
+  $("#aiSettingsMsg").style.color = msg ? "var(--danger)" : "";
+  $("#aiSettingsDialog").showModal();
+}
+function aiStatus(html, type) {
+  const el = $("#aiStatus");
+  if (!html) { el.hidden = true; el.innerHTML = ""; return; }
+  el.hidden = false; el.className = "ai-status" + (type === "error" ? " error" : ""); el.innerHTML = html;
+}
+function showAIResult(ai) {
+  const wrap = $("#aiResultWrap");
+  if (!ai || !ai.content) { wrap.hidden = true; $("#aiCopyBtn").hidden = true; return; }
+  wrap.hidden = false; $("#aiCopyBtn").hidden = false;
+  $("#aiResultMeta").textContent = `${ai.model} · ${fmtDateTime(ai.at)}${ai.includeTranscript ? "" : " · transcript not included"} — decision support only`;
+  $("#aiResult").innerHTML = renderMarkdownSafe(ai.content);
+}
+function renderAISection() {
+  const ai = state.session.ai, sec = $("#aiSection");
+  if (!ai || !ai.content) { sec.hidden = true; return; }
+  sec.hidden = false;
+  $("#aiPanelMeta").textContent = `${ai.model} · ${fmtDateTime(ai.at)} — decision support only, verify before use`;
+  setHTML($("#aiPanelBody"), renderMarkdownSafe(ai.content));
+}
+function updateAIPreview() {
+  const inc = $("#aiIncludeTranscript").checked;
+  $("#aiNoteTranscript").textContent = inc ? " and the transcript" : "";
+  $("#aiPreview").textContent = buildAICaseSummary(state.session, inc);
+}
+function openAskAI() {
+  if (!AI.busy) aiStatus("");
+  $("#aiSetup").hidden = false;
+  updateAIPreview();
+  showAIResult(state.session.ai);
+  if (state.session.ai && state.session.ai.content) $("#aiResultMeta").textContent = "Previous response: " + $("#aiResultMeta").textContent;
+  $("#aiSendBtn").textContent = state.session.ai ? "Ask again" : "Send to Grok";
+  $("#askAiDialog").showModal();
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); }
+  catch { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
+  toast("Copied to clipboard");
+}
+function aiErrorMessage(status, bodyText, model) {
+  let msg = "";
+  try { const j = JSON.parse(bodyText); msg = j.error && (j.error.message || j.error) || j.message || j.code || ""; if (typeof msg !== "string") msg = JSON.stringify(msg); } catch { msg = (bodyText || "").slice(0, 300); }
+  const low = msg.toLowerCase();
+  if (status === 401 || status === 403 || /api key|apikey|unauthori[sz]ed|authentication/.test(low))
+    return { text: `Invalid or unauthorised API key (HTTP ${status}). Check the key in AI settings.${msg ? " Server said: " + msg : ""}`, settings: true };
+  if (status === 429) return { text: `Rate limit or credit limit reached (HTTP 429). Wait a minute and try again, or check your xAI usage/credits.${msg ? " Server said: " + msg : ""}` };
+  if (status === 404 || /model/.test(low) && /not|exist|found|invalid|access/.test(low))
+    return { text: `Model “${model}” was not accepted (HTTP ${status}). Check the model name in AI settings.${msg ? " Server said: " + msg : ""}`, settings: true };
+  if (status >= 500) return { text: `xAI service error (HTTP ${status}). Try again shortly.${msg ? " " + msg : ""}` };
+  return { text: `Request failed (HTTP ${status}).${msg ? " " + msg : ""}` };
+}
+async function askAI() {
+  if (AI.busy) return;
+  const key = AI.key.trim();
+  if (!key) { openAISettings("Add your xAI API key first."); return; }
+  const includeTranscript = $("#aiIncludeTranscript").checked;
+  const summary = buildAICaseSummary(state.session, includeTranscript);
+  const model = AI.model;
+  const body = {
+    model, temperature: 0.3, stream: false,
+    messages: [
+      { role: "system", content: AI_SYSTEM_PROMPT },
+      { role: "user", content: summary + "\n\nPlease give your structured analysis now." }
+    ]
+  };
+  AI.busy = true; AI.controller = new AbortController();
+  const timer = setTimeout(() => AI.controller && AI.controller.abort("timeout"), AI.timeoutMs);
+  const t0 = Date.now();
+  aiStatus(`<span class="spinner"></span><span>Asking ${esc(model)}… <span id="aiElapsed">0</span> s (reasoning models can take up to a minute or two)</span>`);
+  const tick = setInterval(() => { const e = $("#aiElapsed"); if (e) e.textContent = Math.round((Date.now() - t0) / 1000); }, 1000);
+  $("#aiSendBtn").disabled = true; $("#aiCancelBtn").hidden = false; $("#askAiBtn").disabled = true;
+  try {
+    let res;
+    try {
+      res = await fetch(AI.endpoint, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key }, body: JSON.stringify(body), signal: AI.controller.signal });
+    } catch (e) {
+      if (e.name === "AbortError") throw { text: AI.controller.signal.reason === "timeout" ? "The request timed out. Try again, or pick a faster model in AI settings." : "Request cancelled." };
+      throw { text: "Network error — could not reach api.x.ai. Check the internet connection (or an ad-blocker / firewall blocking api.x.ai)." };
+    }
+    const text = await res.text();
+    if (!res.ok) throw aiErrorMessage(res.status, text, model);
+    let data; try { data = JSON.parse(text); } catch { throw { text: "Unexpected response from xAI (not JSON)." }; }
+    const content = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if (!content || !String(content).trim()) throw { text: "xAI returned an empty answer. Try again." };
+    state.session.ai = { model: data.model || model, at: new Date().toISOString(), includeTranscript, request: summary, content: String(content), usage: data.usage || null };
+    markDirty();
+    aiStatus("");
+    showAIResult(state.session.ai);
+    renderAISection();
+    $("#aiSetup").hidden = true;
+    $("#aiSendBtn").textContent = "Ask again";
+    toast("AI response received — it will be saved with the visit");
+  } catch (err) {
+    const e = err && err.text ? err : { text: "Unexpected error: " + (err && err.message || err) };
+    aiStatus(`<span>⚠ ${esc(e.text)}</span>${e.settings ? ' <button class="small" id="aiErrSettingsBtn">Open AI settings</button>' : ""}`, "error");
+    const b = $("#aiErrSettingsBtn"); if (b) b.onclick = () => openAISettings();
+  } finally {
+    clearTimeout(timer); clearInterval(tick);
+    AI.busy = false; AI.controller = null;
+    $("#aiSendBtn").disabled = false; $("#aiCancelBtn").hidden = true; $("#askAiBtn").disabled = false;
+  }
+}
+function bindAIEvents() {
+  $("#aiSettingsBtn").onclick = () => openAISettings();
+  $("#aiDlgSettingsBtn").onclick = () => openAISettings();
+  $("#aiKeyShowBtn").onclick = () => { const i = $("#aiKeyInput"); const show = i.type === "password"; i.type = show ? "text" : "password"; $("#aiKeyShowBtn").textContent = show ? "Hide" : "Show"; };
+  $("#aiKeyClearBtn").onclick = () => { $("#aiKeyInput").value = ""; AI.key = ""; $("#aiSettingsMsg").style.color = ""; $("#aiSettingsMsg").textContent = "Key removed from this browser."; };
+  $("#aiSettingsForm").addEventListener("submit", e => {
+    e.preventDefault();
+    AI.key = $("#aiKeyInput").value.trim();
+    AI.model = $("#aiModelInput").value.trim() || AI.defaultModel;
+    $("#aiSettingsDialog").close();
+    toast(AI.key ? "AI settings saved" : "AI settings saved (no key)");
+  });
+  $("#askAiBtn").onclick = openAskAI;
+  $("#aiOpenBtn").onclick = openAskAI;
+  $("#aiIncludeTranscript").onchange = updateAIPreview;
+  $("#aiSendBtn").onclick = () => { $("#aiSetup").hidden = false; askAI(); };
+  $("#aiCancelBtn").onclick = () => { if (AI.controller) AI.controller.abort("user"); };
+  $("#aiCopyBtn").onclick = () => state.session.ai && copyText(state.session.ai.content);
+  $("#aiCopyPanelBtn").onclick = () => state.session.ai && copyText(state.session.ai.content);
+}
+
+/* =====================================================================
    EVENTS & INIT
    ===================================================================== */
 async function loadData() {
@@ -1524,6 +1911,7 @@ async function loadData() {
   state.visits = await DB.all("visits");
 }
 function bindEvents() {
+  bindAIEvents();
   $("#micBtn").onclick = () => state.listening ? stopListening() : startListening();
   $("#langSel").onchange = () => {
     state.session.lang = $("#langSel").value;
@@ -1567,6 +1955,7 @@ function bindEvents() {
     state.stickToBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
   }, { passive: true });
   $("#patternStrip").onclick = e => {
+    if (e.target.closest("[data-ask-ai]")) { openAskAI(); return; }
     const b = e.target.closest("[data-goto-pattern]");
     const target = b ? document.querySelector(`#patternList [data-pattern="${b.dataset.gotoPattern}"]`) : $("#patternList");
     if (target) { target.scrollIntoView({ behavior: "smooth", block: "start" }); const d = target.querySelector && target.querySelector("details"); if (d) d.open = true; }
@@ -1628,7 +2017,7 @@ async function init() {
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { AI, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>
