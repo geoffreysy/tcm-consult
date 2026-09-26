@@ -146,6 +146,40 @@ mark.sym.removed{background:none;border-bottom:1px dotted #bbb;color:inherit}
 details.more{font-size:12px;color:var(--muted);margin-top:3px}
 details.more summary{cursor:pointer}
 .p-score-meta{font-size:11px;color:var(--muted)}
+.p-organ{display:inline-block;font-size:10.5px;font-weight:600;color:#44615a;background:#eef4f2;border:1px solid #d9e6e2;border-radius:999px;padding:0 7px;margin-left:6px;vertical-align:1px;white-space:nowrap}
+.p-comp{font-size:11px;color:var(--muted);margin:2px 0}
+details.all-matches{margin-top:10px;border-top:1px solid var(--line);padding-top:6px;font-size:12.5px}
+details.all-matches>summary{cursor:pointer;color:var(--accent);font-weight:600}
+.am-group{margin:6px 0 2px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
+.am-row{display:flex;justify-content:space-between;gap:8px;width:100%;border:none;background:none;padding:2px 4px;border-radius:4px;text-align:left;font-size:12.5px}
+.am-row:hover{background:#f1f6f4}
+.am-row b{font-variant-numeric:tabular-nums;color:var(--accent)}
+.am-row.top5 span{font-weight:600}
+.link-btn{border:none;background:none;color:var(--accent);padding:0 4px;font-size:12px;text-decoration:underline;cursor:pointer}
+.ref-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;position:sticky;top:0;background:#fff;padding-bottom:6px;z-index:2}
+.ref-controls input[type=search]{flex:1 1 260px}
+.ref-controls .check{margin:0}
+.ref-count{font-size:12px;color:var(--muted);margin:2px 0 6px}
+.ref-group{margin:14px 0 4px;font-size:13px;font-weight:700;color:#1f2d2a;border-bottom:2px solid var(--line);padding-bottom:3px}
+.ref-group small{font-weight:400;color:var(--muted)}
+.ref-pat{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;background:#fff}
+.ref-pat.hit{border-color:#a9d2c4;background:#f6fbf9}
+.ref-pat.flash{box-shadow:0 0 0 3px #a9d2c4}
+.ref-pat h4{margin:0 0 3px;font-size:14px;display:flex;justify-content:space-between;gap:8px}
+.ref-pat h4 .fit{font-size:12px;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ref-line{font-size:12.5px;margin:2px 0;line-height:1.45}
+.ref-line>b{color:#44615a}
+.ref-signs{display:flex;flex-wrap:wrap;gap:3px;margin:3px 0}
+.ref-signs span{font-size:11.5px;border-radius:4px;padding:0 5px;background:#f3f6f5;border:1px solid #e0e8e5}
+.ref-signs span.w3{background:#e1f0ea;border-color:#a9d2c4}
+.ref-signs span.w2{background:#eef6f3}
+.ref-signs span.key{font-weight:700}
+.ref-signs span.on{outline:2px solid #2f7d6d}
+.ref-signs span.contra{background:#fbeeee;border-color:#ecc9c9;color:#8a2c2c}
+.ref-legend{font-size:11.5px;color:var(--muted);margin-right:auto}
+.ai-preview-part{margin:6px 0}
+.ai-preview-part>summary,.ai-preview-label{font-size:12px;font-weight:700;color:#44615a;cursor:pointer;margin-top:6px}
+.ai-preview-label{cursor:default;display:block}
 
 
 /* flowing transcript paragraphs */
@@ -309,6 +343,7 @@ dialog::backdrop{background:rgba(20,35,30,.35)}
       <button id="menuBtn" title="More">⋯ Data</button>
       <div class="menu-list">
         <button id="printBtn">🖨 Print / PDF summary of this visit</button>
+        <button id="patternsRefBtn">📖 Patterns reference (knowledge base)</button>
         <button id="aiSettingsBtn">⚙ AI settings (xAI Grok)…</button>
         <button id="exportBtn">⬇ Export all data (JSON backup)</button>
         <button id="importBtn">⬆ Import data from JSON…</button>
@@ -359,7 +394,7 @@ dialog::backdrop{background:rgba(20,35,30,.35)}
       </div>
       <div class="section patterns">
         <div class="section-head"><h2>Likely patterns</h2><button class="small ai-btn" id="askAiBtn" title="Ask xAI Grok for a differentiation, formula and acupuncture suggestions (de-identified)">✦ Ask AI</button></div>
-        <div class="disclaimer">Pattern fit score — decision support only, not a diagnosis.</div>
+        <div class="disclaimer">Pattern fit score — decision support only, not a diagnosis. <button class="link-btn" id="patternsRefBtn2" title="Browse all patterns, signs, principles and formulas">📖 All patterns</button></div>
         <div id="patternList"></div>
       </div>
       <div class="section ai-section" id="aiSection" hidden>
@@ -431,10 +466,14 @@ dialog::backdrop{background:rgba(20,35,30,.35)}
       <div class="ai-note">
         <b>What is sent to xAI:</b> age, sex, present and denied symptoms, tongue and pulse findings, the app's top 5 pattern scores, practitioner notes<span id="aiNoteTranscript"> and the transcript</span>.
         <b>Not sent:</b> patient name, contact details, date of birth. Names, phone numbers and e-mail addresses found in the text are replaced with placeholders.
+        <br><b>Grok is asked to return:</b> (1) pattern differentiation — primary and secondary patterns with reasoning and differentials, (2) treatment principle, (3) a recommended herbal formula with an ingredient table, modifications and doses in grams, plus cautions, (4) an acupuncture point prescription with rationale and needling technique, (5) lifestyle &amp; diet advice, and (6) red flags for referral.<br>
         The request goes directly from this browser to <code>api.x.ai</code> using your API key. The answer is decision support for a licensed practitioner — not a diagnosis or prescription.
       </div>
       <label class="check"><input type="checkbox" id="aiIncludeTranscript" checked> Include transcript</label>
-      <details class="ai-preview"><summary>Preview exactly what will be sent</summary><pre id="aiPreview"></pre></details>
+      <details class="ai-preview" id="aiPreviewWrap"><summary>Preview exactly what will be sent (instructions + case)</summary>
+        <details class="ai-preview-part" id="aiPreviewSysWrap"><summary>Instructions to Grok (system prompt — what Grok is asked to return)</summary><pre id="aiPreviewSystem"></pre></details>
+        <span class="ai-preview-label">Case sent (de-identified user message)</span><pre id="aiPreview"></pre>
+      </details>
     </div>
     <div id="aiStatus" class="ai-status" hidden></div>
     <div id="aiResultWrap" hidden>
@@ -449,6 +488,21 @@ dialog::backdrop{background:rgba(20,35,30,.35)}
     <button type="button" data-close>Close</button>
     <button type="button" class="primary" id="aiSendBtn">Send to Grok</button>
   </div>
+</dialog>
+
+<!-- Patterns reference (read-only knowledge base) -->
+<dialog id="patternsDialog" class="wide">
+  <div class="dlg-head"><h3>📖 Patterns reference — knowledge base</h3><button type="button" class="link" data-close>✕</button></div>
+  <div class="dlg-body">
+    <div class="ref-controls">
+      <input type="search" id="refSearch" placeholder="Search pattern, sign, formula, principle… (e.g. night sweats, Gui Pi, pagod)">
+      <select id="refOrgan"><option value="">All organs / groups</option></select>
+      <label class="check"><input type="checkbox" id="refMatchedOnly"> Only patterns matching this session</label>
+    </div>
+    <div class="ref-count" id="refCount"></div>
+    <div id="refList"></div>
+  </div>
+  <div class="dlg-foot"><span class="ref-legend">Read-only. ★ key sign · dark = weight 3, light = 2, plain = 1 · outlined = present in this session · red = argues against</span><button type="button" data-close>Close</button></div>
 </dialog>
 
 <!-- Symptom picker -->
@@ -502,16 +556,16 @@ const SYMPTOMS = [
   { id: "reluctance_speak", name: "Weak voice / reluctant to speak", cat: "energy", syn: ["weak voice", "soft voice", "don't feel like talking", "too tired to talk", "no energy to talk", "tamad magsalita", "mahina ang boses"] },
   { id: "heaviness_body", name: "Heaviness of body", cat: "energy", syn: ["heavy body", "body feels heavy", "body is heavy", "heaviness", "feel heavy", "sluggish", "mabigat ang katawan", "bigat ng katawan", "mabigat ang pakiramdam"] },
   { id: "somnolence", name: "Drowsiness / somnolence", cat: "energy", syn: ["sleepy all the time", "always sleepy", "drowsy", "drowsiness", "sleep a lot", "sleepy after eating", "sleepy after meals", "antukin", "inaantok", "laging inaantok"] },
-  { id: "prolapse", name: "Prolapse / bearing down / hemorrhoids", cat: "energy", syn: ["prolapse", "prolapsed", "bearing down", "dragging down sensation", "hemorrhoids", "haemorrhoids", "piles", "almoranas", "luslos"] },
+  { id: "prolapse", name: "Prolapse / bearing down / hemorrhoids", cat: "energy", syn: ["prolapse", "prolapsed", "bearing down", "dragging down sensation", "hemorrhoids", "haemorrhoids", "piles", "almoranas", "prolapsed uterus", "bumababa ang matris"] },
 
   // ---------- Temperature ----------
   { id: "cold_aversion", name: "Aversion to cold / feels cold", cat: "temperature", syn: ["feel cold", "feels cold", "feeling cold", "cold easily", "get cold easily", "always cold", "sensitive to cold", "cold intolerance", "can't tolerate cold", "hate the cold", "chilly", "giniginaw", "ginaw", "lamigin", "nilalamig", "malamig ang pakiramdam", "madaling lamigin"] },
-  { id: "cold_limbs", name: "Cold hands / feet", cat: "temperature", syn: ["cold hands", "cold feet", "cold hands and feet", "cold extremities", "cold limbs", "cold legs", "hands are cold", "feet are cold", "malamig ang kamay", "malamig ang paa", "malamig ang mga paa"] },
+  { id: "cold_limbs", name: "Cold hands / feet", cat: "temperature", syn: ["cold hands", "cold feet", "cold hands and feet", "cold extremities", "cold limbs", "cold legs", "hands are cold", "feet are cold", "malamig ang kamay", "malamig ang paa", "malamig ang mga paa", "feet feel cold", "feet always cold", "hands and feet are cold"] },
   { id: "chills", name: "Chills / shivering", cat: "temperature", syn: ["chills", "chill", "shivering", "shivers", "shaking with cold", "nanginginig sa lamig", "panginginig"] },
   { id: "fever", name: "Fever", cat: "temperature", syn: ["fever", "feverish", "high temperature", "temperature is high", "lagnat", "nilalagnat", "sinat", "sinisinat"] },
   { id: "feeling_hot", name: "Feels hot / heat intolerance", cat: "temperature", syn: ["feel hot", "feeling hot", "always hot", "heat intolerance", "hate the heat", "can't tolerate heat", "feel warm all the time", "mainit ang pakiramdam", "init na init", "maalinsangan"] },
   { id: "afternoon_fever", name: "Afternoon / evening heat (tidal fever)", cat: "temperature", syn: ["hot in the afternoon", "feel hot in the afternoon", "hot in the evening", "feel hot in the evening", "afternoon fever", "evening fever", "low grade fever in the afternoon", "low grade fever", "low-grade fever"] },
-  { id: "five_palm_heat", name: "Hot palms & soles (five-palm heat)", cat: "temperature", syn: ["hot palms", "hot soles", "hot hands and feet", "burning feet", "burning palms", "palms are hot", "feet feel hot", "five palm heat", "mainit ang palad", "mainit ang talampakan"] },
+  { id: "five_palm_heat", name: "Hot palms & soles (five-palm heat)", cat: "temperature", syn: ["hot palms", "hot soles", "hot hands and feet", "burning feet", "burning palms", "palms are hot", "feet feel hot", "five palm heat", "mainit ang palad", "mainit ang talampakan", "palms feel hot", "palms get hot", "soles feel hot", "hands and feet feel hot"] },
   { id: "hot_flashes", name: "Hot flashes", cat: "temperature", syn: ["hot flashes", "hot flash", "hot flushes", "hot flush", "flushes of heat", "waves of heat"] },
   { id: "malar_flush", name: "Malar flush (red cheekbones)", cat: "temperature", syn: ["red cheeks", "flushed cheeks", "cheeks get red", "cheeks are red", "namumula ang pisngi"] },
   { id: "red_face", name: "Red face", cat: "temperature", syn: ["red face", "face turns red", "flushed face", "face is red", "face gets red", "namumula ang mukha"] },
@@ -523,12 +577,12 @@ const SYMPTOMS = [
 
   // ---------- Sleep ----------
   { id: "insomnia", name: "Insomnia / difficulty sleeping", cat: "sleep", syn: ["insomnia", "can't sleep", "cannot sleep", "couldn't sleep", "trouble sleeping", "difficulty sleeping", "hard to sleep", "hard time sleeping", "hard to fall asleep", "trouble falling asleep", "difficulty falling asleep", "sleepless", "don't sleep well", "not sleeping well", "poor sleep", "hindi makatulog", "di makatulog", "hindi ako makatulog", "hindi ako nakakatulog", "hindi nakakatulog", "hirap matulog", "hirap makatulog", "puyat", "napupuyat"] },
-  { id: "waking_night", name: "Waking during the night", cat: "sleep", syn: ["wake up at night", "waking up at night", "wake up in the middle of the night", "wake up often", "keep waking up", "wake up at 3", "wake up at 1", "wake up at 2", "wake up early and can't go back to sleep", "nagigising sa gabi", "nagigising sa madaling araw", "gising nang gising"] },
+  { id: "waking_night", name: "Waking during the night", cat: "sleep", syn: ["wake up at night", "waking up at night", "wake up in the middle of the night", "wake up often", "keep waking up", "wake up at 3", "wake up at 1", "wake up at 2", "wake up early and can't go back to sleep", "nagigising sa gabi", "nagigising sa madaling araw", "gising nang gising", "wake up many times at night", "wake up many times", "wake up several times", "wake up often at night"] },
   { id: "dream_disturbed", name: "Excessive dreaming / nightmares", cat: "sleep", syn: ["lots of dreams", "many dreams", "vivid dreams", "dream a lot", "dreaming a lot", "nightmares", "nightmare", "bad dreams", "disturbing dreams", "bangungot", "laging nananaginip", "masamang panaginip"] },
   { id: "restless_sleep", name: "Restless / unrefreshing sleep", cat: "sleep", syn: ["restless sleep", "light sleeper", "sleep lightly", "unrefreshing sleep", "wake up tired", "not rested", "don't feel rested", "toss and turn", "tossing and turning", "hindi mahimbing ang tulog", "mababaw ang tulog"] },
 
   // ---------- Emotions ----------
-  { id: "irritability", name: "Irritability / anger", cat: "emotions", syn: ["irritable", "irritability", "easily angered", "easily irritated", "short temper", "short tempered", "quick tempered", "angry", "anger", "frustrated", "frustration", "mainitin ang ulo", "iritable", "naiinis", "inis", "madaling magalit", "bugnutin", "magagalitin"] },
+  { id: "irritability", name: "Irritability / anger", cat: "emotions", syn: ["irritable", "irritability", "easily angered", "easily irritated", "short temper", "short tempered", "quick tempered", "angry", "anger", "frustrated", "frustration", "mainitin ang ulo", "iritable", "naiinis", "inis", "madaling magalit", "bugnutin", "magagalitin", "quick to anger"] },
   { id: "stress", name: "Stress / tension", cat: "emotions", syn: ["stressed", "stress", "stressful", "stressed out", "under pressure", "tense", "na-stress", "stress na stress"] },
   { id: "depression_mood", name: "Low mood / depression", cat: "emotions", syn: ["depressed", "depression", "low mood", "sad", "sadness", "feel down", "feeling down", "feeling low", "unhappy", "hopeless", "malungkot", "lungkot", "nalulungkot"] },
   { id: "mood_swings", name: "Mood swings", cat: "emotions", syn: ["mood swings", "mood swing", "moody", "emotional", "pabago-bago ang mood", "pabago bago ang mood"] },
@@ -537,7 +591,7 @@ const SYMPTOMS = [
   { id: "poor_memory", name: "Poor memory / forgetfulness", cat: "emotions", syn: ["forgetful", "forgetfulness", "poor memory", "bad memory", "memory is bad", "memory is poor", "can't remember things", "makakalimutin", "makalimutin", "ulyanin", "nakakalimot"] },
   { id: "poor_concentration", name: "Poor concentration", cat: "emotions", syn: ["can't concentrate", "poor concentration", "hard to focus", "can't focus", "trouble focusing", "lack of focus", "difficulty concentrating", "hirap mag-focus", "hindi makapag-focus"] },
   { id: "restlessness", name: "Mental restlessness / agitation", cat: "emotions", syn: ["restless", "restlessness", "agitated", "can't sit still", "mental restlessness", "hindi mapakali", "di mapakali"] },
-  { id: "easily_startled", name: "Easily startled / fearful", cat: "emotions", syn: ["easily startled", "jumpy", "fearful", "scared easily", "timid", "magugulatin", "madaling magulat", "matatakutin"] },
+  { id: "easily_startled", name: "Easily startled / fearful", cat: "emotions", syn: ["easily startled", "jumpy", "fearful", "scared easily", "magugulatin", "madaling magulat", "matatakutin"] },
 
   // ---------- Head / eyes / ENT ----------
   { id: "headache", name: "Headache", cat: "head", syn: ["headache", "head ache", "head hurts", "head pain", "migraine", "sakit ng ulo", "masakit ang ulo", "masakit ulo", "sumasakit ang ulo", "kumikirot ang ulo", "masakit yung ulo"] },
@@ -549,7 +603,7 @@ const SYMPTOMS = [
   { id: "blurred_vision", name: "Blurred vision / floaters", cat: "head", syn: ["blurry vision", "blurred vision", "vision is blurry", "eyes are blurry", "can't see clearly", "floaters", "spots in my vision", "malabo ang mata", "lumalabo ang paningin", "malabo ang paningin"] },
   { id: "dry_eyes", name: "Dry eyes", cat: "head", syn: ["dry eyes", "eyes are dry", "gritty eyes", "eyes feel dry", "tuyo ang mata"] },
   { id: "red_eyes", name: "Red / painful eyes", cat: "head", syn: ["red eyes", "bloodshot eyes", "eyes are red", "sore eyes", "namumula ang mata", "mapula ang mata"] },
-  { id: "dry_mouth", name: "Dry mouth / throat", cat: "head", syn: ["dry mouth", "mouth is dry", "mouth feels dry", "dry throat", "throat is dry", "dry lips", "tuyo ang bibig", "tuyo ang lalamunan", "nanunuyo ang lalamunan"] },
+  { id: "dry_mouth", name: "Dry mouth", cat: "head", syn: ["dry mouth", "mouth is dry", "mouth feels dry", "dry lips", "tuyo ang bibig", "tuyo ang labi"] },
   { id: "thirst", name: "Thirst", cat: "head", syn: ["thirsty", "thirst", "always thirsty", "drink a lot of water", "nauuhaw", "uhaw na uhaw", "laging nauuhaw"] },
   { id: "thirst_cold_drinks", name: "Desire for cold drinks", cat: "head", syn: ["crave cold drinks", "like cold drinks", "want cold drinks", "prefer cold drinks", "want cold water", "like cold water", "prefer cold water", "gusto ng malamig na inumin", "mahilig sa malamig na tubig"] },
   { id: "prefer_warm_drinks", name: "Prefers warm drinks", cat: "head", syn: ["prefer warm drinks", "prefer hot drinks", "like warm drinks", "like hot drinks", "crave warm drinks", "prefer warm water", "gusto ng mainit na inumin", "mas gusto ang mainit na tubig"] },
@@ -567,7 +621,7 @@ const SYMPTOMS = [
 
   // ---------- Respiratory ----------
   { id: "cough", name: "Cough", cat: "respiratory", syn: ["cough", "coughing", "ubo", "inuubo", "umuubo", "may ubo"] },
-  { id: "phlegm_white", name: "Phlegm (white / clear / profuse)", cat: "respiratory", syn: ["phlegm", "white phlegm", "clear phlegm", "watery phlegm", "lots of phlegm", "mucus in my throat", "sputum", "plema", "may plema", "maputing plema"] },
+  { id: "phlegm_white", name: "Phlegm (white / clear / profuse)", cat: "respiratory", syn: ["phlegm", "white phlegm", "clear phlegm", "watery phlegm", "lots of phlegm", "mucus in my throat", "rattling in my throat", "rattling in the throat", "sputum", "plema", "may plema", "maputing plema"] },
   { id: "phlegm_yellow", name: "Yellow / green phlegm", cat: "respiratory", syn: ["yellow phlegm", "green phlegm", "thick yellow phlegm", "yellow mucus", "green mucus", "yellow sputum", "madilaw na plema", "berdeng plema"] },
   { id: "plum_pit", name: "Lump in throat (plum-pit)", cat: "respiratory", syn: ["lump in my throat", "lump in the throat", "something stuck in my throat", "something in my throat", "globus", "may bara sa lalamunan", "parang may nakabara sa lalamunan"] },
   { id: "wheezing", name: "Wheezing / asthma", cat: "respiratory", syn: ["wheeze", "wheezing", "asthma", "hika", "hinihika"] },
@@ -577,20 +631,20 @@ const SYMPTOMS = [
 
   // ---------- Chest / heart ----------
   { id: "palpitations", name: "Palpitations", cat: "chest", syn: ["palpitations", "palpitation", "heart racing", "heart pounding", "heart flutters", "racing heart", "heart beats fast", "heart skips", "kaba", "kumakabog ang dibdib", "mabilis ang tibok ng puso", "palpitate"] },
-  { id: "chest_tightness", name: "Chest tightness / oppression", cat: "chest", syn: ["tight chest", "chest tightness", "chest feels tight", "tightness in my chest", "chest oppression", "stuffy chest", "naninikip ang dibdib", "paninikip ng dibdib", "masikip ang dibdib"] },
+  { id: "chest_tightness", name: "Chest tightness / oppression", cat: "chest", syn: ["tight chest", "chest tightness", "chest feels tight", "tightness in my chest", "chest oppression", "stuffy chest", "naninikip ang dibdib", "paninikip ng dibdib", "masikip ang dibdib", "chest feels stuffy", "stuffy feeling in my chest", "chest feels heavy", "pressure in my chest"] },
   { id: "chest_pain", name: "Chest pain", cat: "chest", syn: ["chest pain", "chest hurts", "pain in my chest", "stabbing chest pain", "masakit ang dibdib", "sakit sa dibdib"] },
-  { id: "hypochondriac_pain", name: "Hypochondriac / rib-side pain or distension", cat: "chest", syn: ["pain under my ribs", "under my ribs", "rib pain", "ribs hurt", "pain in my side", "side pain", "hypochondriac pain", "flank distension", "masakit ang tagiliran", "sakit sa tagiliran", "tagiliran"] },
+  { id: "hypochondriac_pain", name: "Hypochondriac / rib-side pain or distension", cat: "chest", syn: ["pain under my ribs", "under my ribs", "rib pain", "ribs hurt", "pain in my side", "side pain", "hypochondriac pain", "flank distension", "masakit ang tagiliran", "sakit sa tagiliran", "tagiliran", "under my right ribs", "under the right ribs", "right rib", "right ribs", "left ribs", "under the ribs", "below my ribs", "right upper abdomen"] },
 
   // ---------- Digestion ----------
-  { id: "poor_appetite", name: "Poor appetite", cat: "digestion", syn: ["poor appetite", "no appetite", "lost my appetite", "loss of appetite", "low appetite", "appetite is poor", "appetite is low", "appetite is bad", "don't feel like eating", "not hungry", "walang gana", "walang ganang kumain", "walang gana kumain", "wala akong gana", "nawalan ng gana"] },
+  { id: "poor_appetite", name: "Poor appetite", cat: "digestion", syn: ["poor appetite", "no appetite", "no taste for food", "lost my appetite", "loss of appetite", "low appetite", "appetite is poor", "appetite is low", "appetite is bad", "don't feel like eating", "not hungry", "walang gana", "walang ganang kumain", "walang gana kumain", "wala akong gana", "nawalan ng gana"] },
   { id: "excessive_hunger", name: "Excessive hunger", cat: "digestion", syn: ["always hungry", "hungry all the time", "big appetite", "excessive hunger", "constantly hungry", "gutom palagi", "laging gutom", "gutumin", "matakaw"] },
   { id: "bloating", name: "Bloating / fullness after eating", cat: "digestion", syn: ["bloated", "bloating", "bloat", "abdominal distension", "distended belly", "gassy", "lots of gas", "full of gas", "flatulence", "full quickly", "feel full quickly", "full after eating", "kabag", "kinakabag", "busog agad", "madaling mabusog", "utot nang utot"] },
   { id: "nausea", name: "Nausea", cat: "digestion", syn: ["nausea", "nauseous", "nauseated", "feel like vomiting", "queasy", "sick to my stomach", "nasusuka", "naduduwal", "nakakaduwal"] },
   { id: "vomiting", name: "Vomiting", cat: "digestion", syn: ["vomit", "vomiting", "vomited", "throw up", "throwing up", "threw up", "nagsusuka", "sumuka", "nagsuka"] },
-  { id: "acid_reflux", name: "Acid reflux / heartburn", cat: "digestion", syn: ["acid reflux", "heartburn", "reflux", "gerd", "sour regurgitation", "hyperacidity", "hyperacid", "acidic", "burning in my stomach", "maasim ang sikmura", "sinisikmura", "umaasim ang sikmura"] },
+  { id: "acid_reflux", name: "Acid reflux / heartburn", cat: "digestion", syn: ["acid reflux", "heartburn", "reflux", "gerd", "sour regurgitation", "hyperacidity", "hyperacid", "acidic", "burning in my stomach", "maasim ang sikmura", "sinisikmura", "umaasim ang sikmura", "sour taste coming up", "maasim sa sikmura", "acid coming up"] },
   { id: "belching", name: "Belching", cat: "digestion", syn: ["burping", "burp", "belching", "belch", "dumidighay", "dighay", "dumighay"] },
-  { id: "epigastric_pain", name: "Epigastric / stomach pain", cat: "digestion", syn: ["stomach pain", "stomach ache", "stomachache", "stomach hurts", "pain in my stomach", "epigastric pain", "ulcer", "masakit ang sikmura", "sakit ng sikmura", "kumikirot ang sikmura"] },
-  { id: "abdominal_pain", name: "Abdominal pain", cat: "digestion", syn: ["abdominal pain", "belly pain", "belly ache", "tummy ache", "tummy hurts", "sakit ng tiyan", "masakit ang tiyan", "sumasakit ang tiyan", "masakit ang puson"] },
+  { id: "epigastric_pain", name: "Epigastric / stomach pain", cat: "digestion", syn: ["stomach pain", "stomach ache", "stomachache", "stomach hurts", "pain in my stomach", "epigastric pain", "ulcer", "masakit ang sikmura", "sakit ng sikmura", "kumikirot ang sikmura", "pain in the epigastrium", "epigastrium", "epigastric", "dull pain in my stomach", "pain in the pit of my stomach", "upper abdominal pain"] },
+  { id: "abdominal_pain", name: "Abdominal pain", cat: "digestion", syn: ["abdominal pain", "belly pain", "belly ache", "tummy ache", "tummy hurts", "sakit ng tiyan", "masakit ang tiyan", "sumasakit ang tiyan"] },
   { id: "pain_better_warmth", name: "Pain relieved by warmth", cat: "digestion", syn: ["better with warmth", "better with heat", "warmth helps", "heat helps", "hot compress helps", "better with a hot water bottle", "gumiginhawa sa mainit"] },
   { id: "craving_sweets", name: "Craving sweets", cat: "digestion", syn: ["crave sweets", "craving sweets", "sugar cravings", "crave sugar", "sweet tooth", "mahilig sa matamis", "hinahanap ang matamis"] },
 
@@ -603,50 +657,121 @@ const SYMPTOMS = [
   { id: "foul_stools", name: "Foul / sticky stools, burning anus", cat: "stool", syn: ["smelly stool", "foul smelling stool", "foul stool", "sticky stool", "burning anus", "mucus in my stool", "mabaho ang dumi", "malagkit ang dumi"] },
 
   // ---------- Urination ----------
-  { id: "frequent_urination", name: "Frequent urination", cat: "urination", syn: ["frequent urination", "pee a lot", "pee often", "urinate often", "urinate a lot", "always peeing", "ihi nang ihi", "madalas umihi", "wiwi nang wiwi"] },
-  { id: "nocturia", name: "Night-time urination", cat: "urination", syn: ["pee at night", "wake up to pee", "urinate at night", "get up to pee", "nocturia", "naiihi sa gabi", "umiihi sa gabi", "gumigising para umihi"] },
+  { id: "frequent_urination", name: "Frequent urination", cat: "urination", syn: ["frequent urination", "pee a lot", "pee often", "urinate often", "urinate a lot", "always peeing", "ihi nang ihi", "madalas umihi", "wiwi nang wiwi", "pee very often", "pee frequently", "urinate frequently", "urinating frequently", "peeing often", "pee so often", "urinate very often"] },
+  { id: "nocturia", name: "Night-time urination", cat: "urination", syn: ["pee at night", "wake up to pee", "urinate at night", "get up to pee", "nocturia", "naiihi sa gabi", "umiihi sa gabi", "gumigising para umihi", "up at night to urinate", "up at night to pee", "night to urinate", "night to pee", "wake up at night to pee"] },
   { id: "clear_urine", name: "Clear / pale copious urine", cat: "urination", syn: ["clear urine", "pale urine", "copious urine", "urine is clear", "malinaw ang ihi"] },
-  { id: "dark_urine", name: "Dark / scanty yellow urine", cat: "urination", syn: ["dark urine", "yellow urine", "dark yellow urine", "concentrated urine", "scanty urine", "urine is dark", "madilaw ang ihi", "kulay tsaa ang ihi"] },
+  { id: "dark_urine", name: "Dark / scanty yellow urine", cat: "urination", syn: ["dark urine", "yellow urine", "dark yellow urine", "concentrated urine", "scanty dark urine", "urine is dark", "madilaw ang ihi", "kulay tsaa ang ihi"] },
   { id: "painful_urination", name: "Burning / painful urination", cat: "urination", syn: ["burning urination", "painful urination", "burns when i pee", "hurts to pee", "burning when i pee", "pain when urinating", "uti", "mahapdi umihi", "mahapdi ang ihi", "masakit umihi", "balisawsaw"] },
-  { id: "incontinence", name: "Dribbling / incontinence", cat: "urination", syn: ["leak urine", "leaking urine", "dribbling", "incontinence", "weak stream", "can't hold my urine", "naiihi agad", "hindi mapigil ang ihi"] },
+  { id: "incontinence", name: "Dribbling / incontinence", cat: "urination", syn: ["leak urine", "leaking urine", "dribbling", "incontinence", "weak stream", "can't hold my urine", "naiihi agad", "hindi mapigil ang ihi", "leak when i cough", "leak when i laugh", "leak when i sneeze", "leaks when i cough", "leak a little urine"] },
 
   // ---------- Pain / body ----------
-  { id: "lower_back_pain", name: "Lower back pain / weakness", cat: "pain", syn: ["lower back pain", "low back pain", "back pain", "sore back", "backache", "back ache", "lower back aches", "lower back hurts", "back hurts", "masakit ang likod", "sakit ng likod", "masakit ang balakang", "sakit sa balakang", "balakang"] },
-  { id: "knee_weakness", name: "Sore / weak knees", cat: "pain", syn: ["weak knees", "sore knees", "knee pain", "knees ache", "knees hurt", "masakit ang tuhod", "nanghihina ang tuhod", "sakit ng tuhod"] },
-  { id: "joint_pain", name: "Joint pain / stiffness", cat: "pain", syn: ["joint pain", "joints ache", "joints hurt", "arthritis", "stiff joints", "swollen joints", "rayuma", "masakit ang kasukasuan"] },
+  { id: "lower_back_pain", name: "Lower back pain / weakness", cat: "pain", syn: ["lower back pain", "low back pain", "back pain", "sore back", "backache", "back ache", "lower back aches", "lower back hurts", "back hurts", "masakit ang likod", "sakit ng likod", "masakit ang balakang", "sakit sa balakang", "balakang", "lower back is sore", "lower back is cold", "lower back feels cold", "cold lower back", "lower back is cold and sore"] },
+  { id: "knee_weakness", name: "Sore / weak knees", cat: "pain", syn: ["weak knees", "sore knees", "knee pain", "knees ache", "knees hurt", "masakit ang tuhod", "nanghihina ang tuhod", "sakit ng tuhod", "knees feel weak", "knees are weak", "weak in the knees", "knees are sore", "knees feel sore"] },
+  { id: "joint_pain", name: "Joint pain / stiffness", cat: "pain", syn: ["joint pain", "joints ache", "joints hurt", "arthritis", "stiff joints", "swollen joints", "rayuma", "masakit ang kasukasuan", "joints are swollen", "aching joints", "joint ache", "painful joints"] },
   { id: "body_aches", name: "Body aches", cat: "pain", syn: ["body aches", "body ache", "aching all over", "achy", "sore all over", "masakit ang katawan", "sakit ng katawan", "bugbog ang katawan", "nangangalay"] },
   { id: "fixed_stabbing_pain", name: "Fixed, stabbing pain", cat: "pain", syn: ["stabbing pain", "sharp pain", "fixed pain", "pain in one spot", "pain is worse at night", "boring pain", "tumutusok na sakit", "parang tinutusok", "parang sinasaksak"] },
   { id: "numbness", name: "Numbness / tingling", cat: "pain", syn: ["numb", "numbness", "tingling", "pins and needles", "manhid", "namamanhid", "pamamanhid"] },
-  { id: "muscle_cramps", name: "Muscle cramps / twitching", cat: "pain", syn: ["muscle cramps", "muscle cramp", "leg cramps", "cramps in my legs", "twitching", "muscle twitch", "pulikat", "pinupulikat", "nangingisay"] },
+  { id: "muscle_cramps", name: "Muscle cramps / twitching", cat: "pain", syn: ["muscle cramps", "muscle cramp", "leg cramps", "cramps in my legs", "twitching", "muscle twitch", "pulikat", "pinupulikat", "cramps in my calves", "calf cramps"] },
 
   // ---------- Menstrual / reproductive ----------
   { id: "dysmenorrhea", name: "Painful periods", cat: "menstruation", syn: ["period pain", "period is painful", "periods are painful", "painful menstruation", "menstrual cramps", "painful periods", "painful period", "cramps during my period", "menstrual pain", "dysmenorrhea", "dismenorya", "masakit ang regla", "masakit ang mens", "sakit ng puson"] },
   { id: "menstrual_clots", name: "Menstrual clots / dark blood", cat: "menstruation", syn: ["clots", "blood clots", "clotting", "dark blood with clots", "dark clots", "buo-buong dugo", "buo buong dugo", "may buo-buo"] },
   { id: "heavy_periods", name: "Heavy periods", cat: "menstruation", syn: ["heavy periods", "heavy period", "heavy bleeding", "heavy flow", "flooding", "malakas ang regla", "malakas ang mens"] },
-  { id: "scanty_periods", name: "Scanty / light periods", cat: "menstruation", syn: ["light periods", "scanty periods", "light flow", "very little blood", "kaunti ang regla", "mahina ang regla", "konti ang mens"] },
-  { id: "pale_menses", name: "Pale / watery menstrual blood", cat: "menstruation", syn: ["pale blood", "pinkish blood", "light colored blood", "watery menstrual blood", "matubig ang regla"] },
+  { id: "scanty_periods", name: "Scanty / light periods", cat: "menstruation", syn: ["light periods", "scanty periods", "light flow", "very little blood", "kaunti ang regla", "mahina ang regla", "konti ang mens", "periods are scanty", "scanty and pale", "period is scanty"] },
+  { id: "pale_menses", name: "Pale / watery menstrual blood", cat: "menstruation", syn: ["pale blood", "pinkish blood", "light colored blood", "watery menstrual blood", "matubig ang regla", "pale periods", "menstrual blood is pale", "period blood is pale"] },
   { id: "irregular_periods", name: "Irregular / late periods", cat: "menstruation", syn: ["irregular periods", "irregular period", "irregular mens", "irregular menstruation", "delayed period", "late period", "missed period", "delayed mens", "hindi regular ang regla", "delayed ang mens"] },
   { id: "early_periods", name: "Early periods / short cycle", cat: "menstruation", syn: ["early periods", "period comes early", "short cycle", "twice a month", "maaga ang regla"] },
   { id: "amenorrhea", name: "Absent periods", cat: "menstruation", syn: ["no period", "no periods", "amenorrhea", "stopped menstruating", "walang regla", "hindi dinadatnan"] },
   { id: "pms_breast", name: "PMS / breast distension", cat: "menstruation", syn: ["breast tenderness", "sore breasts", "tender breasts", "breasts are tender", "breast distension", "pms", "premenstrual", "bloated before my period", "masakit ang suso bago mens"] },
   { id: "vaginal_discharge", name: "Vaginal discharge", cat: "menstruation", syn: ["vaginal discharge", "discharge", "leukorrhea", "yellow discharge", "white discharge", "smelly discharge", "may lumalabas na puti"] },
-  { id: "low_libido", name: "Low libido / impotence", cat: "menstruation", syn: ["low libido", "low sex drive", "no sex drive", "erectile dysfunction", "impotence", "low desire", "mahina ang libog"] },
+  { id: "low_libido", name: "Low libido", cat: "menstruation", syn: ["low libido", "low sex drive", "no sex drive", "low desire", "walang gana sa sex"] },
   { id: "infertility", name: "Infertility", cat: "menstruation", syn: ["infertility", "can't get pregnant", "trying to conceive", "hindi mabuntis", "hirap mabuntis"] },
 
   // ---------- Skin / complexion ----------
   { id: "pale_complexion", name: "Pale complexion", cat: "skin", syn: ["pale", "pale face", "pale complexion", "look pale", "looks pale", "maputla", "namumutla"] },
   { id: "sallow_complexion", name: "Sallow / dull complexion", cat: "skin", syn: ["sallow", "yellowish complexion", "dull complexion", "sallow skin", "matamlay ang mukha"] },
   { id: "dark_complexion", name: "Dark complexion / dark circles", cat: "skin", syn: ["dark circles", "dark under my eyes", "dark complexion", "dark eye circles", "eyebags", "eye bags", "nangingitim ang ilalim ng mata"] },
-  { id: "dry_skin_hair", name: "Dry skin / hair, hair loss", cat: "skin", syn: ["dry skin", "dry hair", "hair falling out", "hair loss", "losing hair", "brittle nails", "nalalagas ang buhok", "tuyo ang balat", "nanlalagas ang buhok"] },
-  { id: "edema", name: "Edema / puffiness", cat: "skin", syn: ["swelling", "swollen ankles", "swollen feet", "swollen legs", "puffy", "puffiness", "water retention", "edema", "oedema", "manas", "namamanas", "namamaga ang paa"] },
-  { id: "easy_bruising", name: "Easy bruising", cat: "skin", syn: ["bruise easily", "easy bruising", "bruises easily", "purple spots", "madaling magpasa", "pasa"] },
+  { id: "dry_skin_hair", name: "Dry skin / hair, brittle nails", cat: "skin", syn: ["dry skin", "dry hair", "brittle nails", "tuyo ang balat", "tuyo ang buhok"] },
+  { id: "edema", name: "Edema / puffiness (general)", cat: "skin", syn: ["swelling", "puffy", "puffiness", "water retention", "fluid retention", "edema", "oedema", "manas", "namamanas"] },
+  { id: "easy_bruising", name: "Easy bruising", cat: "skin", syn: ["bruise easily", "easy bruising", "bruises easily", "purple spots", "red spots under the skin", "petechiae", "madaling magpasa", "pasa"] },
   { id: "skin_itch", name: "Itchy skin / rash", cat: "skin", syn: ["itchy skin", "itchiness", "itching", "rash", "rashes", "eczema", "hives", "makati ang balat", "pantal", "kati kati"] },
   { id: "acne", name: "Acne / pimples", cat: "skin", syn: ["acne", "pimples", "pimple", "breakouts", "tigyawat", "taghiyawat"] },
-  { id: "weight_gain", name: "Weight gain / overweight", cat: "skin", syn: ["weight gain", "gaining weight", "gained weight", "overweight", "hard to lose weight", "tumaba", "tumataba"] }
+  { id: "weight_gain", name: "Weight gain / overweight", cat: "skin", syn: ["weight gain", "gaining weight", "gained weight", "overweight", "hard to lose weight", "tumaba", "tumataba"] },
+  // ---------- Added in KB v2 (pattern expansion) ----------
+  { id: "tremor", name: "Tremor / trembling", cat: "pain", syn: ["tremor", "tremors", "trembling hands", "shaking hands", "hands shake", "hands are shaking", "hand tremor", "nanginginig ang kamay", "nanginginig ang mga kamay", "nangangatal"] },
+  { id: "convulsions", name: "Convulsions / spasms", cat: "pain", syn: ["convulsion", "convulsions", "seizure", "seizures", "spasms", "muscle spasms", "kombulsyon", "kinukumbulsyon", "nangingisay", "pangingisay"] },
+  { id: "wind_stroke", name: "Facial paralysis / slurred speech (Wind-stroke signs)", cat: "head", syn: ["facial paralysis", "face is drooping", "facial droop", "bell's palsy", "slurred speech", "can't speak properly", "mouth is crooked", "stroke", "na-stroke", "ngiwi ang bibig", "utal magsalita"] },
+  { id: "jaundice", name: "Jaundice (yellow skin / eyes)", cat: "skin", syn: ["jaundice", "jaundiced", "yellow skin", "yellow eyes", "yellowish eyes", "eyes are yellow", "skin is yellow", "naninilaw", "naninilaw ang mata", "naninilaw ang balat", "paninilaw", "eyes and skin look yellow", "skin look yellow", "skin looks yellow", "eyes look yellow", "eyes and skin are yellow", "yellowing of the eyes", "yellowing skin"] },
+  { id: "hernia", name: "Hernia / testicular or groin pain", cat: "pain", syn: ["hernia", "inguinal hernia", "testicular pain", "scrotal pain", "pain in my testicles", "groin pain", "pain in my groin", "luslos", "masakit ang bayag"] },
+  { id: "foul_belching", name: "Foul / sour belching", cat: "digestion", syn: ["foul belching", "sour belching", "smelly burps", "rotten egg burps", "burps smell bad", "bad smelling burps", "mabahong dighay", "maasim na dighay"] },
+  { id: "hiccup", name: "Hiccups", cat: "digestion", syn: ["hiccup", "hiccups", "hiccough", "hiccoughs", "sinok", "sinisinok", "sinisinok ako"] },
+  { id: "edema_face", name: "Edema of face / eyelids", cat: "skin", syn: ["puffy face", "swollen face", "face is swollen", "puffy eyelids", "swollen eyelids", "puffy eyes", "manas sa mukha", "namamaga ang mukha", "namamaga ang talukap", "swelling of the face", "swelling of my face", "face is puffy", "eyelids are puffy", "facial swelling"] },
+  { id: "edema_legs", name: "Edema of legs / ankles", cat: "skin", syn: ["swollen ankles", "swollen feet", "swollen legs", "ankle swelling", "pitting edema", "namamaga ang paa", "namamanas ang paa", "manas sa paa", "manas sa binti", "swelling in my legs", "swelling of the legs", "swelling in my feet", "swelling of my ankles", "legs are swollen", "feet are swollen", "ankles are swollen", "oedema of the legs", "edema of the legs", "leg swelling"] },
+  { id: "hoarse_voice", name: "Hoarse voice / loss of voice", cat: "respiratory", syn: ["hoarse voice", "hoarse", "hoarseness", "lost my voice", "loss of voice", "raspy voice", "paos", "namamaos", "nawalan ng boses"] },
+  { id: "dry_cough", name: "Dry cough", cat: "respiratory", syn: ["dry cough", "dry coughing", "tickly cough", "unproductive cough", "cough without phlegm", "ubong tuyo", "tuyong ubo", "dry na ubo"] },
+  { id: "dry_throat", name: "Dry throat", cat: "respiratory", syn: ["dry throat", "throat is dry", "throat feels dry", "tuyo ang lalamunan", "nanunuyo ang lalamunan", "tuyong lalamunan"] },
+  { id: "dry_nose", name: "Dry nose", cat: "respiratory", syn: ["dry nose", "nose is dry", "dry nostrils", "tuyo ang ilong"] },
+  { id: "hemoptysis", name: "Coughing blood / blood-streaked sputum", cat: "respiratory", syn: ["coughing blood", "coughing up blood", "cough up blood", "blood in my phlegm", "blood in my sputum", "blood streaked phlegm", "hemoptysis", "umuubo ng dugo", "may dugo ang plema"] },
+  { id: "nosebleed", name: "Nosebleeds", cat: "head", syn: ["nosebleed", "nose bleed", "nose bleeds", "bleeding nose", "epistaxis", "nagdudugo ang ilong", "balinguyngoy"] },
+  { id: "blood_in_stool", name: "Blood / mucus-blood in stool", cat: "stool", syn: ["blood in my stool", "blood in stool", "bloody stool", "blood when i poop", "rectal bleeding", "dugo sa dumi", "may dugo ang dumi"] },
+  { id: "black_stool", name: "Black / tarry stools", cat: "stool", syn: ["black stool", "tarry stool", "black tarry stool", "maitim na dumi", "itim ang dumi"] },
+  { id: "blood_in_urine", name: "Blood in urine", cat: "urination", syn: ["blood in my urine", "blood in urine", "bloody urine", "hematuria", "dugo sa ihi", "may dugo ang ihi", "blood in the urine", "blood when i pee", "pee blood", "urinating blood"] },
+  { id: "hematemesis", name: "Vomiting blood", cat: "digestion", syn: ["vomiting blood", "vomited blood", "threw up blood", "coffee ground vomit", "sumuka ng dugo", "nagsuka ng dugo"] },
+  { id: "spotting", name: "Spotting / bleeding between periods", cat: "menstruation", syn: ["spotting", "bleeding between periods", "intermenstrual bleeding", "prolonged bleeding", "period won't stop", "dinudugo", "patak-patak na dugo"] },
+  { id: "spermatorrhea", name: "Spermatorrhea / premature ejaculation", cat: "menstruation", syn: ["spermatorrhea", "nocturnal emissions", "wet dreams", "premature ejaculation", "come too fast", "nilalabasan sa gabi", "mabilis labasan"] },
+  { id: "impotence", name: "Impotence / erectile dysfunction", cat: "menstruation", syn: ["impotence", "impotent", "erectile dysfunction", "can't get an erection", "trouble with erections", "hindi tinitigasan", "mahina ang ari"] },
+  { id: "loose_teeth", name: "Loose teeth", cat: "head", syn: ["loose teeth", "loose tooth", "teeth are loose", "teeth feel loose", "umuuga ang ngipin", "gumagalaw ang ngipin"] },
+  { id: "hair_loss", name: "Hair loss / premature greying", cat: "skin", syn: ["hair loss", "hair falling out", "losing hair", "losing my hair", "balding", "thinning hair", "premature greying", "grey hair early", "gray hair early", "early grey hair", "nalalagas ang buhok", "nanlalagas ang buhok", "maagang pumuti ang buhok", "uban", "hair is falling out", "hair keeps falling out", "going grey early", "going gray early", "greying early", "graying early", "turning grey", "turning gray", "premature graying"] },
+  { id: "developmental_delay", name: "Developmental delay (child)", cat: "energy", syn: ["developmental delay", "slow development", "late walking", "late talking", "delayed growth", "slow growth", "stunted growth", "mabagal lumaki", "late maglakad", "late magsalita"] },
+  { id: "premature_aging", name: "Premature ageing", cat: "energy", syn: ["premature aging", "premature ageing", "aging early", "ageing early", "feel old before my time", "maagang tumanda"] },
+  { id: "mental_confusion", name: "Mental confusion / clouded mind", cat: "emotions", syn: ["confused", "confusion", "disoriented", "delirium", "delirious", "clouded mind", "mental dullness", "stupor", "nalilito", "tuliro", "wala sa sarili"] },
+  { id: "manic", name: "Manic / agitated behaviour", cat: "emotions", syn: ["manic", "mania", "violent behaviour", "violent behavior", "hyperactive", "shouting and hitting", "can't be calmed", "nagwawala", "nagagalit nang sobra"] },
+  { id: "incoherent_speech", name: "Incoherent speech / muttering", cat: "emotions", syn: ["incoherent speech", "talking nonsense", "muttering to himself", "muttering to herself", "talks to himself", "talks to herself", "kung anu-ano ang sinasabi", "kung ano ano ang sinasabi"] },
+  { id: "timidity", name: "Timidity / indecision / lack of courage", cat: "emotions", syn: ["timid", "timidity", "lack of courage", "indecisive", "can't make decisions", "can't decide", "hard to make decisions", "mahiyain", "duwag", "hindi makapagdesisyon"] },
+  { id: "bi_wandering", name: "Joint pain moving from joint to joint", cat: "pain", syn: ["pain moves around", "pain moves from joint to joint", "wandering pain", "moving joint pain", "migrating joint pain", "pain changes location", "palipat-lipat ang sakit", "palipat lipat ang sakit"] },
+  { id: "bi_cold", name: "Severe joint pain worse with cold", cat: "pain", syn: ["joint pain worse in the cold", "joints hurt in cold weather", "joints ache when it's cold", "joint pain worse with cold", "joints worse in cold weather", "sumasakit ang kasukasuan pag malamig"] },
+  { id: "bi_damp", name: "Heavy, swollen, numb joints (worse damp)", cat: "pain", syn: ["heavy joints", "joints feel heavy", "heavy swollen joints", "joints swell when it rains", "joint pain worse when it rains", "joints worse in rainy weather", "joints worse in damp weather", "mabigat ang kasukasuan", "sumasakit ang kasukasuan pag umuulan", "worse in rainy weather", "worse when it rains", "worse in damp weather", "heavy and swollen", "pain stays in the same", "same joints", "joints are heavy"] },
+  { id: "bi_heat", name: "Hot, red, swollen joints", cat: "pain", syn: ["hot swollen joints", "red swollen joints", "joints are hot", "joint is hot and swollen", "hot joints", "gout", "gouty arthritis", "namamaga at mainit ang kasukasuan", "mainit ang kasukasuan"] },
+  { id: "cold_sweat", name: "Profuse cold sweat", cat: "sweat", syn: ["cold sweat", "cold sweats", "cold clammy sweat", "clammy skin", "profuse sweating", "drenched in sweat", "malamig na pawis", "pinagpapawisan ng malamig"] },
+  { id: "fainting", name: "Fainting / collapse", cat: "energy", syn: ["fainting", "fainted", "passed out", "blacked out", "collapsed", "nahimatay", "himatayin", "nawalan ng malay", "i faint", "i fainted", "fainting spells", "pass out", "nahihimatay"] },
+  { id: "purple_lips", name: "Purple / bluish lips or nails", cat: "skin", syn: ["purple lips", "blue lips", "bluish lips", "lips turn blue", "purple nails", "blue nails", "cyanosis", "nangingitim ang labi", "nangingitim ang kuko", "violet ang labi"] },
+  { id: "left_arm_pain", name: "Chest pain radiating to left arm", cat: "chest", syn: ["pain radiating to my left arm", "pain radiates to my left arm", "pain down my left arm", "left arm pain", "pain in my left arm", "masakit ang kaliwang braso"] },
+  { id: "hunger_no_appetite", name: "Hungry but no desire to eat", cat: "digestion", syn: ["hungry but can't eat", "hungry but no desire to eat", "hungry but don't want to eat", "hungry but can only eat a little", "gutom pero ayaw kumain", "gutom pero hindi makakain", "hungry but i don't want to eat", "hungry but no appetite", "hungry pero ayaw kumain", "hungry but not able to eat", "gutom pero walang gana", "walang gana pero gutom"] },
+  { id: "dry_retching", name: "Dry retching", cat: "digestion", syn: ["dry retching", "retching", "dry heaves", "dry heaving", "gagging", "naduduwal pero walang lumalabas"] },
+  { id: "vomit_clear_fluid", name: "Vomiting clear / watery fluid", cat: "digestion", syn: ["vomit clear fluid", "vomiting clear fluid", "watery vomit", "vomit water", "spit up clear fluid", "clear watery saliva", "tubig ang isinusuka", "malabnaw ang suka"] },
+  { id: "food_retention", name: "Indigestion after overeating", cat: "digestion", syn: ["indigestion", "overate", "ate too much", "overeating", "food is stuck", "food not digesting", "impatso", "empacho", "hindi natunawan", "nabusog nang sobra", "sobrang busog"] },
+  { id: "frothy_sputum", name: "Frothy watery sputum", cat: "respiratory", syn: ["frothy phlegm", "frothy sputum", "foamy phlegm", "foamy sputum", "watery frothy sputum", "mabula ang plema"] },
+  { id: "borborygmi", name: "Borborygmi / splashing sounds in abdomen", cat: "digestion", syn: ["borborygmi", "rumbling stomach", "stomach rumbling", "gurgling stomach", "stomach gurgles", "splashing sound in my stomach", "sloshing in my stomach", "kumukulo ang tiyan", "kumukulo ang sikmura"] },
+  { id: "sob_exertion", name: "Breathless on exertion", cat: "respiratory", syn: ["breathless on exertion", "short of breath when walking", "short of breath when climbing stairs", "out of breath climbing stairs", "out of breath when i walk", "can't climb stairs", "hard to inhale", "difficulty inhaling", "hinihingal pag umaakyat", "hinihingal pag naglalakad", "short of breath on exertion", "shortness of breath on exertion", "breathless when i walk", "out of breath easily", "short of breath when i walk"] },
+  { id: "scanty_urine", name: "Scanty urine", cat: "urination", syn: ["scanty urine", "little urine", "hardly pee", "don't pee much", "not peeing much", "kaunti ang ihi", "konti lang ang ihi", "konti lang umihi"] },
+  { id: "urinary_urgency", name: "Urgency to urinate", cat: "urination", syn: ["urgency to urinate", "urgent urination", "urgent need to pee", "have to rush to pee", "sudden urge to pee", "ihing-ihi", "ihing ihi", "naiihi agad agad", "have urgency", "urinary urgency", "bladder urgency", "urge to urinate", "urge to pee"] },
+  { id: "turbid_urine", name: "Turbid / cloudy urine", cat: "urination", syn: ["cloudy urine", "turbid urine", "milky urine", "urine is cloudy", "foamy urine", "malabo ang ihi", "mabula ang ihi", "dark and cloudy", "cloudy pee"] },
+  { id: "difficult_urination", name: "Difficult urination", cat: "urination", syn: ["difficult urination", "difficulty urinating", "hard to pee", "can't pee", "trouble peeing", "hesitancy", "hirap umihi", "hindi makaihi"] },
+  { id: "lower_abdominal_pain", name: "Lower abdominal pain", cat: "digestion", syn: ["lower abdominal pain", "pain in my lower abdomen", "lower belly pain", "pain in my lower belly", "twisting pain in my lower abdomen", "masakit ang puson", "sakit sa puson", "kumikirot ang puson"] },
+  { id: "painful_diarrhea", name: "Painful diarrhea relieved by bowel movement (stress-related)", cat: "stool", syn: ["diarrhea when stressed", "diarrhea when i'm stressed", "stomach upset when stressed", "cramping then diarrhea", "pain before bowel movement", "pain relieved after bowel movement", "better after a bowel movement", "cramps then diarrhea", "nagtatae pag stressed"] },
+  { id: "tenesmus", name: "Tenesmus / incomplete evacuation", cat: "stool", syn: ["tenesmus", "incomplete evacuation", "feeling of incomplete bowel movement", "still feel like i need to go", "straining to poop", "urgency to poop", "parang hindi tapos dumumi", "pabalik-balik sa banyo"] },
+  { id: "abdominal_mass", name: "Abdominal mass / myoma / cyst", cat: "digestion", syn: ["abdominal mass", "lump in my abdomen", "mass in my abdomen", "myoma", "fibroids", "fibroid", "ovarian cyst", "cyst", "may bukol sa tiyan", "may bukol sa matris"] },
+  { id: "lumps", name: "Lumps / nodules under the skin", cat: "skin", syn: ["lumps under my skin", "lump under the skin", "nodules", "nodule", "lipoma", "goiter", "goitre", "swollen lymph nodes", "swollen glands", "bukol", "kulani", "may bukol"] },
+  { id: "heatstroke", name: "Heat stroke / worse in hot weather", cat: "temperature", syn: ["heat stroke", "heatstroke", "heat exhaustion", "worse in hot weather", "sick from the heat", "too much sun", "na-heatstroke", "nainitan", "nabilad sa araw"] },
+  { id: "high_fever", name: "High fever", cat: "temperature", syn: ["high fever", "very high fever", "fever of 39", "fever of 40", "mataas na lagnat", "napakataas ng lagnat"] },
+  { id: "fever_night", name: "Fever worse at night", cat: "temperature", syn: ["fever worse at night", "fever at night", "fever gets worse at night", "lagnat sa gabi", "tumataas ang lagnat sa gabi"] },
+  { id: "no_taste", name: "Loss of taste / bland taste", cat: "digestion", syn: ["no taste", "can't taste food", "food tastes bland", "bland taste", "loss of taste", "walang lasa", "matabang ang panlasa"] },
+  { id: "weight_loss", name: "Weight loss / thin body", cat: "skin", syn: ["weight loss", "losing weight", "lost weight", "getting thin", "very thin", "pumapayat", "pumayat", "nangangayayat", "namamayat", "nangangayayat na", "losing a lot of weight"] },
+  { id: "sudden_abd_pain", name: "Sudden severe abdominal / epigastric pain", cat: "digestion", syn: ["sudden stomach pain", "sudden severe stomach pain", "sudden abdominal pain", "sudden cramping pain", "biglang sumakit ang tiyan", "biglang sumakit ang sikmura"] },
+  { id: "worse_cold", name: "Symptoms worse with cold", cat: "temperature", syn: ["worse with cold", "worse in the cold", "worse in cold weather", "cold makes it worse", "worse after cold food", "worse with cold drinks", "lumalala pag malamig", "mas masakit pag malamig"] }
 ];
 
+/* Implied findings: a more specific symptom also counts as its general form for scoring. */
+const SYMPTOM_IMPLIES = {
+  dry_cough: ["cough"], hemoptysis: ["cough"], edema_face: ["edema"], edema_legs: ["edema"],
+  early_morning_diarrhea: ["loose_stools"], painful_diarrhea: ["loose_stools", "abdominal_pain"], high_fever: ["fever"], fever_night: ["fever"],
+  frothy_sputum: ["phlegm_white"], sob_exertion: ["shortness_breath"], bi_wandering: ["joint_pain"], bi_cold: ["joint_pain"],
+  bi_damp: ["joint_pain"], bi_heat: ["joint_pain"], foul_belching: ["belching"], sudden_abd_pain: ["abdominal_pain"], cold_sweat: ["spontaneous_sweating"]
+};
+
+
 /* Phrases that should be consumed but NOT counted (avoid false positives in typed notes). */
-const IGNORE_PHRASES = ["pale tongue", "tongue is pale", "tongue pale", "tongue looks pale", "weak pulse", "pulse is weak", "no problem", "no problems", "not bad", "hindi naman masama", "gas station", "cold drinks are fine"];
+const IGNORE_PHRASES = ["pale tongue", "red tongue", "purple tongue", "tongue is red", "wiry pulse", "rapid pulse", "slow pulse", "pulse is rapid", "high blood pressure", "cold drinks", "cold weather", "a cold one", "sweet dreams", "stroke of luck", "fitting room", "cyst removed years ago", "tongue is pale", "tongue pale", "tongue looks pale", "weak pulse", "pulse is weak", "no problem", "no problems", "not bad", "hindi naman masama", "gas station", "cold drinks are fine", "when i cough or laugh", "when i cough or sneeze", "when i laugh or cough", "when i sneeze or cough", "cough or laugh", "laugh or cough"];
 
 const TONGUE_FINDINGS = [
   { id: "t_pale", name: "Pale body" },
@@ -666,7 +791,15 @@ const TONGUE_FINDINGS = [
   { id: "t_yellow", name: "Yellow coat" },
   { id: "t_greasy", name: "Greasy / sticky coat" },
   { id: "t_dry", name: "Dry" },
-  { id: "t_wet", name: "Wet" }
+  { id: "t_wet", name: "Wet" },
+  { id: "t_dark_red", name: "Deep-red / crimson body" },
+  { id: "t_flabby", name: "Flaccid / flabby" },
+  { id: "t_stiff", name: "Stiff" },
+  { id: "t_deviated", name: "Deviated" },
+  { id: "t_trembling", name: "Trembling / quivering" },
+  { id: "t_sublingual", name: "Distended sublingual veins" },
+  { id: "t_rootless", name: "Rootless coat" },
+  { id: "t_black", name: "Black / grey coat" }
 ];
 
 const PULSE_FINDINGS = [
@@ -682,75 +815,320 @@ const PULSE_FINDINGS = [
   { id: "p_choppy", name: "Choppy" },
   { id: "p_tight", name: "Tight" },
   { id: "p_full", name: "Full" },
-  { id: "p_irregular", name: "Knotted / irregular" }
+  { id: "p_irregular", name: "Knotted (slow, irregular)" },
+  { id: "p_intermittent", name: "Intermittent (regular pauses)" },
+  { id: "p_hurried", name: "Hurried (rapid, irregular)" },
+  { id: "p_soggy", name: "Soggy / soft" },
+  { id: "p_minute", name: "Minute" },
+  { id: "p_hollow", name: "Hollow" },
+  { id: "p_leather", name: "Leather" },
+  { id: "p_short", name: "Short" },
+  { id: "p_moving", name: "Moving / tremulous" },
+  { id: "p_overflowing", name: "Overflowing" },
+  { id: "p_hidden", name: "Hidden" }
 ];
+
+/* ORGAN GROUPS (display order in the Patterns reference and pattern details) */
+const PATTERN_GROUPS = ["Liver", "Heart & Pericardium", "Spleen", "Stomach", "Lung", "Kidney", "Gallbladder", "Small Intestine", "Large Intestine", "Bladder", "Qi, Blood & Body Fluids", "Exterior & Bi syndromes"];
 
 /* PATTERNS
+   organ:    group used for display
    ind:      indicator id -> weight (1 = supportive, 2 = typical, 3 = key sign)
-   cardinal: key/cardinal indicators (give a bonus when present; penalised if explicitly denied)
+   cardinal: key/cardinal indicators (bonus when present; penalised if explicitly denied)
    contra:   indicators that argue AGAINST the pattern (id -> penalty weight)
-   Presentations follow standard textbook descriptions (e.g. Maciocia, "The Foundations of Chinese Medicine"). */
+   requireAny (optional): the pattern is only plausible if at least one of these is present
+             (e.g. a Bi syndrome needs a joint complaint); otherwise its fit is multiplied
+             by SCORING.requireFactor
+   Presentations follow standard textbook descriptions (Maciocia, "The Foundations of
+   Chinese Medicine"; Bensky/Barolet formulas). Formula names are references only. */
 const PATTERNS = [
-  { id: "liver_qi_stagnation", name: "Liver Qi Stagnation", principle: "Soothe the Liver, move Qi", formulas: "Xiao Yao San; Chai Hu Shu Gan San",
-    ind: { hypochondriac_pain: 3, irritability: 3, sighing: 3, pms_breast: 3, depression_mood: 2, mood_swings: 2, stress: 2, plum_pit: 2, chest_tightness: 2, irregular_periods: 2, alternating_stool: 2, dysmenorrhea: 1, bloating: 1, belching: 1, t_red_sides: 1, p_wiry: 3 },
+  // ============================ LIVER ============================
+  { id: "liver_qi_stagnation", organ: "Liver", name: "Liver Qi Stagnation", principle: "Soothe the Liver, move Qi", formulas: "Xiao Yao San; Chai Hu Shu Gan San; Yue Ju Wan",
+    ind: { hypochondriac_pain: 3, irritability: 3, sighing: 3, pms_breast: 3, depression_mood: 2, mood_swings: 2, stress: 2, plum_pit: 2, chest_tightness: 2, irregular_periods: 2, alternating_stool: 1, dysmenorrhea: 1, bloating: 1, belching: 1, t_red_sides: 1, p_wiry: 3 },
     cardinal: ["irritability", "hypochondriac_pain", "sighing", "pms_breast", "p_wiry"], contra: {} },
-  { id: "liver_yang_rising", name: "Liver Yang Rising", principle: "Pacify the Liver, subdue Yang, nourish Yin", formulas: "Tian Ma Gou Teng Yin",
-    ind: { headache: 3, temporal_headache: 3, dizziness: 3, tinnitus: 2, irritability: 2, red_face: 1, dry_eyes: 1, blurred_vision: 1, insomnia: 1, dry_mouth: 1, neck_stiffness: 1, t_red: 1, t_red_sides: 1, p_wiry: 3, p_thin: 1 },
-    cardinal: ["headache", "temporal_headache", "dizziness", "p_wiry"], contra: { cold_aversion: 1, t_pale: 1 } },
-  { id: "liver_fire", name: "Liver Fire Blazing", principle: "Clear Liver Fire", formulas: "Long Dan Xie Gan Tang",
-    ind: { bitter_taste: 3, red_eyes: 3, irritability: 3, headache: 2, temporal_headache: 2, red_face: 2, tinnitus: 2, thirst: 1, dark_urine: 1, constipation: 1, insomnia: 1, dream_disturbed: 1, t_red: 2, t_red_sides: 2, t_yellow: 2, t_dry: 1, p_wiry: 2, p_rapid: 2, p_full: 1 },
-    cardinal: ["bitter_taste", "red_eyes", "irritability", "t_red_sides", "p_rapid"], contra: { cold_aversion: 2, clear_urine: 1, t_pale: 2, p_slow: 2 } },
-  { id: "spleen_qi_def", name: "Spleen Qi Deficiency", principle: "Tonify Spleen Qi", formulas: "Si Jun Zi Tang; Liu Jun Zi Tang; Bu Zhong Yi Qi Tang (if sinking)",
-    ind: { fatigue: 3, poor_appetite: 3, loose_stools: 3, bloating: 3, weakness_limbs: 2, sallow_complexion: 2, prolapse: 2, pale_complexion: 1, reluctance_speak: 1, craving_sweets: 1, somnolence: 1, easy_bruising: 1, t_pale: 2, t_teeth_marks: 2, t_swollen: 1, t_thin_white: 1, p_weak: 2, p_empty: 2 },
-    cardinal: ["fatigue", "poor_appetite", "loose_stools", "bloating"], contra: { t_red: 1, p_rapid: 1, thirst_cold_drinks: 1 } },
-  { id: "spleen_yang_def", name: "Spleen Yang Deficiency", principle: "Warm and tonify Spleen Yang", formulas: "Li Zhong Wan; Fu Zi Li Zhong Wan",
-    ind: { loose_stools: 3, cold_aversion: 3, cold_limbs: 3, fatigue: 2, poor_appetite: 2, pain_better_warmth: 2, edema: 2, undigested_food_stool: 2, bloating: 1, abdominal_pain: 1, prefer_warm_drinks: 1, no_thirst: 1, pale_complexion: 1, t_pale: 2, t_wet: 2, t_swollen: 1, p_weak: 1, p_deep: 1, p_slow: 2 },
-    cardinal: ["loose_stools", "cold_aversion", "cold_limbs"], contra: { feeling_hot: 2, thirst_cold_drinks: 2, night_sweats: 1, t_red: 2, t_yellow: 1, p_rapid: 2 } },
-  { id: "damp_spleen", name: "Dampness Encumbering the Spleen (Cold-Damp)", principle: "Dry Dampness, strengthen the Spleen", formulas: "Ping Wei San; Shen Ling Bai Zhu San",
-    ind: { heaviness_body: 3, heavy_head: 3, sticky_taste: 3, poor_appetite: 2, bloating: 2, loose_stools: 2, nausea: 2, no_thirst: 1, somnolence: 1, edema: 1, vaginal_discharge: 1, chest_tightness: 1, t_greasy: 3, t_thick: 2, t_white: 1, t_swollen: 1, p_slippery: 3 },
-    cardinal: ["heaviness_body", "heavy_head", "t_greasy", "p_slippery"], contra: { dry_mouth: 1, thirst: 1, t_peeled: 2 } },
-  { id: "kidney_yang_def", name: "Kidney Yang Deficiency", principle: "Warm and tonify Kidney Yang", formulas: "Jin Gui Shen Qi Wan; You Gui Wan",
-    ind: { lower_back_pain: 3, knee_weakness: 3, cold_limbs: 3, nocturia: 3, clear_urine: 3, early_morning_diarrhea: 3, cold_aversion: 2, frequent_urination: 2, edema: 2, low_libido: 2, infertility: 1, fatigue: 1, pale_complexion: 1, tinnitus: 1, incontinence: 1, t_pale: 2, t_wet: 2, t_swollen: 1, p_deep: 2, p_weak: 2, p_slow: 2 },
-    cardinal: ["lower_back_pain", "cold_limbs", "clear_urine", "nocturia"], contra: { feeling_hot: 2, night_sweats: 1, dark_urine: 2, t_red: 2, p_rapid: 2 } },
-  { id: "kidney_yin_def", name: "Kidney Yin Deficiency", principle: "Nourish Kidney Yin, clear Empty Heat", formulas: "Liu Wei Di Huang Wan; Zuo Gui Wan; Zhi Bai Di Huang Wan",
-    ind: { night_sweats: 3, five_palm_heat: 3, lower_back_pain: 2, knee_weakness: 2, malar_flush: 2, afternoon_fever: 2, hot_flashes: 2, tinnitus: 2, dry_mouth: 2, dizziness: 1, thirst: 1, poor_memory: 1, insomnia: 1, constipation: 1, dark_urine: 1, scanty_periods: 1, hearing_loss: 1, t_red: 2, t_peeled: 3, t_cracked: 1, p_thin: 2, p_rapid: 2 },
-    cardinal: ["night_sweats", "five_palm_heat", "t_peeled"], contra: { cold_aversion: 2, clear_urine: 1, t_pale: 1, t_wet: 1, t_greasy: 1, p_slow: 1 } },
-  { id: "heart_blood_def", name: "Heart Blood Deficiency (Heart–Spleen)", principle: "Nourish Heart Blood, calm the Shen", formulas: "Gui Pi Tang",
-    ind: { palpitations: 3, insomnia: 3, poor_memory: 2, dream_disturbed: 2, anxiety: 2, easily_startled: 2, pale_complexion: 2, dizziness: 1, fatigue: 1, poor_concentration: 1, scanty_periods: 1, t_pale: 2, t_thin: 1, p_thin: 2, p_choppy: 1, p_weak: 1 },
-    cardinal: ["palpitations", "insomnia", "poor_memory", "t_pale"], contra: { t_red: 1, feeling_hot: 1 } },
-  { id: "heart_kidney_yin", name: "Heart Yin Deficiency / Heart & Kidney Not Harmonised", principle: "Nourish Heart & Kidney Yin, calm the Shen", formulas: "Tian Wang Bu Xin Dan; Huang Lian E Jiao Tang",
-    ind: { palpitations: 3, insomnia: 3, restlessness: 3, waking_night: 2, dream_disturbed: 2, anxiety: 2, night_sweats: 2, five_palm_heat: 2, dry_mouth: 2, malar_flush: 1, poor_memory: 1, tinnitus: 1, lower_back_pain: 1, mouth_ulcers: 1, t_red_tip: 3, t_red: 2, t_peeled: 2, t_cracked: 1, p_thin: 1, p_rapid: 2 },
-    cardinal: ["palpitations", "insomnia", "restlessness", "t_red_tip"], contra: { cold_aversion: 2, t_pale: 2, p_slow: 1 } },
-  { id: "lung_qi_def", name: "Lung Qi Deficiency", principle: "Tonify Lung Qi, consolidate the exterior", formulas: "Bu Fei Tang; Yu Ping Feng San",
-    ind: { shortness_breath: 3, spontaneous_sweating: 3, catch_colds: 3, cough: 2, reluctance_speak: 2, fatigue: 2, aversion_wind: 2, pale_complexion: 1, phlegm_white: 1, t_pale: 2, p_weak: 2, p_empty: 1 },
-    cardinal: ["shortness_breath", "spontaneous_sweating", "catch_colds"], contra: { t_red: 1, p_rapid: 1, phlegm_yellow: 1 } },
-  { id: "blood_stasis", name: "Blood Stasis", principle: "Invigorate Blood, dispel stasis", formulas: "Xue Fu Zhu Yu Tang; Tao Hong Si Wu Tang; Ge Xia Zhu Yu Tang",
-    ind: { fixed_stabbing_pain: 3, dysmenorrhea: 3, menstrual_clots: 3, chest_pain: 2, dark_complexion: 2, easy_bruising: 1, numbness: 1, hypochondriac_pain: 1, dry_skin_hair: 1, irregular_periods: 1, infertility: 1, t_purple: 3, t_dark_spots: 2, p_choppy: 3, p_wiry: 1 },
-    cardinal: ["fixed_stabbing_pain", "menstrual_clots", "t_purple", "p_choppy"], contra: {} },
-  { id: "blood_def", name: "Blood Deficiency (Liver Blood)", principle: "Nourish Blood", formulas: "Si Wu Tang; Ba Zhen Tang; Dang Gui Bu Xue Tang",
+  { id: "liver_blood_stasis", organ: "Liver", name: "Liver Blood Stasis", principle: "Invigorate Blood, eliminate stasis, move Liver Qi", formulas: "Ge Xia Zhu Yu Tang; Xue Fu Zhu Yu Tang; Gui Zhi Fu Ling Wan (masses)",
+    ind: { fixed_stabbing_pain: 3, abdominal_mass: 3, dysmenorrhea: 3, menstrual_clots: 3, hypochondriac_pain: 2, dark_complexion: 2, purple_lips: 2, irregular_periods: 1, heavy_periods: 1, hematemesis: 1, t_purple: 3, t_dark_spots: 2, t_sublingual: 2, p_wiry: 2, p_choppy: 2 },
+    cardinal: ["fixed_stabbing_pain", "menstrual_clots", "abdominal_mass", "t_purple"], contra: {} },
+  { id: "blood_def", organ: "Liver", name: "Liver Blood Deficiency", principle: "Nourish Liver Blood", formulas: "Si Wu Tang; Bu Gan Tang; Ba Zhen Tang",
     ind: { blurred_vision: 3, scanty_periods: 3, dizziness: 2, dry_eyes: 2, numbness: 2, muscle_cramps: 2, pale_complexion: 2, dry_skin_hair: 2, pale_menses: 2, sallow_complexion: 1, amenorrhea: 1, poor_memory: 1, fatigue: 1, insomnia: 1, t_pale: 3, t_thin: 1, t_dry: 1, p_thin: 3, p_choppy: 1 },
     cardinal: ["blurred_vision", "scanty_periods", "t_pale", "p_thin"], contra: { t_red: 1, feeling_hot: 1 } },
-  { id: "phlegm_damp", name: "Phlegm-Damp", principle: "Resolve Phlegm, dry Dampness", formulas: "Er Chen Tang; Wen Dan Tang (with Heat)",
-    ind: { phlegm_white: 3, cough: 2, chest_tightness: 2, nausea: 2, heavy_head: 2, dizziness: 2, heaviness_body: 2, weight_gain: 2, sticky_taste: 2, plum_pit: 1, poor_appetite: 1, wheezing: 1, somnolence: 1, t_greasy: 3, t_swollen: 2, t_thick: 2, t_white: 1, p_slippery: 3 },
-    cardinal: ["phlegm_white", "t_greasy", "p_slippery"], contra: { dry_mouth: 1, t_peeled: 2 } },
-  { id: "damp_heat", name: "Damp-Heat (Lower Jiao / general)", principle: "Clear Heat, resolve Dampness", formulas: "San Ren Tang; Ba Zheng San (urinary); Long Dan Xie Gan Tang",
-    ind: { painful_urination: 3, foul_stools: 3, dark_urine: 2, vaginal_discharge: 2, skin_itch: 2, loose_stools: 1, heaviness_body: 1, feeling_hot: 1, fever: 1, thirst: 1, bitter_taste: 1, acne: 1, bloating: 1, nausea: 1, t_greasy: 3, t_yellow: 2, t_red: 1, p_slippery: 2, p_rapid: 2 },
-    cardinal: ["painful_urination", "foul_stools", "t_greasy", "t_yellow"], contra: { cold_aversion: 1, clear_urine: 2, t_pale: 1, p_slow: 1 } },
-  { id: "wind_cold", name: "Wind-Cold Invasion", principle: "Release the exterior, dispel Wind-Cold", formulas: "Ma Huang Tang; Gui Zhi Tang; Jing Fang Bai Du San",
+  { id: "liver_yin_def", organ: "Liver", name: "Liver Yin Deficiency", principle: "Nourish Liver Yin", formulas: "Yi Guan Jian; Qi Ju Di Huang Wan",
+    ind: { dry_eyes: 3, blurred_vision: 2, dizziness: 2, scanty_periods: 2, night_sweats: 2, five_palm_heat: 2, numbness: 1, dry_skin_hair: 1, insomnia: 1, irritability: 1, dry_throat: 1, muscle_cramps: 1, t_red: 2, t_peeled: 3, t_red_sides: 1, p_thin: 2, p_rapid: 1, p_wiry: 1 },
+    cardinal: ["dry_eyes", "blurred_vision", "t_peeled"], contra: { cold_aversion: 2, t_pale: 1, p_slow: 1 } },
+  { id: "liver_yang_rising", organ: "Liver", name: "Liver Yang Rising", principle: "Pacify the Liver, subdue Yang, nourish Yin", formulas: "Tian Ma Gou Teng Yin",
+    ind: { headache: 3, temporal_headache: 3, dizziness: 3, tinnitus: 2, irritability: 2, red_face: 1, dry_eyes: 1, blurred_vision: 1, insomnia: 1, dry_mouth: 1, neck_stiffness: 1, t_red: 1, t_red_sides: 1, p_wiry: 3, p_thin: 1 },
+    cardinal: ["headache", "temporal_headache", "dizziness", "p_wiry"], contra: { cold_aversion: 1, t_pale: 1 } },
+  { id: "liver_fire", organ: "Liver", name: "Liver Fire Blazing", principle: "Clear Liver Fire, drain Heat", formulas: "Long Dan Xie Gan Tang; Dang Gui Long Hui Wan",
+    ind: { bitter_taste: 3, red_eyes: 3, irritability: 3, headache: 2, temporal_headache: 2, red_face: 2, tinnitus: 2, thirst: 1, dark_urine: 1, constipation: 1, insomnia: 1, dream_disturbed: 1, nosebleed: 1, t_red: 2, t_red_sides: 2, t_yellow: 2, t_dry: 1, p_wiry: 2, p_rapid: 2, p_full: 1 },
+    cardinal: ["bitter_taste", "red_eyes", "irritability", "t_red_sides", "p_rapid"], contra: { cold_aversion: 2, clear_urine: 1, t_pale: 2, p_slow: 2 } },
+  { id: "liver_wind_yang", organ: "Liver", name: "Liver Wind (from Liver Yang Rising)", principle: "Extinguish Wind, subdue Yang, nourish Yin", formulas: "Zhen Gan Xi Feng Tang; Tian Ma Gou Teng Yin",
+    ind: { tremor: 3, dizziness: 3, wind_stroke: 3, headache: 2, numbness: 2, convulsions: 2, tinnitus: 1, irritability: 1, t_stiff: 2, t_deviated: 2, t_trembling: 2, t_red: 1, p_wiry: 3 },
+    cardinal: ["tremor", "wind_stroke", "dizziness", "p_wiry"], contra: { t_pale: 1 }, requireAny: ["tremor", "wind_stroke", "convulsions", "numbness"] },
+  { id: "liver_wind_heat", organ: "Liver", name: "Liver Wind (from Extreme Heat)", principle: "Clear Heat, cool the Liver, extinguish Wind", formulas: "Ling Jiao Gou Teng Tang",
+    ind: { high_fever: 3, convulsions: 3, neck_stiffness: 2, mental_confusion: 2, fever: 1, thirst: 1, t_dark_red: 3, t_stiff: 2, t_dry: 1, p_wiry: 2, p_rapid: 3 },
+    cardinal: ["high_fever", "convulsions", "t_dark_red"], contra: { t_pale: 2, p_slow: 2 }, requireAny: ["convulsions", "high_fever"] },
+  { id: "liver_wind_blood", organ: "Liver", name: "Liver Wind (from Liver Blood Deficiency)", principle: "Nourish Liver Blood, extinguish Wind", formulas: "E Jiao Ji Zi Huang Tang; Si Wu Tang + Tian Ma, Gou Teng",
+    ind: { tremor: 3, numbness: 3, dizziness: 2, blurred_vision: 2, muscle_cramps: 2, pale_complexion: 1, scanty_periods: 1, poor_memory: 1, t_pale: 3, t_trembling: 2, p_thin: 2, p_choppy: 1 },
+    cardinal: ["tremor", "numbness", "t_pale"], contra: { t_red: 1, high_fever: 2 }, requireAny: ["tremor", "numbness", "muscle_cramps"] },
+  { id: "liver_gb_damp_heat", organ: "Liver", name: "Damp-Heat in Liver & Gallbladder", principle: "Clear Damp-Heat from Liver & GB", formulas: "Long Dan Xie Gan Tang; Yin Chen Hao Tang (jaundice)",
+    ind: { hypochondriac_pain: 3, jaundice: 3, bitter_taste: 3, vaginal_discharge: 2, dark_urine: 2, nausea: 2, painful_urination: 1, hernia: 1, skin_itch: 1, vomiting: 1, poor_appetite: 1, bloating: 1, fever: 1, t_yellow: 2, t_greasy: 3, t_red_sides: 1, p_slippery: 2, p_wiry: 2, p_rapid: 1 },
+    cardinal: ["hypochondriac_pain", "bitter_taste", "vaginal_discharge", "t_greasy"], contra: { cold_aversion: 1, clear_urine: 1, t_pale: 1 } },
+  { id: "liver_cold_channel", organ: "Liver", name: "Cold Stagnating in the Liver Channel", principle: "Warm the Liver channel, expel Cold, move Qi", formulas: "Nuan Gan Jian; Tian Tai Wu Yao San",
+    ind: { hernia: 3, lower_abdominal_pain: 3, pain_better_warmth: 2, worse_cold: 2, cold_limbs: 2, cold_aversion: 1, impotence: 1, t_pale: 1, t_wet: 2, t_white: 1, p_wiry: 2, p_deep: 2, p_slow: 2 },
+    cardinal: ["hernia", "lower_abdominal_pain", "p_wiry"], contra: { feeling_hot: 2, t_red: 2, p_rapid: 2 }, requireAny: ["hernia", "lower_abdominal_pain"] },
+  { id: "liver_spleen_disharmony", organ: "Liver", name: "Liver–Spleen Disharmony (Liver overacting on Spleen)", principle: "Soothe the Liver, strengthen the Spleen", formulas: "Tong Xie Yao Fang; Xiao Yao San",
+    ind: { painful_diarrhea: 3, alternating_stool: 3, irritability: 2, stress: 2, abdominal_pain: 2, bloating: 2, hypochondriac_pain: 2, fatigue: 1, poor_appetite: 1, sighing: 1, loose_stools: 1, t_red_sides: 1, t_pale: 1, p_wiry: 2, p_weak: 1 },
+    cardinal: ["painful_diarrhea", "alternating_stool", "irritability", "p_wiry"], contra: {} },
+  { id: "liver_invading_stomach", organ: "Liver", name: "Liver Qi Invading the Stomach", principle: "Soothe the Liver, harmonise the Stomach, subdue rebellious Qi", formulas: "Si Ni San; Zuo Jin Wan (with Heat); Chai Hu Shu Gan San",
+    ind: { belching: 3, acid_reflux: 3, epigastric_pain: 2, hypochondriac_pain: 2, nausea: 2, hiccup: 2, irritability: 2, stress: 1, vomiting: 1, bloating: 1, t_red_sides: 1, p_wiry: 3 },
+    cardinal: ["belching", "acid_reflux", "irritability", "p_wiry"], contra: {} },
+  { id: "liver_fire_lung", organ: "Liver", name: "Liver Fire Insulting the Lungs", principle: "Clear Liver Fire, descend Lung Qi", formulas: "Dai Ge San + Xie Bai San",
+    ind: { hemoptysis: 3, cough: 2, hypochondriac_pain: 2, irritability: 2, red_face: 2, bitter_taste: 2, wheezing: 1, headache: 1, thirst: 1, phlegm_yellow: 1, t_red: 2, t_red_sides: 2, t_yellow: 1, p_wiry: 2, p_rapid: 2 },
+    cardinal: ["hemoptysis", "cough", "irritability", "t_red_sides"], contra: { cold_aversion: 1, t_pale: 1 } },
+
+  // ======================= HEART & PERICARDIUM =======================
+  { id: "heart_qi_def", organ: "Heart & Pericardium", name: "Heart Qi Deficiency", principle: "Tonify Heart Qi", formulas: "Yang Xin Tang; Si Jun Zi Tang + Wu Wei Zi",
+    ind: { p_intermittent: 1, p_short: 1, palpitations: 3, sob_exertion: 3, shortness_breath: 2, spontaneous_sweating: 2, fatigue: 2, pale_complexion: 1, reluctance_speak: 1, t_pale: 2, p_weak: 2, p_empty: 1, p_irregular: 1 },
+    cardinal: ["palpitations", "sob_exertion", "p_weak"], contra: { t_red: 1, feeling_hot: 1 } },
+  { id: "heart_yang_def", organ: "Heart & Pericardium", name: "Heart Yang Deficiency", principle: "Tonify and warm Heart Yang", formulas: "Gui Zhi Gan Cao Tang; Bao Yuan Tang",
+    ind: { p_intermittent: 1, palpitations: 3, cold_limbs: 3, chest_tightness: 2, sob_exertion: 2, cold_aversion: 2, chest_pain: 1, spontaneous_sweating: 1, fatigue: 1, pale_complexion: 1, purple_lips: 1, edema: 1, t_pale: 2, t_swollen: 1, t_wet: 2, p_deep: 1, p_weak: 2, p_irregular: 2, p_slow: 1 },
+    cardinal: ["palpitations", "cold_limbs", "chest_tightness"], contra: { feeling_hot: 2, t_red: 2, p_rapid: 1 } },
+  { id: "heart_yang_collapse", organ: "Heart & Pericardium", name: "Collapse of Heart Yang (emergency)", principle: "Rescue Yang, restore collapse — urgent medical referral", formulas: "Shen Fu Tang; Si Ni Tang",
+    ind: { t_black: 1, cold_sweat: 3, cold_limbs: 3, fainting: 3, purple_lips: 2, palpitations: 2, shortness_breath: 2, mental_confusion: 1, t_pale: 1, t_purple: 1, p_minute: 3, p_hidden: 2, p_irregular: 1 },
+    cardinal: ["cold_sweat", "cold_limbs", "fainting", "p_minute"], contra: { feeling_hot: 2, p_full: 2 }, requireAny: ["cold_sweat", "fainting"] },
+  { id: "heart_blood_def", organ: "Heart & Pericardium", name: "Heart Blood Deficiency", principle: "Nourish Heart Blood, calm the Shen", formulas: "Gui Pi Tang; Yang Xin Tang; Suan Zao Ren Tang",
+    ind: { palpitations: 3, insomnia: 3, poor_memory: 2, dream_disturbed: 2, easily_startled: 2, anxiety: 2, dizziness: 2, pale_complexion: 2, t_pale: 3, t_thin: 1, p_thin: 2, p_choppy: 1 },
+    cardinal: ["palpitations", "insomnia", "poor_memory", "t_pale"], contra: { t_red: 1, feeling_hot: 1 } },
+  { id: "heart_yin_def", organ: "Heart & Pericardium", name: "Heart Yin Deficiency", principle: "Nourish Heart Yin, calm the Shen", formulas: "Tian Wang Bu Xin Dan; Bai Zi Yang Xin Wan",
+    ind: { restless_sleep: 1, palpitations: 3, insomnia: 3, anxiety: 2, restlessness: 2, dream_disturbed: 2, night_sweats: 2, five_palm_heat: 2, dry_mouth: 2, easily_startled: 1, poor_memory: 1, malar_flush: 1, afternoon_fever: 1, t_red: 2, t_red_tip: 2, t_peeled: 2, t_cracked: 1, p_thin: 2, p_rapid: 2 },
+    cardinal: ["palpitations", "insomnia", "night_sweats", "t_peeled"], contra: { cold_aversion: 2, t_pale: 2 } },
+  { id: "heart_fire", organ: "Heart & Pericardium", name: "Heart Fire Blazing", principle: "Clear Heart Fire, calm the Shen", formulas: "Dao Chi San; Xie Xin Tang",
+    ind: { p_hurried: 1, mouth_ulcers: 3, insomnia: 2, restlessness: 2, palpitations: 2, thirst: 2, bitter_taste: 2, red_face: 2, dark_urine: 2, painful_urination: 1, blood_in_urine: 1, dream_disturbed: 1, feeling_hot: 1, t_red_tip: 3, t_red: 2, t_yellow: 1, p_rapid: 3, p_full: 1, p_overflowing: 1 },
+    cardinal: ["mouth_ulcers", "restlessness", "t_red_tip", "p_rapid"], contra: { cold_aversion: 2, t_pale: 2, p_slow: 2 } },
+  { id: "phlegm_fire_heart", organ: "Heart & Pericardium", name: "Phlegm-Fire Harassing the Heart", principle: "Clear Heart, resolve Phlegm, calm the Shen", formulas: "Wen Dan Tang + Huang Lian; Meng Shi Gun Tan Wan",
+    ind: { p_hurried: 2, manic: 3, restlessness: 3, incoherent_speech: 3, insomnia: 2, palpitations: 2, bitter_taste: 1, red_face: 1, thirst: 1, dream_disturbed: 1, phlegm_yellow: 1, t_red: 2, t_red_tip: 1, t_yellow: 2, t_greasy: 2, p_slippery: 3, p_rapid: 2, p_full: 1 },
+    cardinal: ["manic", "incoherent_speech", "t_greasy", "p_slippery"], contra: { t_pale: 1, p_slow: 1 }, requireAny: ["manic", "incoherent_speech", "restlessness", "insomnia"] },
+  { id: "phlegm_misting_mind", organ: "Heart & Pericardium", name: "Phlegm Misting the Mind (Heart)", principle: "Resolve Phlegm, open the orifices", formulas: "Di Tan Tang; Su He Xiang Wan",
+    ind: { mental_confusion: 3, incoherent_speech: 2, somnolence: 2, phlegm_white: 2, depression_mood: 1, vomiting: 1, dizziness: 1, heavy_head: 1, fainting: 1, t_swollen: 2, t_greasy: 3, t_white: 1, t_thick: 1, p_slippery: 3, p_soggy: 1 },
+    cardinal: ["mental_confusion", "t_greasy", "p_slippery"], contra: { t_peeled: 1, manic: 1 }, requireAny: ["mental_confusion", "incoherent_speech", "somnolence"] },
+  { id: "heart_blood_stasis", organ: "Heart & Pericardium", name: "Heart Blood Stasis", principle: "Invigorate Blood, eliminate stasis, open the chest", formulas: "Xue Fu Zhu Yu Tang; Dan Shen Yin",
+    ind: { p_intermittent: 1, chest_pain: 3, left_arm_pain: 3, purple_lips: 3, fixed_stabbing_pain: 2, palpitations: 2, chest_tightness: 2, cold_limbs: 1, sob_exertion: 1, t_purple: 3, t_dark_spots: 1, t_sublingual: 1, p_choppy: 3, p_irregular: 2 },
+    cardinal: ["chest_pain", "left_arm_pain", "purple_lips", "t_purple", "p_choppy"], contra: {} },
+  { id: "heart_kidney_yin", organ: "Heart & Pericardium", name: "Heart & Kidney Not Harmonised", principle: "Nourish Kidney & Heart Yin, clear Empty Heat, harmonise Heart–Kidney", formulas: "Huang Lian E Jiao Tang; Jiao Tai Wan; Tian Wang Bu Xin Dan",
+    ind: { restless_sleep: 1, palpitations: 3, insomnia: 3, lower_back_pain: 2, night_sweats: 2, waking_night: 2, restlessness: 2, dream_disturbed: 2, spermatorrhea: 2, tinnitus: 2, five_palm_heat: 2, knee_weakness: 1, dizziness: 1, dry_mouth: 1, poor_memory: 1, anxiety: 1, t_red: 2, t_red_tip: 2, t_peeled: 2, p_thin: 1, p_rapid: 2 },
+    cardinal: ["palpitations", "insomnia", "lower_back_pain", "night_sweats"], contra: { cold_aversion: 2, t_pale: 2 } },
+  { id: "heart_spleen_def", organ: "Heart & Pericardium", name: "Heart & Spleen Deficiency (Qi & Blood)", principle: "Tonify Spleen Qi, nourish Heart Blood", formulas: "Gui Pi Tang",
+    ind: { poor_concentration: 1, palpitations: 3, fatigue: 3, poor_appetite: 3, insomnia: 2, poor_memory: 2, loose_stools: 2, pale_complexion: 2, dream_disturbed: 1, anxiety: 1, bloating: 1, easy_bruising: 1, heavy_periods: 1, scanty_periods: 1, t_pale: 3, t_teeth_marks: 1, t_thin: 1, p_thin: 2, p_weak: 2 },
+    cardinal: ["palpitations", "fatigue", "poor_appetite", "t_pale"], contra: { t_red: 1 } },
+  { id: "heart_gb_def", organ: "Heart & Pericardium", name: "Heart & Gallbladder Deficiency (timidity)", principle: "Tonify Heart & GB Qi, calm the Shen", formulas: "An Shen Ding Zhi Wan; Wen Dan Tang",
+    ind: { p_moving: 2, timidity: 3, easily_startled: 3, palpitations: 2, insomnia: 2, waking_night: 1, dream_disturbed: 1, sighing: 1, anxiety: 1, dizziness: 1, shortness_breath: 1, t_pale: 1, p_weak: 2, p_thin: 1 },
+    cardinal: ["timidity", "easily_startled", "palpitations"], contra: {} },
+  { id: "pericardium_heat", organ: "Heart & Pericardium", name: "Heat in the Pericardium (Nutritive level)", principle: "Clear Nutritive-level Heat, open the orifices — urgent referral", formulas: "Qing Ying Tang; An Gong Niu Huang Wan",
+    ind: { t_black: 1, fever_night: 3, high_fever: 3, mental_confusion: 3, incoherent_speech: 2, restlessness: 2, thirst: 1, convulsions: 1, t_dark_red: 3, t_dry: 1, p_rapid: 2, p_thin: 2 },
+    cardinal: ["fever_night", "mental_confusion", "t_dark_red"], contra: { cold_aversion: 1, t_pale: 2, p_slow: 2 }, requireAny: ["mental_confusion", "fever_night", "incoherent_speech", "high_fever"] },
+
+  // ============================ SPLEEN ============================
+  { id: "spleen_qi_def", organ: "Spleen", name: "Spleen Qi Deficiency", principle: "Tonify Spleen Qi", formulas: "Si Jun Zi Tang; Liu Jun Zi Tang; Shen Ling Bai Zhu San",
+    ind: { poor_concentration: 1, fatigue: 3, poor_appetite: 3, loose_stools: 3, bloating: 3, weakness_limbs: 2, sallow_complexion: 2, pale_complexion: 1, reluctance_speak: 1, craving_sweets: 1, somnolence: 1, no_taste: 1, t_pale: 2, t_teeth_marks: 2, t_swollen: 1, t_thin_white: 1, p_weak: 2, p_empty: 2 },
+    cardinal: ["fatigue", "poor_appetite", "loose_stools", "bloating"], contra: { t_red: 1, p_rapid: 1, thirst_cold_drinks: 1 } },
+  { id: "spleen_yang_def", organ: "Spleen", name: "Spleen Yang Deficiency", principle: "Warm and tonify Spleen Yang", formulas: "Li Zhong Wan; Fu Zi Li Zhong Wan",
+    ind: { t_flabby: 1, loose_stools: 3, cold_aversion: 3, cold_limbs: 3, fatigue: 2, poor_appetite: 2, pain_better_warmth: 2, edema: 2, undigested_food_stool: 2, bloating: 1, abdominal_pain: 1, prefer_warm_drinks: 1, no_thirst: 1, pale_complexion: 1, t_pale: 2, t_wet: 2, t_swollen: 1, p_weak: 1, p_deep: 1, p_slow: 2 },
+    cardinal: ["loose_stools", "cold_aversion", "cold_limbs"], contra: { feeling_hot: 2, thirst_cold_drinks: 2, night_sweats: 1, t_red: 2, t_yellow: 1, p_rapid: 2 } },
+  { id: "spleen_qi_sinking", organ: "Spleen", name: "Spleen Qi Sinking", principle: "Tonify and raise Spleen Qi", formulas: "Bu Zhong Yi Qi Tang",
+    ind: { prolapse: 3, fatigue: 2, frequent_urination: 2, loose_stools: 2, incontinence: 1, poor_appetite: 1, bloating: 1, heavy_periods: 1, vaginal_discharge: 1, dizziness: 1, t_pale: 2, p_weak: 3 },
+    cardinal: ["prolapse", "fatigue", "p_weak"], contra: { t_red: 1, p_full: 1 } },
+  { id: "spleen_not_controlling_blood", organ: "Spleen", name: "Spleen Not Controlling Blood", principle: "Tonify Spleen Qi to hold Blood", formulas: "Gui Pi Tang",
+    ind: { p_hollow: 1, easy_bruising: 3, heavy_periods: 3, spotting: 3, blood_in_stool: 2, blood_in_urine: 2, fatigue: 2, pale_complexion: 2, nosebleed: 1, poor_appetite: 1, loose_stools: 1, t_pale: 2, p_weak: 2, p_thin: 1 },
+    cardinal: ["easy_bruising", "heavy_periods", "spotting", "fatigue"], contra: { t_red: 2, p_rapid: 2, feeling_hot: 1 } },
+  { id: "damp_spleen", organ: "Spleen", name: "Cold-Damp Invading the Spleen", principle: "Dry Dampness, warm and strengthen the Spleen", formulas: "Ping Wei San; Huo Xiang Zheng Qi San",
+    ind: { heaviness_body: 3, heavy_head: 3, sticky_taste: 3, poor_appetite: 2, bloating: 2, loose_stools: 2, nausea: 2, no_thirst: 1, somnolence: 1, edema: 1, vaginal_discharge: 1, chest_tightness: 1, cold_aversion: 1, t_greasy: 3, t_thick: 2, t_white: 2, t_swollen: 1, p_slippery: 3, p_soggy: 2, p_slow: 1 },
+    cardinal: ["heaviness_body", "sticky_taste", "t_greasy", "p_slippery"], contra: { dry_mouth: 1, thirst: 1, t_yellow: 1, t_peeled: 2, p_rapid: 1 } },
+  { id: "spleen_damp_heat", organ: "Spleen", name: "Damp-Heat in the Spleen", principle: "Clear Heat, resolve Dampness, strengthen the Spleen", formulas: "Lian Po Yin; Yin Chen Wu Ling San",
+    ind: { foul_stools: 3, bloating: 2, nausea: 2, loose_stools: 2, heaviness_body: 2, jaundice: 2, dark_urine: 2, vomiting: 1, poor_appetite: 1, thirst: 1, fever: 1, sticky_taste: 1, t_yellow: 3, t_greasy: 3, t_red: 1, p_slippery: 2, p_rapid: 2, p_soggy: 1 },
+    cardinal: ["foul_stools", "heaviness_body", "t_yellow", "t_greasy"], contra: { clear_urine: 1, cold_aversion: 1, t_pale: 1 } },
+  { id: "spleen_lung_qi_def", organ: "Spleen", name: "Spleen & Lung Qi Deficiency", principle: "Tonify Spleen and Lung Qi", formulas: "Liu Jun Zi Tang + Yu Ping Feng San; Shen Ling Bai Zhu San",
+    ind: { shortness_breath: 3, fatigue: 2, poor_appetite: 2, loose_stools: 2, reluctance_speak: 2, spontaneous_sweating: 2, catch_colds: 2, bloating: 1, cough: 1, phlegm_white: 1, pale_complexion: 1, t_pale: 2, t_teeth_marks: 1, p_weak: 2, p_empty: 1 },
+    cardinal: ["shortness_breath", "poor_appetite", "loose_stools", "fatigue"], contra: { t_red: 1 } },
+  { id: "spleen_kidney_yang_def", organ: "Spleen", name: "Spleen & Kidney Yang Deficiency", principle: "Warm and tonify Spleen & Kidney Yang", formulas: "Si Shen Wan; Fu Zi Li Zhong Wan; Zhen Wu Tang (oedema)",
+    ind: { early_morning_diarrhea: 3, cold_limbs: 3, loose_stools: 2, undigested_food_stool: 2, cold_aversion: 2, lower_back_pain: 2, edema: 2, knee_weakness: 1, fatigue: 1, poor_appetite: 1, abdominal_pain: 1, pain_better_warmth: 1, clear_urine: 1, nocturia: 1, t_pale: 2, t_swollen: 1, t_wet: 2, p_deep: 2, p_weak: 1, p_slow: 2 },
+    cardinal: ["early_morning_diarrhea", "cold_limbs", "lower_back_pain"], contra: { feeling_hot: 2, t_red: 2, p_rapid: 2 } },
+
+  // ============================ STOMACH ============================
+  { id: "stomach_qi_def", organ: "Stomach", name: "Stomach Qi Deficiency", principle: "Tonify Stomach Qi", formulas: "Si Jun Zi Tang; Xiang Sha Liu Jun Zi Tang",
+    ind: { t_rootless: 2, poor_appetite: 3, no_taste: 2, epigastric_pain: 2, fatigue: 2, weakness_limbs: 1, loose_stools: 1, bloating: 1, t_pale: 2, p_weak: 2, p_empty: 1 },
+    cardinal: ["poor_appetite", "no_taste", "p_weak"], contra: { t_red: 1, excessive_hunger: 1 } },
+  { id: "stomach_yin_def", organ: "Stomach", name: "Stomach Yin Deficiency", principle: "Nourish Stomach Yin", formulas: "Yi Wei Tang; Mai Men Dong Tang; Sha Shen Mai Dong Tang",
+    ind: { t_rootless: 1, hunger_no_appetite: 3, epigastric_pain: 2, dry_mouth: 2, dry_throat: 2, constipation: 2, dry_retching: 2, thirst: 1, afternoon_fever: 1, weight_loss: 1, t_red: 1, t_peeled: 3, t_cracked: 2, p_thin: 2, p_rapid: 1, p_empty: 1 },
+    cardinal: ["hunger_no_appetite", "dry_mouth", "t_peeled"], contra: { t_greasy: 2, t_thick: 1, cold_aversion: 1 } },
+  { id: "stomach_def_cold", organ: "Stomach", name: "Stomach Deficient and Cold", principle: "Warm the Stomach, tonify Qi", formulas: "Huang Qi Jian Zhong Tang; Li Zhong Wan",
+    ind: { epigastric_pain: 3, pain_better_warmth: 3, prefer_warm_drinks: 2, vomit_clear_fluid: 2, poor_appetite: 2, cold_limbs: 2, fatigue: 1, no_thirst: 1, loose_stools: 1, t_pale: 2, t_wet: 2, p_deep: 1, p_weak: 2, p_slow: 1 },
+    cardinal: ["epigastric_pain", "pain_better_warmth", "prefer_warm_drinks"], contra: { feeling_hot: 2, thirst_cold_drinks: 2, t_red: 2, t_yellow: 1, p_rapid: 2 } },
+  { id: "stomach_heat", organ: "Stomach", name: "Stomach Heat / Fire", principle: "Clear Stomach Heat", formulas: "Qing Wei San; Yu Nu Jian",
+    ind: { excessive_hunger: 3, thirst_cold_drinks: 3, bad_breath: 3, bleeding_gums: 3, thirst: 2, epigastric_pain: 2, acid_reflux: 2, mouth_ulcers: 2, constipation: 2, dark_urine: 1, nausea: 1, vomiting: 1, acne: 1, t_red: 2, t_yellow: 2, t_dry: 1, p_rapid: 2, p_full: 1, p_slippery: 1 },
+    cardinal: ["excessive_hunger", "thirst_cold_drinks", "bleeding_gums", "bad_breath"], contra: { cold_aversion: 2, prefer_warm_drinks: 2, loose_stools: 1, t_pale: 2, p_slow: 2 } },
+  { id: "cold_invading_stomach", organ: "Stomach", name: "Cold Invading the Stomach", principle: "Warm the Stomach, expel Cold", formulas: "Liang Fu Wan; Hou Po Wen Zhong Tang",
+    ind: { sudden_abd_pain: 3, epigastric_pain: 3, worse_cold: 2, vomit_clear_fluid: 2, cold_aversion: 2, vomiting: 1, prefer_warm_drinks: 1, pain_better_warmth: 1, t_white: 2, t_thick: 1, p_deep: 1, p_tight: 3, p_slow: 2 },
+    cardinal: ["sudden_abd_pain", "epigastric_pain", "p_tight"], contra: { feeling_hot: 2, t_red: 2, p_rapid: 2 } },
+  { id: "food_retention", organ: "Stomach", name: "Retention of Food in the Stomach", principle: "Resolve food retention, harmonise the Stomach", formulas: "Bao He Wan; Zhi Shi Dao Zhi Wan",
+    ind: { food_retention: 3, foul_belching: 3, bloating: 3, acid_reflux: 2, nausea: 2, vomiting: 2, poor_appetite: 2, epigastric_pain: 1, foul_stools: 1, loose_stools: 1, constipation: 1, insomnia: 1, bad_breath: 1, t_thick: 3, t_greasy: 2, p_full: 1, p_slippery: 3 },
+    cardinal: ["food_retention", "foul_belching", "bloating", "t_thick"], contra: { t_peeled: 2 }, requireAny: ["food_retention", "foul_belching"] },
+  { id: "rebellious_stomach_qi", organ: "Stomach", name: "Stomach Qi Rebelling Upward", principle: "Subdue rebellious Stomach Qi", formulas: "Xuan Fu Dai Zhe Tang; Ban Xia Hou Po Tang; Ding Xiang Shi Di Tang (hiccup)",
+    ind: { nausea: 3, vomiting: 3, belching: 3, hiccup: 3, acid_reflux: 1, epigastric_pain: 1, poor_appetite: 1 },
+    cardinal: ["nausea", "vomiting", "hiccup", "belching"], contra: {} },
+  { id: "stomach_blood_stasis", organ: "Stomach", name: "Blood Stasis in the Stomach", principle: "Invigorate Blood, eliminate stasis, harmonise the Stomach", formulas: "Shi Xiao San + Dan Shen Yin",
+    ind: { fixed_stabbing_pain: 3, hematemesis: 3, black_stool: 3, epigastric_pain: 2, purple_lips: 1, t_purple: 3, t_dark_spots: 1, p_choppy: 3, p_wiry: 1 },
+    cardinal: ["fixed_stabbing_pain", "hematemesis", "black_stool", "t_purple"], contra: {}, requireAny: ["hematemesis", "black_stool", "epigastric_pain"] },
+  { id: "stomach_phlegm_fire", organ: "Stomach", name: "Phlegm-Fire in the Stomach", principle: "Clear Stomach Heat, resolve Phlegm", formulas: "Wen Dan Tang + Huang Lian; Xiao Xian Xiong Tang",
+    ind: { epigastric_pain: 2, acid_reflux: 2, excessive_hunger: 2, nausea: 2, thirst: 1, vomiting: 1, foul_stools: 1, constipation: 1, phlegm_yellow: 1, restlessness: 1, manic: 1, bad_breath: 1, t_red: 2, t_yellow: 2, t_greasy: 3, p_slippery: 3, p_rapid: 2 },
+    cardinal: ["epigastric_pain", "excessive_hunger", "t_greasy", "p_slippery"], contra: { t_pale: 1, p_slow: 1 } },
+
+  // ============================== LUNG ==============================
+  { id: "lung_qi_def", organ: "Lung", name: "Lung Qi Deficiency", principle: "Tonify Lung Qi, consolidate the exterior", formulas: "Bu Fei Tang; Yu Ping Feng San",
+    ind: { shortness_breath: 3, spontaneous_sweating: 3, catch_colds: 3, cough: 2, reluctance_speak: 2, fatigue: 2, aversion_wind: 2, sob_exertion: 1, pale_complexion: 1, phlegm_white: 1, t_pale: 2, p_weak: 2, p_empty: 1 },
+    cardinal: ["shortness_breath", "spontaneous_sweating", "catch_colds"], contra: { t_red: 1, p_rapid: 1, phlegm_yellow: 1 } },
+  { id: "lung_yin_def", organ: "Lung", name: "Lung Yin Deficiency", principle: "Nourish Lung Yin, moisten, clear Empty Heat", formulas: "Bai He Gu Jin Tang; Sha Shen Mai Dong Tang",
+    ind: { dry_cough: 3, dry_throat: 2, hoarse_voice: 2, hemoptysis: 2, night_sweats: 2, five_palm_heat: 2, malar_flush: 2, cough: 1, afternoon_fever: 1, fatigue: 1, weight_loss: 1, dry_mouth: 1, t_red: 2, t_peeled: 3, t_cracked: 1, p_thin: 2, p_rapid: 2, p_empty: 1 },
+    cardinal: ["dry_cough", "dry_throat", "night_sweats", "t_peeled"], contra: { phlegm_white: 2, phlegm_yellow: 1, t_greasy: 2, cold_aversion: 1 } },
+  { id: "lung_dryness", organ: "Lung", name: "Lung Dryness", principle: "Moisten the Lungs, nourish fluids", formulas: "Qing Zao Jiu Fei Tang; Sang Xing Tang",
+    ind: { dry_cough: 3, dry_throat: 3, dry_nose: 3, dry_mouth: 2, dry_skin_hair: 2, hoarse_voice: 1, thirst: 1, sore_throat: 1, t_dry: 3, t_thin_white: 1, p_thin: 1, p_empty: 1 },
+    cardinal: ["dry_cough", "dry_nose", "dry_throat", "t_dry"], contra: { phlegm_white: 2, t_greasy: 2, t_peeled: 1 } },
+  { id: "wind_cold", organ: "Lung", name: "Wind-Cold Invading the Lungs", principle: "Release the exterior, dispel Wind-Cold", formulas: "Ma Huang Tang; Gui Zhi Tang; Jing Fang Bai Du San",
     ind: { chills: 3, no_sweat: 3, body_aches: 3, cold_aversion: 2, headache: 2, neck_stiffness: 2, sneezing: 2, runny_nose: 2, acute_cold: 2, stuffy_nose: 1, cough: 1, phlegm_white: 1, fever: 1, aversion_wind: 1, t_thin_white: 2, p_floating: 3, p_tight: 3 },
     cardinal: ["chills", "no_sweat", "body_aches", "p_floating", "p_tight"], contra: { sore_throat: 2, thirst: 2, phlegm_yellow: 2, t_red: 1, p_rapid: 2 } },
-  { id: "wind_heat", name: "Wind-Heat Invasion", principle: "Release the exterior, dispel Wind-Heat", formulas: "Yin Qiao San; Sang Ju Yin",
+  { id: "wind_heat", organ: "Lung", name: "Wind-Heat Invading the Lungs", principle: "Release the exterior, dispel Wind-Heat", formulas: "Yin Qiao San; Sang Ju Yin",
     ind: { fever: 3, sore_throat: 3, cough: 2, phlegm_yellow: 2, acute_cold: 2, thirst: 1, spontaneous_sweating: 1, headache: 1, runny_nose: 1, chills: 1, aversion_wind: 1, t_red_tip: 2, t_thin_white: 1, t_yellow: 1, p_floating: 3, p_rapid: 3 },
     cardinal: ["fever", "sore_throat", "p_floating", "p_rapid"], contra: { no_sweat: 1, prefer_warm_drinks: 1, p_slow: 2, p_tight: 1 } },
-  { id: "stomach_heat", name: "Stomach Heat / Fire", principle: "Clear Stomach Heat", formulas: "Qing Wei San; Yu Nu Jian",
-    ind: { excessive_hunger: 3, thirst_cold_drinks: 3, bad_breath: 3, bleeding_gums: 3, thirst: 2, epigastric_pain: 2, acid_reflux: 2, mouth_ulcers: 2, constipation: 2, dark_urine: 1, nausea: 1, vomiting: 1, acne: 1, t_red: 2, t_yellow: 2, t_dry: 1, p_rapid: 2, p_full: 1, p_slippery: 1 },
-    cardinal: ["excessive_hunger", "thirst_cold_drinks", "bleeding_gums", "bad_breath"], contra: { cold_aversion: 2, prefer_warm_drinks: 2, loose_stools: 1, t_pale: 2, p_slow: 2 } }
+  { id: "wind_water", organ: "Lung", name: "Wind-Water Invading the Lungs", principle: "Release the exterior, open Water passages, reduce oedema", formulas: "Yue Bi Jia Zhu Tang; Fang Ji Huang Qi Tang",
+    ind: { edema_face: 3, scanty_urine: 2, chills: 2, cough: 2, fever: 1, aversion_wind: 1, wheezing: 1, sore_throat: 1, body_aches: 1, t_thin_white: 2, p_floating: 3, p_slippery: 2 },
+    cardinal: ["edema_face", "scanty_urine", "p_floating"], contra: {}, requireAny: ["edema_face", "edema", "edema_legs"] },
+  { id: "lung_phlegm_heat", organ: "Lung", name: "Phlegm-Heat in the Lungs", principle: "Clear Lung Heat, resolve Phlegm, stop cough", formulas: "Qing Qi Hua Tan Tang; Wen Dan Tang; Ma Xing Shi Gan Tang",
+    ind: { cough: 3, phlegm_yellow: 3, wheezing: 2, fever: 2, chest_tightness: 1, chest_pain: 1, thirst: 1, shortness_breath: 1, restlessness: 1, t_red: 2, t_yellow: 2, t_greasy: 2, p_slippery: 3, p_rapid: 3 },
+    cardinal: ["phlegm_yellow", "cough", "p_slippery", "p_rapid"], contra: { dry_cough: 2, t_pale: 2, p_slow: 2 } },
+  { id: "phlegm_damp", organ: "Lung", name: "Damp-Phlegm in the Lungs", principle: "Resolve Damp-Phlegm, descend Lung Qi", formulas: "Er Chen Tang; San Zi Yang Qin Tang",
+    ind: { phlegm_white: 3, cough: 2, chest_tightness: 2, nausea: 2, heavy_head: 2, heaviness_body: 2, wheezing: 1, dizziness: 1, weight_gain: 1, sticky_taste: 1, plum_pit: 1, poor_appetite: 1, somnolence: 1, t_greasy: 3, t_swollen: 2, t_thick: 2, t_white: 1, p_slippery: 3 },
+    cardinal: ["phlegm_white", "cough", "t_greasy", "p_slippery"], contra: { dry_cough: 2, dry_mouth: 1, t_peeled: 2, phlegm_yellow: 1 } },
+  { id: "phlegm_fluids", organ: "Lung", name: "Phlegm-Fluids (Tan Yin) in Lungs / Stomach", principle: "Warm and resolve Phlegm-Fluids", formulas: "Ling Gui Zhu Gan Tang; Xiao Qing Long Tang",
+    ind: { frothy_sputum: 3, borborygmi: 3, wheezing: 2, cough: 2, vomit_clear_fluid: 2, shortness_breath: 1, dizziness: 1, chest_tightness: 1, cold_aversion: 1, t_swollen: 1, t_wet: 3, t_white: 1, t_greasy: 1, p_slippery: 2, p_wiry: 2, p_deep: 1 },
+    cardinal: ["frothy_sputum", "borborygmi", "t_wet"], contra: { dry_cough: 2, t_dry: 2, t_peeled: 2 } },
+  { id: "lung_kidney_yin_def", organ: "Lung", name: "Lung & Kidney Yin Deficiency", principle: "Nourish Lung & Kidney Yin", formulas: "Mai Wei Di Huang Wan; Bai He Gu Jin Tang",
+    ind: { dry_cough: 3, lower_back_pain: 3, night_sweats: 3, dry_throat: 2, sob_exertion: 2, five_palm_heat: 2, hemoptysis: 1, hoarse_voice: 1, knee_weakness: 1, malar_flush: 1, afternoon_fever: 1, spermatorrhea: 1, weight_loss: 1, t_red: 2, t_peeled: 3, p_thin: 2, p_rapid: 2 },
+    cardinal: ["dry_cough", "lower_back_pain", "night_sweats", "t_peeled"], contra: { cold_aversion: 2, phlegm_white: 1, t_pale: 1 } },
+  { id: "kidney_not_grasping_qi", organ: "Lung", name: "Kidney Failing to Grasp Qi", principle: "Tonify Kidney, help it grasp Qi, stop wheezing", formulas: "Ren Shen Ge Jie San; Du Qi Wan; Shen Ge San",
+    ind: { sob_exertion: 3, wheezing: 3, lower_back_pain: 3, shortness_breath: 2, cold_limbs: 2, knee_weakness: 1, cold_aversion: 1, spontaneous_sweating: 1, clear_urine: 1, frequent_urination: 1, edema: 1, reluctance_speak: 1, cough: 1, t_pale: 2, t_swollen: 1, p_deep: 2, p_weak: 2 },
+    cardinal: ["sob_exertion", "wheezing", "lower_back_pain"], contra: { t_red: 1, phlegm_yellow: 1, fever: 1 } },
+
+  // ============================= KIDNEY =============================
+  { id: "kidney_yin_def", organ: "Kidney", name: "Kidney Yin Deficiency", principle: "Nourish Kidney Yin", formulas: "Liu Wei Di Huang Wan; Zuo Gui Wan",
+    ind: { night_sweats: 3, five_palm_heat: 3, lower_back_pain: 2, knee_weakness: 2, tinnitus: 2, dry_mouth: 2, dry_throat: 1, malar_flush: 2, afternoon_fever: 2, hot_flashes: 2, dizziness: 1, thirst: 1, poor_memory: 1, insomnia: 1, constipation: 1, dark_urine: 1, scanty_periods: 1, hearing_loss: 1, loose_teeth: 1, spermatorrhea: 1, t_red: 2, t_peeled: 3, t_cracked: 1, p_thin: 2, p_rapid: 2 },
+    cardinal: ["night_sweats", "five_palm_heat", "lower_back_pain", "t_peeled"], contra: { cold_aversion: 2, clear_urine: 1, t_pale: 1, t_wet: 1, t_greasy: 1, p_slow: 1 } },
+  { id: "kidney_yang_def", organ: "Kidney", name: "Kidney Yang Deficiency", principle: "Warm and tonify Kidney Yang", formulas: "Jin Gui Shen Qi Wan; You Gui Wan",
+    ind: { t_flabby: 1, lower_back_pain: 3, knee_weakness: 3, cold_limbs: 3, nocturia: 2, clear_urine: 3, cold_aversion: 3, frequent_urination: 2, edema: 2, low_libido: 2, impotence: 2, early_morning_diarrhea: 2, infertility: 1, fatigue: 1, pale_complexion: 1, tinnitus: 1, incontinence: 1, t_pale: 2, t_wet: 2, t_swollen: 1, p_deep: 2, p_weak: 2, p_slow: 2 },
+    cardinal: ["lower_back_pain", "cold_limbs", "cold_aversion", "clear_urine"], contra: { feeling_hot: 2, night_sweats: 1, dark_urine: 2, t_red: 2, p_rapid: 2 } },
+  { id: "kidney_empty_heat", organ: "Kidney", name: "Kidney Yin Deficiency with Empty Heat", principle: "Nourish Kidney Yin, clear Empty Heat", formulas: "Zhi Bai Di Huang Wan; Da Bu Yin Wan",
+    ind: { afternoon_fever: 3, malar_flush: 3, night_sweats: 3, five_palm_heat: 3, restlessness: 2, dry_throat: 2, dark_urine: 2, insomnia: 1, scanty_urine: 1, lower_back_pain: 1, spermatorrhea: 1, blood_in_urine: 1, t_red: 3, t_peeled: 2, t_cracked: 1, p_thin: 2, p_rapid: 3 },
+    cardinal: ["afternoon_fever", "malar_flush", "t_red", "p_rapid"], contra: { cold_aversion: 2, clear_urine: 2, t_pale: 2, p_slow: 2 } },
+  { id: "kidney_qi_not_firm", organ: "Kidney", name: "Kidney Qi Not Firm", principle: "Tonify and consolidate Kidney Qi", formulas: "Jin Suo Gu Jing Wan; Suo Quan Wan; Sang Piao Xiao San",
+    ind: { incontinence: 3, spermatorrhea: 3, frequent_urination: 3, clear_urine: 2, nocturia: 2, lower_back_pain: 2, knee_weakness: 2, vaginal_discharge: 1, cold_aversion: 1, fatigue: 1, t_pale: 2, p_deep: 1, p_weak: 3 },
+    cardinal: ["incontinence", "spermatorrhea", "frequent_urination", "lower_back_pain"], contra: { painful_urination: 2, dark_urine: 2, t_red: 1, p_rapid: 1 } },
+  { id: "kidney_jing_def", organ: "Kidney", name: "Kidney Essence (Jing) Deficiency", principle: "Nourish Kidney Essence", formulas: "He Che Da Zao Wan; Zuo Gui Wan / You Gui Wan; Liu Wei Di Huang Wan (children)",
+    ind: { poor_concentration: 1, developmental_delay: 3, loose_teeth: 3, hair_loss: 3, premature_aging: 3, poor_memory: 2, infertility: 2, knee_weakness: 2, lower_back_pain: 1, tinnitus: 1, hearing_loss: 1, dizziness: 1, low_libido: 1, impotence: 1, amenorrhea: 1, p_weak: 1, p_leather: 2, p_deep: 1 },
+    cardinal: ["developmental_delay", "loose_teeth", "hair_loss", "premature_aging"], contra: {}, requireAny: ["developmental_delay", "loose_teeth", "hair_loss", "premature_aging", "infertility"] },
+  { id: "kidney_yang_water", organ: "Kidney", name: "Kidney Yang Deficiency, Water Overflowing", principle: "Warm Kidney Yang, transform Water, reduce oedema", formulas: "Zhen Wu Tang; Ji Sheng Shen Qi Wan",
+    ind: { edema_legs: 3, scanty_urine: 3, cold_limbs: 2, cold_aversion: 2, lower_back_pain: 2, shortness_breath: 2, bloating: 1, palpitations: 1, wheezing: 1, frothy_sputum: 1, t_pale: 2, t_swollen: 2, t_wet: 3, p_deep: 2, p_weak: 1, p_slow: 1 },
+    cardinal: ["edema_legs", "scanty_urine", "cold_limbs", "t_wet"], contra: { feeling_hot: 2, t_red: 2 } },
+  { id: "liver_kidney_yin_def", organ: "Kidney", name: "Liver & Kidney Yin Deficiency", principle: "Nourish Liver & Kidney Yin", formulas: "Qi Ju Di Huang Wan; Yi Guan Jian",
+    ind: { dry_eyes: 2, tinnitus: 2, lower_back_pain: 2, dizziness: 2, blurred_vision: 2, night_sweats: 2, five_palm_heat: 2, knee_weakness: 1, dry_throat: 1, insomnia: 1, poor_memory: 1, scanty_periods: 1, hypochondriac_pain: 1, numbness: 1, t_red: 2, t_peeled: 3, p_thin: 2, p_rapid: 1, p_wiry: 1 },
+    cardinal: ["dry_eyes", "tinnitus", "lower_back_pain", "t_peeled"], contra: { cold_aversion: 2, t_pale: 1 } },
+
+  // =========================== GALLBLADDER ===========================
+  { id: "gb_damp_heat", organ: "Gallbladder", name: "Gallbladder Damp-Heat", principle: "Clear GB Damp-Heat, promote bile flow", formulas: "Yin Chen Hao Tang; Da Chai Hu Tang; Long Dan Xie Gan Tang",
+    ind: { hypochondriac_pain: 3, jaundice: 3, bitter_taste: 3, nausea: 2, vomiting: 2, dark_urine: 2, fever: 1, chills: 1, poor_appetite: 1, bloating: 1, t_yellow: 3, t_greasy: 3, t_red_sides: 1, p_wiry: 3, p_slippery: 2, p_rapid: 1 },
+    cardinal: ["hypochondriac_pain", "jaundice", "bitter_taste", "t_greasy"], contra: { vaginal_discharge: 1, cold_aversion: 1, clear_urine: 1, t_pale: 1 } },
+  { id: "gb_def", organ: "Gallbladder", name: "Gallbladder Deficiency", principle: "Tonify Gallbladder Qi", formulas: "An Shen Ding Zhi Wan; Wen Dan Tang",
+    ind: { timidity: 3, easily_startled: 2, dizziness: 2, blurred_vision: 1, sighing: 1, waking_night: 1, anxiety: 1, t_pale: 1, p_weak: 2 },
+    cardinal: ["timidity", "easily_startled"], contra: { palpitations: 1 } },
+
+  // ========================= SMALL INTESTINE =========================
+  { id: "si_full_heat", organ: "Small Intestine", name: "Small Intestine Full Heat", principle: "Clear Heart & Small Intestine Fire, promote urination", formulas: "Dao Chi San",
+    ind: { painful_urination: 3, mouth_ulcers: 2, dark_urine: 2, blood_in_urine: 2, restlessness: 2, thirst: 1, sore_throat: 1, insomnia: 1, feeling_hot: 1, t_red_tip: 3, t_red: 1, t_yellow: 2, p_rapid: 3, p_overflowing: 1 },
+    cardinal: ["painful_urination", "t_red_tip", "p_rapid"], contra: { cold_aversion: 1, clear_urine: 2, t_pale: 2 } },
+  { id: "si_qi_pain", organ: "Small Intestine", name: "Small Intestine Qi Pain", principle: "Move Qi, soothe the Liver, stop pain", formulas: "Tian Tai Wu Yao San; Ju He Wan (hernia)",
+    ind: { lower_abdominal_pain: 3, borborygmi: 3, bloating: 2, hernia: 2, abdominal_pain: 1, painful_diarrhea: 1, t_white: 1, p_deep: 1, p_wiry: 3 },
+    cardinal: ["lower_abdominal_pain", "borborygmi", "p_wiry"], contra: {}, requireAny: ["lower_abdominal_pain", "borborygmi", "hernia"] },
+
+  // ========================= LARGE INTESTINE =========================
+  { id: "li_damp_heat", organ: "Large Intestine", name: "Damp-Heat in the Large Intestine", principle: "Clear Damp-Heat from the Intestines, stop diarrhoea", formulas: "Ge Gen Qin Lian Tang; Bai Tou Weng Tang; Shao Yao Tang",
+    ind: { tenesmus: 3, foul_stools: 3, blood_in_stool: 3, loose_stools: 2, abdominal_pain: 2, fever: 1, thirst: 1, dark_urine: 1, heaviness_body: 1, t_yellow: 2, t_greasy: 3, t_red: 1, p_slippery: 2, p_rapid: 2 },
+    cardinal: ["tenesmus", "foul_stools", "blood_in_stool", "t_greasy"], contra: { cold_aversion: 1, t_pale: 1 }, requireAny: ["tenesmus", "foul_stools", "blood_in_stool", "loose_stools"] },
+  { id: "li_heat", organ: "Large Intestine", name: "Heat in the Large Intestine", principle: "Clear Heat, moisten and move the stool", formulas: "Tiao Wei Cheng Qi Tang; Ma Zi Ren Wan",
+    ind: { constipation: 3, abdominal_pain: 2, dry_mouth: 2, thirst: 2, foul_stools: 1, feeling_hot: 1, dark_urine: 1, bad_breath: 1, t_red: 2, t_yellow: 2, t_dry: 2, p_full: 2, p_rapid: 2 },
+    cardinal: ["constipation", "t_yellow", "t_dry"], contra: { loose_stools: 2, cold_aversion: 1, t_pale: 2, p_slow: 1 } },
+  { id: "li_dryness", organ: "Large Intestine", name: "Large Intestine Dryness", principle: "Moisten the Intestines, nourish fluids / Blood", formulas: "Run Chang Wan; Ma Zi Ren Wan",
+    ind: { constipation: 3, dry_mouth: 2, dry_throat: 2, weight_loss: 2, dry_skin_hair: 1, bad_breath: 1, dizziness: 1, t_dry: 3, t_pale: 1, t_peeled: 1, p_thin: 3, p_choppy: 1 },
+    cardinal: ["constipation", "t_dry", "p_thin"], contra: { loose_stools: 2, t_greasy: 2 } },
+  { id: "cold_invading_li", organ: "Large Intestine", name: "Cold Invading the Large Intestine", principle: "Warm the Intestines, expel Cold, stop pain", formulas: "Liang Fu Wan + Zheng Qi Tian Xiang San",
+    ind: { sudden_abd_pain: 3, loose_stools: 3, abdominal_pain: 2, painful_diarrhea: 2, worse_cold: 2, cold_aversion: 2, borborygmi: 1, pain_better_warmth: 1, t_white: 2, t_thick: 1, p_deep: 1, p_tight: 3, p_slow: 1 },
+    cardinal: ["sudden_abd_pain", "loose_stools", "p_tight"], contra: { feeling_hot: 2, foul_stools: 1, t_yellow: 1, p_rapid: 2 }, requireAny: ["loose_stools", "painful_diarrhea", "abdominal_pain", "sudden_abd_pain"] },
+
+  // ============================= BLADDER =============================
+  { id: "bladder_damp_heat", organ: "Bladder", name: "Bladder Damp-Heat", principle: "Clear Damp-Heat from the Bladder, promote urination", formulas: "Ba Zheng San; Xiao Ji Yin Zi (blood in urine)",
+    ind: { painful_urination: 3, urinary_urgency: 3, frequent_urination: 2, dark_urine: 2, turbid_urine: 2, blood_in_urine: 2, scanty_urine: 1, lower_abdominal_pain: 1, fever: 1, thirst: 1, t_yellow: 2, t_greasy: 2, t_red: 1, p_slippery: 2, p_rapid: 2 },
+    cardinal: ["painful_urination", "urinary_urgency", "dark_urine"], contra: { clear_urine: 2, t_pale: 1, p_slow: 1 }, requireAny: ["painful_urination", "urinary_urgency", "frequent_urination", "dark_urine", "turbid_urine", "blood_in_urine", "scanty_urine"] },
+  { id: "bladder_damp_cold", organ: "Bladder", name: "Bladder Damp-Cold", principle: "Warm and resolve Damp-Cold from the Bladder", formulas: "Bi Xie Fen Qing Yin; Wu Ling San",
+    ind: { difficult_urination: 3, turbid_urine: 2, frequent_urination: 2, urinary_urgency: 2, lower_abdominal_pain: 2, clear_urine: 1, cold_aversion: 1, t_white: 2, t_greasy: 2, p_slippery: 2, p_slow: 2 },
+    cardinal: ["difficult_urination", "turbid_urine", "t_white"], contra: { dark_urine: 2, painful_urination: 1, feeling_hot: 1, t_yellow: 2, p_rapid: 2 }, requireAny: ["difficult_urination", "turbid_urine", "frequent_urination", "urinary_urgency"] },
+
+  // ===================== QI, BLOOD & BODY FLUIDS =====================
+  { id: "qi_blood_def", organ: "Qi, Blood & Body Fluids", name: "Qi & Blood Deficiency", principle: "Tonify Qi and nourish Blood", formulas: "Ba Zhen Tang; Shi Quan Da Bu Tang",
+    ind: { t_flabby: 1, fatigue: 3, pale_complexion: 3, dizziness: 2, palpitations: 2, shortness_breath: 2, poor_memory: 1, numbness: 1, scanty_periods: 1, pale_menses: 1, spontaneous_sweating: 1, poor_appetite: 1, reluctance_speak: 1, insomnia: 1, t_pale: 3, t_thin: 1, p_weak: 2, p_thin: 2 },
+    cardinal: ["fatigue", "pale_complexion", "dizziness", "t_pale"], contra: { t_red: 1, p_full: 1 } },
+  { id: "qi_stagnation", organ: "Qi, Blood & Body Fluids", name: "Qi Stagnation (general)", principle: "Move Qi, relieve distension", formulas: "Yue Ju Wan; Ban Xia Hou Po Tang (plum-pit)",
+    ind: { bloating: 3, sighing: 2, chest_tightness: 2, mood_swings: 2, depression_mood: 2, stress: 2, belching: 2, plum_pit: 1, hypochondriac_pain: 1, pms_breast: 1, abdominal_pain: 1, irritability: 1, p_wiry: 2 },
+    cardinal: ["bloating", "sighing", "chest_tightness"], contra: {} },
+  { id: "blood_stasis", organ: "Qi, Blood & Body Fluids", name: "Blood Stasis (general)", principle: "Invigorate Blood, dispel stasis", formulas: "Xue Fu Zhu Yu Tang; Tao Hong Si Wu Tang; Shao Fu Zhu Yu Tang (lower abdomen)",
+    ind: { fixed_stabbing_pain: 3, dysmenorrhea: 3, menstrual_clots: 3, chest_pain: 2, dark_complexion: 2, purple_lips: 2, abdominal_mass: 2, easy_bruising: 1, numbness: 1, hypochondriac_pain: 1, dry_skin_hair: 1, irregular_periods: 1, infertility: 1, t_purple: 3, t_dark_spots: 2, t_sublingual: 2, p_choppy: 3, p_wiry: 1 },
+    cardinal: ["fixed_stabbing_pain", "menstrual_clots", "t_purple", "p_choppy"], contra: {} },
+  { id: "blood_heat", organ: "Qi, Blood & Body Fluids", name: "Blood Heat", principle: "Cool Blood, clear Heat, stop bleeding", formulas: "Xi Jiao Di Huang Tang (substitute rhinoceros horn); Qing Jing San (early periods)",
+    ind: { nosebleed: 3, heavy_periods: 2, early_periods: 2, skin_itch: 2, restlessness: 2, feeling_hot: 2, spotting: 1, blood_in_urine: 1, blood_in_stool: 1, hemoptysis: 1, thirst: 1, acne: 1, t_red: 2, t_dark_red: 3, p_rapid: 3, p_overflowing: 1 },
+    cardinal: ["nosebleed", "early_periods", "t_dark_red", "p_rapid"], contra: { cold_aversion: 2, pale_complexion: 1, t_pale: 2, p_slow: 2 } },
+  { id: "phlegm_nodules", organ: "Qi, Blood & Body Fluids", name: "Phlegm Nodules / Masses", principle: "Resolve Phlegm, soften hardness, dissipate nodules", formulas: "Hai Zao Yu Hu Tang; Xiao Luo Wan; Er Chen Tang",
+    ind: { lumps: 3, plum_pit: 2, abdominal_mass: 1, weight_gain: 1, heaviness_body: 1, phlegm_white: 1, t_swollen: 2, t_greasy: 2, p_slippery: 3, p_wiry: 1 },
+    cardinal: ["lumps", "t_greasy", "p_slippery"], contra: {}, requireAny: ["lumps", "plum_pit", "abdominal_mass"] },
+  { id: "dampness", organ: "Qi, Blood & Body Fluids", name: "Dampness (general)", principle: "Resolve Dampness, strengthen the Spleen", formulas: "Ping Wei San; Wu Ling San; San Ren Tang",
+    ind: { heaviness_body: 3, heavy_head: 2, sticky_taste: 2, edema: 2, vaginal_discharge: 2, poor_appetite: 1, bloating: 1, loose_stools: 1, turbid_urine: 1, joint_pain: 1, skin_itch: 1, somnolence: 1, t_greasy: 3, t_thick: 1, p_slippery: 2, p_soggy: 2 },
+    cardinal: ["heaviness_body", "sticky_taste", "t_greasy"], contra: { dry_mouth: 1, t_peeled: 2, t_dry: 1 } },
+  { id: "damp_heat", organ: "Qi, Blood & Body Fluids", name: "Damp-Heat (general / Lower Jiao)", principle: "Clear Heat, resolve Dampness", formulas: "San Ren Tang; Si Miao San; Long Dan Xie Gan Tang",
+    ind: { painful_urination: 3, foul_stools: 3, dark_urine: 2, vaginal_discharge: 2, skin_itch: 2, loose_stools: 1, heaviness_body: 1, feeling_hot: 1, fever: 1, thirst: 1, bitter_taste: 1, acne: 1, bloating: 1, nausea: 1, t_greasy: 3, t_yellow: 2, t_red: 1, p_slippery: 2, p_rapid: 2 },
+    cardinal: ["painful_urination", "foul_stools", "t_greasy", "t_yellow"], contra: { cold_aversion: 1, clear_urine: 2, t_pale: 1, p_slow: 1 } },
+
+  // ===================== EXTERIOR & BI SYNDROMES =====================
+  { id: "summer_heat", organ: "Exterior & Bi syndromes", name: "Summer-Heat", principle: "Clear Summer-Heat, generate fluids, tonify Qi", formulas: "Qing Shu Yi Qi Tang; Liu Yi San; Xiang Ru San (with Damp)",
+    ind: { heatstroke: 3, spontaneous_sweating: 3, thirst: 3, fever: 2, feeling_hot: 2, dark_urine: 2, scanty_urine: 1, irritability: 1, headache: 1, fatigue: 1, heaviness_body: 1, nausea: 1, t_red: 2, t_yellow: 1, p_overflowing: 2, p_rapid: 2, p_soggy: 1 },
+    cardinal: ["heatstroke", "spontaneous_sweating", "thirst"], contra: { cold_aversion: 2, chills: 1, t_pale: 1 }, requireAny: ["heatstroke"] },
+  { id: "bi_wandering", organ: "Exterior & Bi syndromes", name: "Wind Bi (Wandering Painful Obstruction)", principle: "Expel Wind, scatter Cold & Damp, open the channels", formulas: "Fang Feng Tang; Juan Bi Tang",
+    ind: { bi_wandering: 3, joint_pain: 2, aversion_wind: 2, body_aches: 1, numbness: 1, fever: 1, t_thin_white: 1, p_floating: 2, p_wiry: 1 },
+    cardinal: ["bi_wandering"], contra: { bi_heat: 2 }, requireAny: ["joint_pain", "bi_wandering", "bi_cold", "bi_damp", "bi_heat", "body_aches"] },
+  { id: "bi_cold", organ: "Exterior & Bi syndromes", name: "Cold Bi (Painful Obstruction)", principle: "Expel Cold, scatter Wind & Damp, warm the channels", formulas: "Wu Tou Tang; Juan Bi Tang",
+    ind: { bi_cold: 3, worse_cold: 3, joint_pain: 2, pain_better_warmth: 2, fixed_stabbing_pain: 1, cold_limbs: 1, t_white: 1, p_tight: 3, p_wiry: 1, p_slow: 1 },
+    cardinal: ["bi_cold", "worse_cold", "p_tight"], contra: { bi_heat: 3, feeling_hot: 1, t_yellow: 1 }, requireAny: ["joint_pain", "bi_wandering", "bi_cold", "bi_damp", "bi_heat", "body_aches"] },
+  { id: "bi_damp", organ: "Exterior & Bi syndromes", name: "Damp Bi (Fixed Painful Obstruction)", principle: "Resolve Damp, expel Wind & Cold, open the channels", formulas: "Yi Yi Ren Tang; Qiang Huo Sheng Shi Tang",
+    ind: { bi_damp: 3, heaviness_body: 2, joint_pain: 2, numbness: 2, edema: 1, weakness_limbs: 1, t_greasy: 2, t_white: 1, p_slippery: 2, p_soggy: 2 },
+    cardinal: ["bi_damp", "heaviness_body", "t_greasy"], contra: { bi_heat: 2 }, requireAny: ["joint_pain", "bi_wandering", "bi_cold", "bi_damp", "bi_heat"] },
+  { id: "bi_heat", organ: "Exterior & Bi syndromes", name: "Heat Bi (Painful Obstruction)", principle: "Clear Heat, resolve Damp, expel Wind, open the channels", formulas: "Bai Hu Jia Gui Zhi Tang; Xuan Bi Tang; Si Miao San",
+    ind: { bi_heat: 3, joint_pain: 2, fever: 2, thirst: 2, feeling_hot: 1, restlessness: 1, t_red: 2, t_yellow: 2, t_greasy: 1, p_rapid: 3, p_slippery: 2 },
+    cardinal: ["bi_heat", "p_rapid", "t_yellow"], contra: { worse_cold: 2, pain_better_warmth: 2, t_pale: 1 }, requireAny: ["joint_pain", "bi_wandering", "bi_cold", "bi_damp", "bi_heat"] }
 ];
 
-/* Scoring constants (see scorePatterns) */
+/* Scoring constants (see scorePatterns in the engine for the full formula) */
 const SCORING = {
-  cardinalBonus: 0.20,       // up to +20 points when all cardinal signs are present
-  negatedCardinalFactor: 0.5,// explicitly denied cardinal sign subtracts half its weight
+  wC: 0.40,                  // weight of coverage (matched / normalised pattern weight)
+  wP: 0.30,                  // weight of explanation (share of patient findings explained)
+  wK: 0.30,                  // weight of key (cardinal) signs present
+  covMin: 16, covMax: 26,    // clamp for the coverage denominator
+  evMin: 0.6, evFull: 8,     // evidence damping until 8 points of matched weight
+  penDiv: 12,
+  requireFactor: 0.5,        // fit multiplier when none of a pattern's requireAny findings is present                // contra / denied-cardinal penalty divisor
+  negatedCardinalFactor: 0.5,// explicitly denied cardinal sign counts half its weight as penalty
   topN: 5
 };
 /* =================== END OF KNOWLEDGE BASE =================== */
@@ -889,31 +1267,64 @@ function computeSymptoms(session, liveMatches) {
 }
 
 /* =====================================================================
-   PATTERN SCORING
-   fit = (matched weight − contra penalties − ½·weight of denied cardinals) / total weight
-         + cardinalBonus × (cardinals present / cardinals total), clamped to 0–100 %.
+   PATTERN SCORING (v4, tuned for ~80 overlapping patterns)
+   For each pattern with indicator weights w (1 supportive, 2 typical, 3 key):
+     M  = matched weight (a specific finding also counts as its general form,
+          see SYMPTOM_IMPLIES, e.g. "dry cough" also matches "cough")
+     C  = coverage    = min(1, M / clamp(T, covMin, covMax))   T = pattern's total weight
+          (the clamp stops small patterns reaching 100 % from 2-3 signs and stops
+           large patterns being unreachable)
+     P  = explanation = share of the patient's positive findings this pattern accounts
+          for (a weight-1 indicator counts ½) — favours the pattern that explains the
+          whole picture rather than one that merely overlaps it
+     K  = key signs   = cardinal signs present / cardinal signs defined
+     pen = (contra weights + ½·weight of explicitly denied cardinals) / penDiv
+     E  = evidence factor = evMin + (1 − evMin)·min(1, M / evFull)  (1–2 matches → damped)
+     fit = clamp01( (wC·C + wP·P + wK·K) · E − pen )
+     × requireFactor if the pattern defines requireAny and none of those findings is present
+   Ties are broken by matched weight. Scores are relative decision support only.
    ===================================================================== */
+function expandImplied(ids) {
+  const out = new Set(ids);
+  for (const id of ids) for (const t of (SYMPTOM_IMPLIES[id] || [])) out.add(t);
+  return out;
+}
 function scorePatterns(presentIds, negatedIds) {
-  const present = new Set(presentIds), negated = new Set(negatedIds);
+  const S = SCORING;
+  const base = [...new Set(presentIds)];
+  const present = expandImplied(base), negated = new Set(negatedIds);
+  const nFind = base.length;
   const results = PATTERNS.map(p => {
     let total = 0, matched = 0, contraPen = 0, negPen = 0;
     const hits = [], contraHits = [], negHits = [], missingCardinal = [];
     const card = new Set(p.cardinal || []);
     for (const [id, w] of Object.entries(p.ind)) {
       total += w;
-      if (present.has(id)) { matched += w; hits.push({ id, w, cardinal: card.has(id) }); }
+      if (present.has(id)) { matched += w; hits.push({ id, w, cardinal: card.has(id), implied: !base.includes(id) }); }
       else if (card.has(id)) {
-        if (negated.has(id)) { negPen += w * SCORING.negatedCardinalFactor; negHits.push({ id, w }); }
+        if (negated.has(id)) { negPen += w * S.negatedCardinalFactor; negHits.push({ id, w }); }
         else missingCardinal.push(id);
       }
     }
     for (const [id, w] of Object.entries(p.contra || {})) if (present.has(id)) { contraPen += w; contraHits.push({ id, w }); }
+    // explanation: how many of the patient's own findings does this pattern account for?
+    let explained = 0;
+    for (const f of base) {
+      let w = p.ind[f] || 0;
+      for (const t of (SYMPTOM_IMPLIES[f] || [])) w = Math.max(w, p.ind[t] || 0);
+      if (w) explained += w >= 2 ? 1 : 0.5;
+    }
     const cardHit = hits.filter(h => h.cardinal).length;
-    const coverage = total ? (matched - contraPen - negPen) / total : 0;
-    const bonus = card.size ? SCORING.cardinalBonus * (cardHit / card.size) : 0;
-    let fit = matched > 0 ? Math.max(0, Math.min(1, coverage + bonus)) : 0;
+    const C = Math.min(1, matched / Math.min(S.covMax, Math.max(S.covMin, total)));
+    const P = nFind ? explained / nFind : 0;
+    const K = card.size ? cardHit / card.size : 0;
+    const E = S.evMin + (1 - S.evMin) * Math.min(1, matched / S.evFull);
+    const pen = (contraPen + negPen) / S.penDiv;
+    let fit = matched > 0 ? Math.max(0, Math.min(1, (S.wC * C + S.wP * P + S.wK * K) * E - pen)) : 0;
+    const gated = !!(p.requireAny && !p.requireAny.some(id => present.has(id)));
+    if (gated) fit *= S.requireFactor;
     hits.sort((a, b) => (b.cardinal - a.cardinal) || (b.w - a.w));
-    return { id: p.id, name: p.name, principle: p.principle, formulas: p.formulas, fit, pct: Math.round(fit * 100), matched, total, contraPen, negPen, cardHit, cardTotal: card.size, hits, contraHits, negHits, missingCardinal };
+    return { id: p.id, name: p.name, organ: p.organ, principle: p.principle, formulas: p.formulas, fit, pct: Math.round(fit * 100), matched, total, contraPen, negPen, cardHit, cardTotal: card.size, C, P, K, E, gated, hits, contraHits, negHits, missingCardinal };
   });
   return results.filter(r => r.matched > 0).sort((a, b) => (b.fit - a.fit) || (b.matched - a.matched));
 }
@@ -1193,7 +1604,8 @@ function renderFindings() {
 }
 
 function renderPatterns() {
-  const list = state.analysis.patterns.slice(0, SCORING.topN);
+  const all = state.analysis.patterns;
+  const list = all.slice(0, SCORING.topN);
   const el = $("#patternList");
   const strip = $("#patternStrip");
   const EMPTY = "Patterns will appear once symptoms are detected.";
@@ -1201,20 +1613,84 @@ function renderPatterns() {
     ? list.slice(0, 3).map((r, i) => `<button class="ps-item${i === 0 ? " first" : ""}" data-goto-pattern="${r.id}" title="${esc(r.name)} — ${r.pct}% fit (tap for details)"><span class="ps-name">${esc(r.name.replace(/ \(.*\)$/, ""))}</span><span class="ps-pct">${r.pct}%</span><span class="ps-bar"><i style="width:${r.pct}%"></i></span></button>`).join("")
     : `<span class="ps-empty">${EMPTY}</span>`) + `<span class="ps-note">decision support only</span><button class="small ai-btn ps-ai" data-ask-ai>✦ Ask AI</button>`);
   if (!list.length) { setHTML(el, `<div class="empty">${EMPTY}<br><small>Scores update live from the transcript, manual symptoms, tongue and pulse.</small></div>`); return; }
-  setHTML(el, list.map((r, i) => `
+  // keep <details> that the user opened open across live re-renders
+  const openKeys = new Set([...el.querySelectorAll("details[data-dkey]")].filter(d => d.open).map(d => d.dataset.dkey));
+  const op = k => openKeys.has(k) ? " open" : "";
+  const pc = x => Math.round(x * 100);
+  const top = list.map((r, i) => `
     <div class="pattern${i === 0 ? " p-rank1" : ""}" data-pattern="${r.id}">
-      <div class="p-head"><span class="p-name">${i + 1}. ${esc(r.name)}</span><span class="p-pct">${r.pct}%</span></div>
+      <div class="p-head"><span class="p-name">${i + 1}. ${esc(r.name)}<span class="p-organ">${esc(r.organ || "")}</span></span><span class="p-pct">${r.pct}%</span></div>
       <div class="bar"><div style="width:${r.pct}%"></div></div>
-      <div class="ind">${r.hits.map(h => `<span class="${h.cardinal ? "card" : ""}" title="${esc(indicatorName(h.id))} (weight ${h.w}${h.cardinal ? ", key sign" : ""})">${h.cardinal ? "★ " : ""}${esc(shortIndicatorName(h.id))}</span>`).join("")}
+      <div class="ind">${r.hits.map(h => `<span class="${h.cardinal ? "card" : ""}" title="${esc(indicatorName(h.id))} (weight ${h.w}${h.cardinal ? ", key sign" : ""}${h.implied ? ", implied by a more specific finding" : ""})">${h.cardinal ? "★ " : ""}${esc(shortIndicatorName(h.id))}</span>`).join("")}
         ${r.contraHits.map(h => `<span class="contra" title="Argues against this pattern (−${h.w})">− ${esc(shortIndicatorName(h.id))}</span>`).join("")}
         ${r.negHits.map(h => `<span class="negc" title="Key sign explicitly denied">${esc(shortIndicatorName(h.id))}</span>`).join("")}
       </div>
       ${r.missingCardinal.length ? `<div class="ask">Check key signs: ${r.missingCardinal.map(id => esc(shortIndicatorName(id))).join(", ")}</div>` : ""}
-      <details class="more"><summary>Details</summary>
-        <div class="p-score-meta">Matched weight ${r.matched}/${r.total}${r.contraPen ? `, contra −${r.contraPen}` : ""}${r.negPen ? `, denied −${r.negPen}` : ""} · key signs ${r.cardHit}/${r.cardTotal}</div>
+      <details class="more" data-dkey="p:${r.id}"${op("p:" + r.id)}><summary>Details</summary>
+        <div class="p-score-meta">Group: ${esc(r.organ || "—")} · matched weight ${r.matched}/${r.total}${r.contraPen ? `, contra −${r.contraPen}` : ""}${r.negPen ? `, denied −${r.negPen}` : ""} · key signs ${r.cardHit}/${r.cardTotal}</div>
+        <div class="p-comp">Coverage ${pc(r.C)}% · explains ${pc(r.P)}% of findings · key signs ${pc(r.K)}%${r.E < 1 ? ` · limited evidence ×${r.E.toFixed(2)}` : ""}${r.gated ? " · <b>typical complaint absent (×" + SCORING.requireFactor + ")</b>" : ""}</div>
         <div>Principle: ${esc(r.principle)}</div><div>Reference formulas: ${esc(r.formulas)}</div>
+        <div><button class="link-btn" data-ref-pattern="${r.id}">Open in Patterns reference</button></div>
       </details>
-    </div>`).join(""));
+    </div>`).join("");
+  // every matching pattern, grouped by organ system
+  const topIds = new Set(list.map(r => r.id));
+  const groups = PATTERN_GROUPS.map(g => ({ g, rows: all.filter(r => r.organ === g && r.pct >= 5) })).filter(x => x.rows.length);
+  const nAll = groups.reduce((n, x) => n + x.rows.length, 0);
+  const allHtml = `<details class="all-matches" data-dkey="all"${op("all")}><summary>All matching patterns by organ (${nAll} with fit ≥ 5%)</summary>
+    ${groups.map(x => `<div class="am-group">${esc(x.g)}</div>${x.rows.map(r => `<button class="am-row${topIds.has(r.id) ? " top5" : ""}" data-ref-pattern="${r.id}" title="Open in Patterns reference"><span>${esc(r.name)}</span><b>${r.pct}%</b></button>`).join("")}`).join("")}
+  </details>`;
+  setHTML(el, top + allHtml);
+}
+
+/* ---------- Patterns reference (read-only view of the knowledge base) ---------- */
+function refPatternText(p) {
+  const names = Object.keys(p.ind).concat(Object.keys(p.contra || {})).map(id => {
+    const s = SYMPTOM_BY_ID[id];
+    return indicatorName(id) + (s ? " " + s.syn.join(" ") : "");
+  });
+  return [p.name, p.id.replace(/_/g, " "), p.organ, p.principle, p.formulas, ...names].join(" | ").toLowerCase().replace(/[\s\-]+/g, " ");
+}
+function renderPatternsRef(focusId) {
+  const q = $("#refSearch").value.trim().toLowerCase();
+  const organ = $("#refOrgan").value;
+  const onlyHit = $("#refMatchedOnly").checked;
+  const scored = new Map((state.analysis.patterns || []).map(r => [r.id, r]));
+  const present = expandImplied([...state.analysis.presentSym, ...(state.session.tongue || []), ...(state.session.pulse || [])]);
+  const qre = q ? new RegExp("(^|[^\\p{L}\\p{N}])" + escapeRegExp(q.replace(/[\s\-]+/g, " ")), "u") : null;   // phrase, matched at a word start
+  const shown = PATTERNS.filter(p => (!organ || p.organ === organ) && (!onlyHit || (scored.get(p.id) || {}).pct > 0) && (!qre || qre.test(refPatternText(p))));
+  const chip = (id, w, key) => `<span class="w${w}${key ? " key" : ""}${present.has(id) ? " on" : ""}" title="weight ${w}${key ? ", key sign" : ""}">${key ? "★ " : ""}${esc(shortIndicatorName(id))}</span>`;
+  const card = p => {
+    const r = scored.get(p.id), card = new Set(p.cardinal || []);
+    const ent = Object.entries(p.ind).sort((a, b) => (card.has(b[0]) - card.has(a[0])) || (b[1] - a[1]));
+    const sym = ent.filter(([id]) => SYMPTOM_BY_ID[id]), ton = ent.filter(([id]) => TONGUE_BY_ID[id]), pul = ent.filter(([id]) => PULSE_BY_ID[id]);
+    const contra = Object.entries(p.contra || {});
+    return `<div class="ref-pat${r && r.pct > 0 ? " hit" : ""}" data-ref-id="${p.id}">
+      <h4><span>${esc(p.name)}</span>${r && r.pct > 0 ? `<span class="fit">current fit ${r.pct}%</span>` : ""}</h4>
+      <div class="ref-line"><b>Principle:</b> ${esc(p.principle)}</div>
+      <div class="ref-line"><b>Formulas:</b> ${esc(p.formulas)}</div>
+      <div class="ref-line"><b>Signs &amp; symptoms:</b><div class="ref-signs">${sym.map(([id, w]) => chip(id, w, card.has(id))).join("")}</div></div>
+      ${ton.length ? `<div class="ref-line"><b>Tongue:</b><div class="ref-signs">${ton.map(([id, w]) => chip(id, w, card.has(id))).join("")}</div></div>` : ""}
+      ${pul.length ? `<div class="ref-line"><b>Pulse:</b><div class="ref-signs">${pul.map(([id, w]) => chip(id, w, card.has(id))).join("")}</div></div>` : ""}
+      ${contra.length ? `<div class="ref-line"><b>Argues against:</b><div class="ref-signs">${contra.map(([id, w]) => `<span class="contra${present.has(id) ? " on" : ""}" title="penalty ${w}">− ${esc(shortIndicatorName(id))}</span>`).join("")}</div></div>` : ""}
+      ${p.requireAny ? `<div class="ref-line"><b>Needs at least one of:</b> ${p.requireAny.map(id => esc(shortIndicatorName(id))).join(", ")}</div>` : ""}
+    </div>`;
+  };
+  const html = PATTERN_GROUPS.map(g => { const ps = shown.filter(p => p.organ === g); return ps.length ? `<div class="ref-group">${esc(g)} <small>(${ps.length})</small></div>` + ps.map(card).join("") : ""; }).join("");
+  $("#refCount").textContent = `${shown.length} of ${PATTERNS.length} patterns shown`;
+  $("#refList").innerHTML = html || `<div class="empty">No pattern matches this search.</div>`;
+  if (focusId) {
+    const t = $("#refList").querySelector(`[data-ref-id="${focusId}"]`);
+    if (t) { t.classList.add("flash"); setTimeout(() => t.scrollIntoView({ block: "center" }), 30); setTimeout(() => t.classList.remove("flash"), 2500); }
+  }
+}
+function openPatternsRef(focusId) {
+  const sel = $("#refOrgan");
+  if (sel.options.length <= 1) sel.insertAdjacentHTML("beforeend", PATTERN_GROUPS.map(g => `<option value="${esc(g)}">${esc(g)} (${PATTERNS.filter(p => p.organ === g).length})</option>`).join(""));
+  if (focusId) { $("#refSearch").value = ""; sel.value = ""; $("#refMatchedOnly").checked = false; }
+  renderPatternsRef(focusId);
+  if (!$("#patternsDialog").open) $("#patternsDialog").showModal();
+  if (!focusId) setTimeout(() => $("#refSearch").focus(), 30);
 }
 
 function renderAll() {
@@ -1601,7 +2077,7 @@ function stopListening() {
 function renderPicker() {
   const q = $("#pickerSearch").value.trim().toLowerCase();
   const presentSet = new Set(state.analysis.presentSym);
-  const items = SYMPTOMS.filter(s => !q || s.name.toLowerCase().includes(q) || s.syn.some(x => x.toLowerCase().includes(q)) || CATEGORIES[s.cat].label.toLowerCase().includes(q)).slice(0, 80);
+  const items = SYMPTOMS.filter(s => !q || s.name.toLowerCase().includes(q) || s.syn.some(x => x.toLowerCase().includes(q)) || CATEGORIES[s.cat].label.toLowerCase().includes(q)).slice(0, 400);
   $("#pickerList").innerHTML = items.map((s, i) => {
     const c = CATEGORIES[s.cat];
     return `<li data-add="${s.id}" class="${presentSet.has(s.id) ? "added" : ""}${i === 0 && q ? " hl" : ""}"><div><div>${esc(s.name)}${presentSet.has(s.id) ? " ✓" : ""}</div><div class="syn">${esc(s.syn.slice(0, 6).join(", "))}</div></div><span class="cat" style="--c:${c.color}">${esc(c.label)}</span></li>`;
@@ -1665,6 +2141,8 @@ End with one line in italics: *Decision support for a licensed practitioner — 
 
 Rules: base everything on the supplied findings; say clearly when data is insufficient; do not invent findings; never state a biomedical diagnosis as fact; use grams for all herb doses and adult doses unless the age indicates otherwise; do not include any HTML.`;
 
+const AI_REQUEST_LINE = "Request: Based on this case, give the TCM pattern differentiation, treatment principle, a recommended herbal formula with modifications and doses in grams, and an acupuncture point prescription with rationale and technique, following the sections in your instructions.";
+
 // --- de-identification --------------------------------------------------
 function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 function deidentify(text, patient) {
@@ -1715,6 +2193,8 @@ function buildAICaseSummary(session, includeTranscript) {
     const t = session.entries.map(e => (e.src === "typed" ? "[typed] " : "") + e.text).join("\n\n");
     lines.push(deidentify(t, p).trim() || "(empty)");
   }
+  lines.push("");
+  lines.push(AI_REQUEST_LINE);
   return lines.join("\n");
 }
 
@@ -1803,6 +2283,7 @@ function renderAISection() {
 function updateAIPreview() {
   const inc = $("#aiIncludeTranscript").checked;
   $("#aiNoteTranscript").textContent = inc ? " and the transcript" : "";
+  $("#aiPreviewSystem").textContent = AI_SYSTEM_PROMPT;
   $("#aiPreview").textContent = buildAICaseSummary(state.session, inc);
 }
 function openAskAI() {
@@ -1842,7 +2323,7 @@ async function askAI() {
     model, temperature: 0.3, stream: false,
     messages: [
       { role: "system", content: AI_SYSTEM_PROMPT },
-      { role: "user", content: summary + "\n\nPlease give your structured analysis now." }
+      { role: "user", content: summary }   // exactly what the preview shows (ends with AI_REQUEST_LINE)
     ]
   };
   AI.busy = true; AI.controller = new AbortController();
@@ -1924,6 +2405,12 @@ function bindEvents() {
   $("#menuBtn").onclick = e => { e.stopPropagation(); $("#menu").classList.toggle("open"); };
   document.addEventListener("click", () => $("#menu").classList.remove("open"));
   $("#printBtn").onclick = printVisit;
+  $("#patternsRefBtn").onclick = () => openPatternsRef();
+  $("#patternsRefBtn2").onclick = () => openPatternsRef();
+  $("#refSearch").oninput = () => renderPatternsRef();
+  $("#refOrgan").onchange = () => renderPatternsRef();
+  $("#refMatchedOnly").onchange = () => renderPatternsRef();
+  $("#patternList").addEventListener("click", e => { const b = e.target.closest("[data-ref-pattern]"); if (b) { e.stopPropagation(); openPatternsRef(b.dataset.refPattern); } });
   $("#exportBtn").onclick = exportAll;
   $("#importBtn").onclick = () => $("#importFile").click();
   $("#importFile").onchange = async e => { const f = e.target.files[0]; if (f) await importData(await f.text()); e.target.value = ""; };
@@ -2017,7 +2504,7 @@ async function init() {
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { AI, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>
