@@ -15,7 +15,7 @@
    (https://geoffreysy.github.io) to "Authorised JavaScript origins" and
    enable the Google Drive API. Leave "" to keep the app in local-only mode.
    ===================================================================== */
-const GOOGLE_CLIENT_ID = "";
+const GOOGLE_CLIENT_ID = "416895917493-3j5kk308fk420kcc2rjnfuoap45hep2s.apps.googleusercontent.com";
 </script>
 <style>
 :root{
@@ -3350,7 +3350,9 @@ const GAUTH = {
   pullEveryMs: 5 * 60 * 1000
 };
 const Cloud = {
-  configured: typeof GOOGLE_CLIENT_ID === "string" && GOOGLE_CLIENT_ID.trim() !== "",
+  // Google only accepts web origins: a copy opened from disk (file://) stays local-only
+  configured: typeof GOOGLE_CLIENT_ID === "string" && GOOGLE_CLIENT_ID.trim() !== "" && /^https?:$/.test(location.protocol),
+  fileCopy: typeof GOOGLE_CLIENT_ID === "string" && GOOGLE_CLIENT_ID.trim() !== "" && !/^https?:$/.test(location.protocol),
   account: null, token: null, tokenExp: 0, tokenClient: null, gisPromise: null,
   status: "local", detail: "", lastSyncAt: null, folderId: null,
   timer: null, running: null, again: false, changeSeq: 0, pending: false, retryTimer: null, retryDelay: 0,
@@ -3724,7 +3726,7 @@ function syncTitle() {
   if (Cloud.status === "synced" && Cloud.lastSyncAt) return "Saved in your Google Drive · last sync " + fmtDateTime(Cloud.lastSyncAt);
   if (Cloud.status === "offline") return "No connection — changes are kept on this device and uploaded when you are back online";
   if (Cloud.status === "reauth") return "Google access expired or was blocked — click Reconnect Google. Your work is kept on this device.";
-  if (Cloud.status === "notconfigured") return "Google sign-in is not configured yet — records are stored only in this browser";
+  if (Cloud.status === "notconfigured") return Cloud.fileCopy ? "This copy was opened from a file — Google sign-in works only on the web app (https://geoffreysy.github.io/tcm-consult/). Records are stored only in this browser." : "Google sign-in is not configured yet — records are stored only in this browser";
   if (Cloud.status === "local") return "Not signed in — records are stored only in this browser";
   return Cloud.detail || "";
 }
@@ -3732,7 +3734,7 @@ function renderAuth() {
   const el = $("#authArea"); if (!el) return;
   const st = Cloud.status, chip = `<span class="sync-chip ${st}" id="syncChip" title="${esc(syncTitle())}">${esc(SYNC_TEXT[st] || st)}</span>`;
   let html;
-  if (!Cloud.configured) html = `<button class="sync-chip notconfigured" id="syncChip" data-acct-open title="${esc(syncTitle())}">${esc(SYNC_TEXT.notconfigured)}</button>`;
+  if (!Cloud.configured) html = `<button class="sync-chip notconfigured" id="syncChip" data-acct-open title="${esc(syncTitle())}">${esc(Cloud.fileCopy ? "Local file — sign-in off" : SYNC_TEXT.notconfigured)}</button>`;
   else if (!Cloud.account) html = `<button class="gbtn" data-signin title="Store your records in your own Google Drive">${G_LOGO}<span>Sign in with Google</span></button>${chip}`;
   else html = `<button class="acct-btn" data-acct-open title="${esc(Cloud.account.name)} — ${esc(Cloud.account.email)}">${avatarHTML(Cloud.account)}<span class="em">${esc(Cloud.account.email)}</span></button>${chip}${st === "reauth" ? `<button class="small primary" data-reconnect>Reconnect Google</button>` : ""}`;
   setHTML(el, html);
@@ -3748,7 +3750,7 @@ function renderAccountDialog() {
   const b = $("#accountBody");
   const perm = `<div class="acct-note">Your records are saved in <b>your own Google Drive</b>, in a folder named “${esc(GAUTH.folderName)}” (one file, <code>${esc(GAUTH.fileName)}</code>). The app asks only for the <b>drive.file</b> permission, so it can see <b>only the files it created</b> — not the rest of your Drive. Nothing is sent to the app developer. The xAI API key stays on this device. <a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></div>`;
   if (!Cloud.configured) {
-    b.innerHTML = `<p><b>Google sign-in not configured yet.</b></p><p>The app is working in <b>local-only mode</b>: records are stored in this browser (IndexedDB). Use <i>Export all data</i> regularly as a backup.</p>
+    b.innerHTML = Cloud.fileCopy ? `<p><b>Google sign-in is not available in a copy opened from a file.</b></p><p>This page was opened from your device (file://). Google only allows sign-in from the app's web address: <a href="https://geoffreysy.github.io/tcm-consult/" target="_blank" rel="noopener">geoffreysy.github.io/tcm-consult</a>. Here the app works in <b>local-only mode</b> (records in this browser; export regularly).</p>` : `<p><b>Google sign-in not configured yet.</b></p><p>The app is working in <b>local-only mode</b>: records are stored in this browser (IndexedDB). Use <i>Export all data</i> regularly as a backup.</p>
       <div class="acct-note">When the developer adds a Google OAuth client ID, each practitioner will be able to sign in with their own Google account and keep their records in their own Google Drive.</div>`;
   } else if (!Cloud.account) {
     b.innerHTML = `<p>Sign in with <b>your own Google account</b> to keep your patient records in your Google Drive and open them on any device. Each practitioner signs in separately and sees only their own records.</p>${perm}
