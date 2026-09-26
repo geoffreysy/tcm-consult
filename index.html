@@ -27,7 +27,7 @@ const GOOGLE_CLIENT_ID = "416895917493-3j5kk308fk420kcc2rjnfuoap45hep2s.apps.goo
 *{box-sizing:border-box}
 [hidden]{display:none !important}
 html,body{height:100%;margin:0}
-body{font-family:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;line-height:1.4}
+body{font-family:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,var(--cjk),sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;line-height:1.4}
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer;border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 11px;transition:background .15s,border-color .15s}
 button:hover{background:#f2f6f5;border-color:#c6d3cf}
@@ -515,6 +515,28 @@ dialog.herbs-dlg[open]{display:flex;flex-direction:column}
   .hb-foot{padding:6px 8px}
   .herbs-btn{padding:6px 10px;min-height:32px}
 }
+/* (v12) Chinese herb names, consult date + copy */
+:root{--cjk:"Noto Sans CJK SC","Noto Sans SC","Source Han Sans SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK TC"}
+html.hn-t{--cjk:"Noto Sans CJK TC","Noto Sans TC","Source Han Sans TC","PingFang TC","Microsoft JhengHei","Noto Sans CJK SC"}
+textarea,input,select,button{font-family:inherit}
+[lang="zh-Hans"]{font-family:"Segoe UI",Roboto,"Noto Sans CJK SC","Noto Sans SC","Source Han Sans SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+[lang="zh-Hant"]{font-family:"Segoe UI",Roboto,"Noto Sans CJK TC","Noto Sans TC","Source Han Sans TC","PingFang TC","Microsoft JhengHei",sans-serif}
+.zh-name{font-size:11.5px;color:#4d5f5a;font-weight:400;margin-left:2px;white-space:nowrap}
+.dx-head{flex-wrap:wrap;row-gap:4px}
+.dx-head label{flex:1 1 auto}
+.dx-tools{display:flex;flex-wrap:wrap;gap:4px;align-items:center;flex-basis:100%}
+.dx-tools .herbs-btn{margin-left:auto}
+.hn-seg{display:inline-flex;border:1px solid #cfe0da;border-radius:6px;overflow:hidden;background:#fff}
+.hn-seg[hidden]{display:none}
+.hn-seg button{border:0;border-radius:0;padding:2px 8px;font-size:12px;background:#fff;color:#3c4f4a;min-width:0;line-height:1.5}
+.hn-seg button+button{border-left:1px solid #cfe0da}
+.hn-seg button.on{background:var(--accent);color:#fff}
+.dx-copy{padding:2px 9px;font-size:12px;white-space:nowrap}
+.dx-copy.copied{background:var(--accent);color:#fff;border-color:var(--accent)}
+@media (max-width:760px){
+  .hn-seg button{min-height:32px;padding:4px 10px;font-size:13px}
+  .dx-copy{padding:6px 12px;min-height:32px}
+}
 </style>
 </head>
 <body>
@@ -589,7 +611,11 @@ dialog.herbs-dlg[open]{display:flex;flex-direction:column}
     </div>
     <div class="notes">
       <label>Practitioner notes<textarea id="notesInput" placeholder="Observations, history, plan…"></textarea></label>
-      <div class="dx-field"><div class="dx-head"><label for="diagnosisInput">Final TCM diagnosis / treatment</label><button type="button" class="small herbs-btn" id="herbsBtn" data-open-herbs title="All herbs A–Z with TCM category and dose range — tap + to add to the Rx line">🌿 Herbs</button></div><textarea id="diagnosisInput" placeholder="Pattern differentiation, treatment principle, formula / points…"></textarea></div>
+      <div class="dx-field"><div class="dx-head"><label for="diagnosisInput">Final TCM diagnosis / treatment</label><button type="button" class="small dx-copy" id="dxCopyBtn" title="Copy the whole field (date, diagnosis, Rx in the chosen herb-name form)">📋 Copy</button><div class="dx-tools">
+        <span class="hn-seg" role="group" aria-label="Herb names in Rx lines"><button type="button" data-hn-mode="py" title="Herb names in pinyin (Dang Gui 9 g)">Pinyin</button><button type="button" data-hn-mode="zh" title="Herb names in Chinese characters (当归 9 g)">中文</button><button type="button" data-hn-mode="both" title="Chinese + pinyin (当归 Dang Gui 9 g)">Both</button></span>
+        <span class="hn-seg hn-script" id="hnScript" role="group" aria-label="Chinese script" hidden><button type="button" data-hn-script="s" lang="zh-Hans" title="Simplified characters (简体)">简</button><button type="button" data-hn-script="t" lang="zh-Hant" title="Traditional characters (繁體)">繁</button></span>
+        <button type="button" class="small herbs-btn" id="herbsBtn" data-open-herbs title="All herbs A–Z with TCM category and dose range — tap + to add to the Rx line">🌿 Herbs</button>
+      </div></div><textarea id="diagnosisInput" placeholder="Pattern differentiation, treatment principle, formula / points…"></textarea></div>
     </div>
   </section>
 
@@ -1658,6 +1684,356 @@ const HERB_DOSE = {
   "Zhi Zi": [6, 10], "Zhu Ling": [6, 12], "Zhu Ru": [5, 10], "Zhu Ye": [6, 15], "Zi Su Ye": [5, 10],
   "Zi Su Zi": [3, 10], "Zi Wan": [5, 10]
 };
+/* HERB_ZH: pinyin -> [Simplified, Traditional] Chinese name (display + search).
+   FORMULA_ZH_S: formula id -> Simplified name (FORMULAS[id].zh holds the Traditional form).
+   HERB_ZH_ALIAS: common alternative Chinese names, used for search only.
+   Characters follow the Chinese Pharmacopoeia / standard Zhongyaoxue usage; Traditional forms keep the
+   customary TCM characters (白朮 / 蒼朮, 製 for prepared herbs, 參, 神麴). Less common or variant names are
+   listed in HERB_ZH_UNSURE — verify against your supplier's labels. */
+const HERB_ZH = {
+  "Ba Dou": ["巴豆", "巴豆"],
+  "Bai Bian Dou": ["白扁豆", "白扁豆"],
+  "Bai He": ["百合", "百合"],
+  "Bai Jie Zi": ["白芥子", "白芥子"],
+  "Bai Kou Ren": ["白蔻仁", "白蔻仁"],
+  "Bai Shao": ["白芍", "白芍"],
+  "Bai Tou Weng": ["白头翁", "白頭翁"],
+  "Bai Zhi": ["白芷", "白芷"],
+  "Bai Zhu": ["白术", "白朮"],
+  "Bai Zi Ren": ["柏子仁", "柏子仁"],
+  "Ban Xia Qu": ["半夏曲", "半夏曲"],
+  "Bei Sha Shen": ["北沙参", "北沙參"],
+  "Bian Xu": ["萹蓄", "萹蓄"],
+  "Bing Lang": ["槟榔", "檳榔"],
+  "Bing Tang": ["冰糖", "冰糖"],
+  "Bo He": ["薄荷", "薄荷"],
+  "Bu Gu Zhi": ["补骨脂", "補骨脂"],
+  "Can Sha": ["蚕沙", "蠶沙"],
+  "Cang Zhu": ["苍术", "蒼朮"],
+  "Cao Dou Kou": ["草豆蔻", "草豆蔻"],
+  "Chai Hu": ["柴胡", "柴胡"],
+  "Che Qian Zi": ["车前子", "車前子"],
+  "Chen Pi": ["陈皮", "陳皮"],
+  "Chen Xiang": ["沉香", "沉香"],
+  "Chi Fu Ling": ["赤茯苓", "赤茯苓"],
+  "Chi Shao": ["赤芍", "赤芍"],
+  "Chi Xiao Dou Pi": ["赤小豆皮", "赤小豆皮"],
+  "Chuan Bei Mu": ["川贝母", "川貝母"],
+  "Chuan Bi Xie": ["川萆薢", "川萆薢"],
+  "Chuan Lian Zi": ["川楝子", "川楝子"],
+  "Chuan Niu Xi": ["川牛膝", "川牛膝"],
+  "Chuan Xiong": ["川芎", "川芎"],
+  "Da Fu Pi": ["大腹皮", "大腹皮"],
+  "Da Huang": ["大黄", "大黃"],
+  "Da Zao": ["大枣", "大棗"],
+  "Dai Zhe Shi": ["代赭石", "代赭石"],
+  "Dan Dou Chi": ["淡豆豉", "淡豆豉"],
+  "Dan Nan Xing": ["胆南星", "膽南星"],
+  "Dan Shen": ["丹参", "丹參"],
+  "Dan Zhu Ye": ["淡竹叶", "淡竹葉"],
+  "Dang Gui": ["当归", "當歸"],
+  "Dang Shen": ["党参", "黨參"],
+  "Deng Xin Cao": ["灯心草", "燈心草"],
+  "Di Gu Pi": ["地骨皮", "地骨皮"],
+  "Ding Xiang": ["丁香", "丁香"],
+  "Du Huo": ["独活", "獨活"],
+  "Du Zhong": ["杜仲", "杜仲"],
+  "E Jiao": ["阿胶", "阿膠"],
+  "Fang Feng": ["防风", "防風"],
+  "Feng Mi": ["蜂蜜", "蜂蜜"],
+  "Fu Ling": ["茯苓", "茯苓"],
+  "Fu Shen": ["茯神", "茯神"],
+  "Gan Cao": ["甘草", "甘草"],
+  "Gan Cao Shao": ["甘草梢", "甘草梢"],
+  "Gan Jiang": ["干姜", "乾薑"],
+  "Gao Ben": ["藁本", "藁本"],
+  "Gao Liang Jiang": ["高良姜", "高良薑"],
+  "Ge Gen": ["葛根", "葛根"],
+  "Ge Jie": ["蛤蚧", "蛤蚧"],
+  "Ge Ke": ["蛤壳", "蛤殼"],
+  "Gou Qi Zi": ["枸杞子", "枸杞子"],
+  "Gou Teng": ["钩藤", "鉤藤"],
+  "Gua Lou": ["瓜蒌", "瓜蔞"],
+  "Gua Lou Ren": ["瓜蒌仁", "瓜蔞仁"],
+  "Gui Ban": ["龟板", "龜板"],
+  "Gui Ban Jiao": ["龟板胶", "龜板膠"],
+  "Gui Zhi": ["桂枝", "桂枝"],
+  "Hai Feng Teng": ["海风藤", "海風藤"],
+  "Hai Zao": ["海藻", "海藻"],
+  "Han Fang Ji": ["汉防己", "漢防己"],
+  "He Geng": ["荷梗", "荷梗"],
+  "Hong Hua": ["红花", "紅花"],
+  "Hou Po": ["厚朴", "厚朴"],
+  "Hu Ma Ren": ["胡麻仁", "胡麻仁"],
+  "Hu Tao Ren": ["胡桃仁", "胡桃仁"],
+  "Hua Shi": ["滑石", "滑石"],
+  "Huai Niu Xi": ["怀牛膝", "懷牛膝"],
+  "Huang Bai": ["黄柏", "黃柏"],
+  "Huang Lian": ["黄连", "黃連"],
+  "Huang Qi": ["黄芪", "黃芪"],
+  "Huang Qin": ["黄芩", "黃芩"],
+  "Huo Ma Ren": ["火麻仁", "火麻仁"],
+  "Huo Xiang": ["藿香", "藿香"],
+  "Ji Zi Huang": ["鸡子黄", "雞子黃"],
+  "Jie Geng": ["桔梗", "桔梗"],
+  "Jin Yin Hua": ["金银花", "金銀花"],
+  "Jing Jie": ["荆芥", "荊芥"],
+  "Jing Mi": ["粳米", "粳米"],
+  "Ju Hua": ["菊花", "菊花"],
+  "Kun Bu": ["昆布", "昆布"],
+  "Lai Fu Zi": ["莱菔子", "萊菔子"],
+  "Li Pi": ["梨皮", "梨皮"],
+  "Lian Qiao": ["连翘", "連翹"],
+  "Lian Xu": ["莲须", "蓮鬚"],
+  "Lian Zi": ["莲子", "蓮子"],
+  "Long Chi": ["龙齿", "龍齒"],
+  "Long Dan Cao": ["龙胆草", "龍膽草"],
+  "Long Gu": ["龙骨", "龍骨"],
+  "Long Yan Rou": ["龙眼肉", "龍眼肉"],
+  "Lu Gen": ["芦根", "蘆根"],
+  "Lu Jiao Jiao": ["鹿角胶", "鹿角膠"],
+  "Luo Shi Teng": ["络石藤", "絡石藤"],
+  "Ma Huang": ["麻黄", "麻黃"],
+  "Mai Men Dong": ["麦门冬", "麥門冬"],
+  "Mai Ya": ["麦芽", "麥芽"],
+  "Man Jing Zi": ["蔓荆子", "蔓荊子"],
+  "Mang Xiao": ["芒硝", "芒硝"],
+  "Mo Yao": ["没药", "沒藥"],
+  "Mu Dan Pi": ["牡丹皮", "牡丹皮"],
+  "Mu Gua": ["木瓜", "木瓜"],
+  "Mu Li": ["牡蛎", "牡蠣"],
+  "Mu Tong": ["木通", "木通"],
+  "Mu Xiang": ["木香", "木香"],
+  "Niu Bang Zi": ["牛蒡子", "牛蒡子"],
+  "Ou Jie": ["藕节", "藕節"],
+  "Pi Pa Ye": ["枇杷叶", "枇杷葉"],
+  "Pu Huang": ["蒲黄", "蒲黃"],
+  "Qian Hu": ["前胡", "前胡"],
+  "Qian Shi": ["芡实", "芡實"],
+  "Qiang Huo": ["羌活", "羌活"],
+  "Qin Jiao": ["秦艽", "秦艽"],
+  "Qin Pi": ["秦皮", "秦皮"],
+  "Qing Dai": ["青黛", "青黛"],
+  "Qing Hao": ["青蒿", "青蒿"],
+  "Qing Pi": ["青皮", "青皮"],
+  "Qu Mai": ["瞿麦", "瞿麥"],
+  "Ren Shen": ["人参", "人參"],
+  "Rou Dou Kou": ["肉豆蔻", "肉豆蔻"],
+  "Rou Gui": ["肉桂", "肉桂"],
+  "Ru Xiang": ["乳香", "乳香"],
+  "Sang Bai Pi": ["桑白皮", "桑白皮"],
+  "Sang Ji Sheng": ["桑寄生", "桑寄生"],
+  "Sang Piao Xiao": ["桑螵蛸", "桑螵蛸"],
+  "Sang Ye": ["桑叶", "桑葉"],
+  "Sang Zhi": ["桑枝", "桑枝"],
+  "Sha Ren": ["砂仁", "砂仁"],
+  "Sha Shen": ["沙参", "沙參"],
+  "Sha Yuan Zi": ["沙苑子", "沙苑子"],
+  "Shan Yang Jiao": ["山羊角", "山羊角"],
+  "Shan Yao": ["山药", "山藥"],
+  "Shan Zha": ["山楂", "山楂"],
+  "Shan Zhu Yu": ["山茱萸", "山茱萸"],
+  "Shen Qu": ["神曲", "神麴"],
+  "Sheng Di Huang": ["生地黄", "生地黃"],
+  "Sheng Jiang": ["生姜", "生薑"],
+  "Sheng Ma": ["升麻", "升麻"],
+  "Shi Chang Pu": ["石菖蒲", "石菖蒲"],
+  "Shi Di": ["柿蒂", "柿蒂"],
+  "Shi Gao": ["石膏", "石膏"],
+  "Shi Hu": ["石斛", "石斛"],
+  "Shi Jue Ming": ["石决明", "石決明"],
+  "Shu Di Huang": ["熟地黄", "熟地黃"],
+  "Shui Niu Jiao": ["水牛角", "水牛角"],
+  "Suan Zao Ren": ["酸枣仁", "酸棗仁"],
+  "Tan Xiang": ["檀香", "檀香"],
+  "Tao Ren": ["桃仁", "桃仁"],
+  "Tian Hua Fen": ["天花粉", "天花粉"],
+  "Tian Ma": ["天麻", "天麻"],
+  "Tian Men Dong": ["天门冬", "天門冬"],
+  "Tong Cao": ["通草", "通草"],
+  "Tu Si Zi": ["菟丝子", "菟絲子"],
+  "Wu Ling Zhi": ["五灵脂", "五靈脂"],
+  "Wu Mei": ["乌梅", "烏梅"],
+  "Wu Wei Zi": ["五味子", "五味子"],
+  "Wu Yao": ["乌药", "烏藥"],
+  "Wu Zhu Yu": ["吴茱萸", "吳茱萸"],
+  "Xi Gua Cui Yi": ["西瓜翠衣", "西瓜翠衣"],
+  "Xi Xin": ["细辛", "細辛"],
+  "Xi Yang Shen": ["西洋参", "西洋參"],
+  "Xiang Fu": ["香附", "香附"],
+  "Xiang Ru": ["香薷", "香薷"],
+  "Xiao Hui Xiang": ["小茴香", "小茴香"],
+  "Xiao Ji": ["小蓟", "小薊"],
+  "Xing Ren": ["杏仁", "杏仁"],
+  "Xuan Fu Hua": ["旋覆花", "旋覆花"],
+  "Xuan Shen": ["玄参", "玄參"],
+  "Yan Hu Suo": ["延胡索", "延胡索"],
+  "Ye Jiao Teng": ["夜交藤", "夜交藤"],
+  "Yi Mu Cao": ["益母草", "益母草"],
+  "Yi Tang": ["饴糖", "飴糖"],
+  "Yi Yi Ren": ["薏苡仁", "薏苡仁"],
+  "Yi Zhi Ren": ["益智仁", "益智仁"],
+  "Yin Chen": ["茵陈", "茵陳"],
+  "Yu Zhu": ["玉竹", "玉竹"],
+  "Yuan Zhi": ["远志", "遠志"],
+  "Ze Xie": ["泽泻", "澤瀉"],
+  "Zhe Bei Mu": ["浙贝母", "浙貝母"],
+  "Zhi Ban Xia": ["制半夏", "製半夏"],
+  "Zhi Chuan Wu": ["制川乌", "製川烏"],
+  "Zhi Fu Zi": ["制附子", "製附子"],
+  "Zhi Gan Cao": ["炙甘草", "炙甘草"],
+  "Zhi He Shou Wu": ["制何首乌", "製何首烏"],
+  "Zhi Ke": ["枳壳", "枳殼"],
+  "Zhi Mu": ["知母", "知母"],
+  "Zhi Shi": ["枳实", "枳實"],
+  "Zhi Zi": ["栀子", "梔子"],
+  "Zhi Zi Pi": ["栀子皮", "梔子皮"],
+  "Zhu Ling": ["猪苓", "豬苓"],
+  "Zhu Ru": ["竹茹", "竹茹"],
+  "Zhu Ye": ["竹叶", "竹葉"],
+  "Zi Su Ye": ["紫苏叶", "紫蘇葉"],
+  "Zi Su Zi": ["紫苏子", "紫蘇子"],
+  "Zi Wan": ["紫菀", "紫菀"]
+};
+const HERB_ZH_ALIAS = {"Gui Ban":"龟甲 龜甲","Ye Jiao Teng":"首乌藤 首烏藤","Hu Tao Ren":"核桃仁","Hu Ma Ren":"黑芝麻","Bai Kou Ren":"豆蔻 白豆蔻","Gua Lou":"栝楼 栝樓 全瓜蒌","Gua Lou Ren":"栝楼仁 瓜蒌子","Huang Qi":"黄耆 黃耆","Yin Chen":"茵陈蒿 茵陳蒿","Ge Ke":"海蛤壳 海蛤殼","Can Sha":"晚蚕沙 晚蠶沙","Xing Ren":"苦杏仁","Mai Men Dong":"麦冬 麥冬","Tian Men Dong":"天冬","Shen Qu":"六神曲 神曲","Zhi Ke":"枳殼","Sheng Di Huang":"生地 干地黄 乾地黃","Shu Di Huang":"熟地","Long Dan Cao":"龙胆 龍膽","Bian Xu":"扁蓄","Yan Hu Suo":"元胡 延胡","Chuan Bi Xie":"萆薢","Xuan Shen":"元参 元參","Mu Dan Pi":"丹皮","Zhi Ban Xia":"法半夏 半夏","Zhi Fu Zi":"附子 熟附子","Zhi Chuan Wu":"川乌 川烏","Zhi He Shou Wu":"何首乌 何首烏","Gou Qi Zi":"枸杞","Suan Zao Ren":"枣仁 棗仁"};
+const HERB_ZH_UNSURE = {"Bai Kou Ren":"白蔻仁 — Pharmacopoeia title is 豆蔻 (白豆蔻)","Ge Ke":"蛤壳 — also written 海蛤壳","Gui Ban":"龟板 — Pharmacopoeia title is 龟甲","Hu Ma Ren":"胡麻仁 — usually sold as 黑芝麻","Hu Tao Ren":"胡桃仁 — usually 核桃仁","Ye Jiao Teng":"夜交藤 — Pharmacopoeia title is 首乌藤","Shen Qu":"神曲 (Traditional 神麴; often 六神曲)","Huang Qi":"黄芪 — Taiwan writes 黃耆","Chi Xiao Dou Pi":"赤小豆皮 — uncommon item name","Gan Cao Shao":"甘草梢 — uncommon item name","He Geng":"荷梗 — uncommon item name","Li Pi":"梨皮 — uncommon item name","Zhi Zi Pi":"栀子皮 — uncommon item name","Xi Gua Cui Yi":"西瓜翠衣 — also 西瓜皮","Sha Shen":"沙参 — generic; 北沙参 (Glehnia) vs 南沙参 (Adenophora) not distinguished","Bian Xu":"萹蓄 — sometimes written 扁蓄"};
+const FORMULA_ZH_S = {
+  xiao_yao_san: "逍遥散",
+  dan_zhi_xiao_yao_san: "丹栀逍遥散",
+  chai_hu_shu_gan_san: "柴胡疏肝散",
+  yue_ju_wan: "越鞠丸",
+  ge_xia_zhu_yu_tang: "膈下逐瘀汤",
+  xue_fu_zhu_yu_tang: "血府逐瘀汤",
+  gui_zhi_fu_ling_wan: "桂枝茯苓丸",
+  si_wu_tang: "四物汤",
+  bu_gan_tang: "补肝汤",
+  ba_zhen_tang: "八珍汤",
+  shi_quan_da_bu_tang: "十全大补汤",
+  tao_hong_si_wu_tang: "桃红四物汤",
+  shao_fu_zhu_yu_tang: "少腹逐瘀汤",
+  dan_shen_yin: "丹参饮",
+  shi_xiao_san: "失笑散",
+  yi_guan_jian: "一贯煎",
+  qi_ju_di_huang_wan: "杞菊地黄丸",
+  liu_wei_di_huang_wan: "六味地黄丸",
+  tian_ma_gou_teng_yin: "天麻钩藤饮",
+  zhen_gan_xi_feng_tang: "镇肝熄风汤",
+  ling_jiao_gou_teng_tang: "羚角钩藤汤",
+  e_jiao_ji_zi_huang_tang: "阿胶鸡子黄汤",
+  long_dan_xie_gan_tang: "龙胆泻肝汤",
+  yin_chen_hao_tang: "茵陈蒿汤",
+  nuan_gan_jian: "暖肝煎",
+  tian_tai_wu_yao_san: "天台乌药散",
+  tong_xie_yao_fang: "痛泻要方",
+  si_ni_san: "四逆散",
+  zuo_jin_wan: "左金丸",
+  dai_ge_san: "黛蛤散",
+  xie_bai_san: "泻白散",
+  yang_xin_tang: "养心汤",
+  gui_zhi_gan_cao_tang: "桂枝甘草汤",
+  bao_yuan_tang: "保元汤",
+  shen_fu_tang: "参附汤",
+  si_ni_tang: "四逆汤",
+  gui_pi_tang: "归脾汤",
+  suan_zao_ren_tang: "酸枣仁汤",
+  tian_wang_bu_xin_dan: "天王补心丹",
+  dao_chi_san: "导赤散",
+  xie_xin_tang: "泻心汤",
+  wen_dan_tang: "温胆汤",
+  huang_lian_wen_dan_tang: "黄连温胆汤",
+  di_tan_tang: "涤痰汤",
+  huang_lian_e_jiao_tang: "黄连阿胶汤",
+  jiao_tai_wan: "交泰丸",
+  an_shen_ding_zhi_wan: "安神定志丸",
+  qing_ying_tang: "清营汤",
+  si_jun_zi_tang: "四君子汤",
+  liu_jun_zi_tang: "六君子汤",
+  xiang_sha_liu_jun_zi_tang: "香砂六君子汤",
+  shen_ling_bai_zhu_san: "参苓白术散",
+  li_zhong_wan: "理中丸",
+  fu_zi_li_zhong_wan: "附子理中丸",
+  bu_zhong_yi_qi_tang: "补中益气汤",
+  ping_wei_san: "平胃散",
+  huo_xiang_zheng_qi_san: "藿香正气散",
+  lian_po_yin: "连朴饮",
+  wu_ling_san: "五苓散",
+  yin_chen_wu_ling_san: "茵陈五苓散",
+  yu_ping_feng_san: "玉屏风散",
+  si_shen_wan: "四神丸",
+  zhen_wu_tang: "真武汤",
+  yi_wei_tang: "益胃汤",
+  mai_men_dong_tang: "麦门冬汤",
+  sha_shen_mai_dong_tang: "沙参麦冬汤",
+  huang_qi_jian_zhong_tang: "黄芪建中汤",
+  qing_wei_san: "清胃散",
+  yu_nu_jian: "玉女煎",
+  liang_fu_wan: "良附丸",
+  hou_po_wen_zhong_tang: "厚朴温中汤",
+  bao_he_wan: "保和丸",
+  zhi_shi_dao_zhi_wan: "枳实导滞丸",
+  xuan_fu_dai_zhe_tang: "旋覆代赭汤",
+  ban_xia_hou_po_tang: "半夏厚朴汤",
+  ding_xiang_shi_di_tang: "丁香柿蒂汤",
+  xiao_xian_xiong_tang: "小陷胸汤",
+  bu_fei_tang: "补肺汤",
+  bai_he_gu_jin_tang: "百合固金汤",
+  qing_zao_jiu_fei_tang: "清燥救肺汤",
+  sang_xing_tang: "桑杏汤",
+  ma_huang_tang: "麻黄汤",
+  gui_zhi_tang: "桂枝汤",
+  jing_fang_bai_du_san: "荆防败毒散",
+  yin_qiao_san: "银翘散",
+  sang_ju_yin: "桑菊饮",
+  yue_bi_jia_zhu_tang: "越婢加术汤",
+  fang_ji_huang_qi_tang: "防己黄芪汤",
+  qing_qi_hua_tan_wan: "清气化痰丸",
+  ma_xing_shi_gan_tang: "麻杏石甘汤",
+  er_chen_tang: "二陈汤",
+  san_zi_yang_qin_tang: "三子养亲汤",
+  ling_gui_zhu_gan_tang: "苓桂术甘汤",
+  xiao_qing_long_tang: "小青龙汤",
+  mai_wei_di_huang_wan: "麦味地黄丸",
+  du_qi_wan: "都气丸",
+  ren_shen_hu_tao_tang: "人参胡桃汤",
+  shen_ge_san: "参蛤散",
+  jin_gui_shen_qi_wan: "金匮肾气丸",
+  you_gui_wan: "右归丸",
+  zuo_gui_wan: "左归丸",
+  zhi_bai_di_huang_wan: "知柏地黄丸",
+  da_bu_yin_wan: "大补阴丸",
+  jin_suo_gu_jing_wan: "金锁固精丸",
+  suo_quan_wan: "缩泉丸",
+  sang_piao_xiao_san: "桑螵蛸散",
+  qi_bao_mei_ran_dan: "七宝美髯丹",
+  ji_sheng_shen_qi_wan: "济生肾气丸",
+  da_chai_hu_tang: "大柴胡汤",
+  ge_gen_qin_lian_tang: "葛根黄芩黄连汤",
+  bai_tou_weng_tang: "白头翁汤",
+  shao_yao_tang: "芍药汤",
+  tiao_wei_cheng_qi_tang: "调胃承气汤",
+  ma_zi_ren_wan: "麻子仁丸",
+  run_chang_wan: "润肠丸",
+  zheng_qi_tian_xiang_san: "正气天香散",
+  ba_zheng_san: "八正散",
+  xiao_ji_yin_zi: "小蓟饮子",
+  bi_xie_fen_qing_yin: "萆薢分清饮",
+  xi_jiao_di_huang_tang: "犀角地黄汤",
+  qing_jing_san: "清经散",
+  hai_zao_yu_hu_tang: "海藻玉壶汤",
+  xiao_luo_wan: "消瘰丸",
+  san_ren_tang: "三仁汤",
+  si_miao_wan: "四妙丸",
+  qing_shu_yi_qi_tang: "清暑益气汤",
+  liu_yi_san: "六一散",
+  xiang_ru_san: "香薷散",
+  fang_feng_tang: "防风汤",
+  juan_bi_tang: "蠲痹汤",
+  wu_tou_tang: "乌头汤",
+  yi_yi_ren_tang: "薏苡仁汤",
+  qiang_huo_sheng_shi_tang: "羌活胜湿汤",
+  bai_hu_jia_gui_zhi_tang: "白虎加桂枝汤",
+  xuan_bi_tang: "宣痹汤"
+};
 /* Safety flags. type: toxic | restricted | endangered | aristolochic | animal | pregnancy | interaction */
 const HERB_FLAGS = {
   "Zhi Fu Zi": { type: "toxic", text: "Aconite (toxic alkaloids). Prepared root only; pre-cook 30–60 min (longer above 15 g) until a taste test gives no numbness. Contraindicated in pregnancy; incompatible with Ban Xia, Gua Lou, Bei Mu (18 antagonisms)." },
@@ -2428,11 +2804,12 @@ const state = {
 };
 
 function newSession(patientId) {
-  return { id: uid(), patientId: patientId || null, startedAt: new Date().toISOString(), savedAt: null,
-           lang: $("#langSel") ? $("#langSel").value : "en-PH", entries: [], overrides: {}, tongue: [], pulse: [], notes: "", diagnosis: "", ai: null, dirty: false };
+  const startedAt = new Date().toISOString();
+  return { id: uid(), patientId: patientId || null, startedAt, savedAt: null,
+           lang: $("#langSel") ? $("#langSel").value : "en-PH", entries: [], overrides: {}, tongue: [], pulse: [], notes: "", diagnosis: "Date: " + dxDateText(startedAt) + "\n", dxDated: true, ai: null, dirty: false };
 }
 function sessionHasContent(s) {
-  return s && (s.entries.length || s.tongue.length || s.pulse.length || s.notes.trim() || s.diagnosis.trim() || Object.keys(s.overrides).length || s.ai);
+  return s && (s.entries.length || s.tongue.length || s.pulse.length || s.notes.trim() || stripDateLines(s.diagnosis).trim() || Object.keys(s.overrides).length || s.ai);
 }
 function patientById(id) { return state.patients.find(p => p.id === id); }
 function ageOf(p) {
@@ -2632,11 +3009,11 @@ function rxFlags(id) {
 }
 function rxSearchText(id) {
   const f = FORMULAS[id]; if (!f) return "";
-  return [f.name, f.en, f.zh || "", ...rxHerbs(id).map(h => h.name + " " + h.latin + " " + h.cat)].join(" | ");
+  return [f.name, f.en, f.zh || "", formulaZh(id, "s"), ...rxHerbs(id).map(h => h.name + " " + h.latin + " " + h.cat + " " + herbZh(h.name, "s") + " " + herbZh(h.name, "t"))].join(" | ");
 }
 function rxText(id) {   // plain text used by "Use this formula" and the print summary
   const f = FORMULAS[id]; if (!f) return "";
-  return `${f.name}${f.zh ? " " + f.zh : ""} (${f.en}): ` + rxHerbs(id).map(h => `${h.name} ${h.dose}${h.unit === "g" ? " g" : " " + h.unit}`).join(", ") + (f.form && /pill|powder/i.test(f.form) ? ` [decoction doses; ${f.form}]` : "");
+  return `${f.name}${f.zh ? " " + formulaZh(id) : ""} (${f.en}): ` + rxHerbs(id).map(h => `${herbLabel(h.name)} ${h.dose}${h.unit === "g" ? " g" : " " + h.unit}`).join(", ") + (f.form && /pill|powder/i.test(f.form) ? ` [decoction doses; ${f.form}]` : "");
 }
 function formulaHTML(id, opt = {}) {
   const f = FORMULAS[id];
@@ -2645,10 +3022,10 @@ function formulaHTML(id, opt = {}) {
   const rows = rxHerbs(id).map(h => {
     const fl = flagBy[h.name], hit = hl && hl.test((h.name + " " + h.latin + " " + h.cat).toLowerCase().replace(/[\s\-]+/g, " "));
     const doseTxt = `${h.dose} ${h.unit}`, added = herbInRx(h.name);
-    return `<tr class="${hit ? "rx-hit" : ""}"><td class="rx-addc"><button type="button" class="rx-add${added ? " added" : ""}" data-add-herb="${esc(h.name)}" data-dose="${esc(doseTxt)}" title="${added ? `${esc(h.name)} is already in the treatment field` : `Add ${esc(h.name)} ${esc(doseTxt)} to Final diagnosis / treatment`}" aria-label="Add ${esc(h.name)} ${esc(doseTxt)} to treatment">${added ? "✓" : "+"}</button></td><td class="rx-herb"><b title="${esc(h.latin)}">${esc(h.name)}</b>${fl ? ` <span class="rx-flag rx-${fl.type}" title="${esc(fl.text)}">⚠ ${esc(RX_FLAG_LABEL[fl.type] || fl.type)}</span>` : ""}${h.latin ? `<div class="rx-latin">${esc(h.latin)}</div>` : ""}${h.note ? `<div class="rx-hnote">${esc(h.note)}</div>` : ""}</td><td class="rx-cat" title="${esc(h.latin)}">${esc(h.cat || "—")}</td><td class="rx-dose">${esc(h.dose)}${h.unit !== "g" ? " " + esc(h.unit) : ""}</td><td class="rx-role">${esc(rxRoleName(h.role))}</td></tr>`;
+    return `<tr class="${hit ? "rx-hit" : ""}"><td class="rx-addc"><button type="button" class="rx-add${added ? " added" : ""}" data-add-herb="${esc(h.name)}" data-dose="${esc(doseTxt)}" title="${added ? `${esc(h.name)} is already in the treatment field` : `Add ${esc(h.name)} ${esc(doseTxt)} to Final diagnosis / treatment`}" aria-label="Add ${esc(h.name)} ${esc(doseTxt)} to treatment">${added ? "✓" : "+"}</button></td><td class="rx-herb"><b title="${esc(h.latin)}">${esc(h.name)}</b>${zhSpan(h.name)}${fl ? ` <span class="rx-flag rx-${fl.type}" title="${esc(fl.text)}">⚠ ${esc(RX_FLAG_LABEL[fl.type] || fl.type)}</span>` : ""}${h.latin ? `<div class="rx-latin">${esc(h.latin)}</div>` : ""}${h.note ? `<div class="rx-hnote">${esc(h.note)}</div>` : ""}</td><td class="rx-cat" title="${esc(h.latin)}">${esc(h.cat || "—")}</td><td class="rx-dose">${esc(h.dose)}${h.unit !== "g" ? " " + esc(h.unit) : ""}</td><td class="rx-role">${esc(rxRoleName(h.role))}</td></tr>`;
   }).join("");
   return `<div class="rx" data-rx="${id}">
-    <div class="rx-title"><b>${esc(f.name)}</b>${f.zh ? ` <span class="rx-zh">${esc(f.zh)}</span>` : ""} <span class="rx-en">${esc(f.en)}</span></div>
+    <div class="rx-title"><b>${esc(f.name)}</b>${f.zh ? ` <span class="rx-zh" lang="${zhLang()}">${esc(formulaZh(id))}</span>` : ""} <span class="rx-en">${esc(f.en)}</span></div>
     <div class="rx-src">${esc(f.src)} · ${esc(f.form || "Decoction")}</div>
     <div class="rx-wrap"><table class="rx-table"><thead><tr><th class="rx-addc" title="Add a single herb to the treatment field"><span class="sr-only">Add</span></th><th>Herb (pinyin)</th><th>TCM category</th><th>Dose (g)</th><th>Role</th></tr></thead><tbody>${rows}</tbody></table></div>
     ${f.prep ? `<div class="rx-prep"><b>Preparation:</b> ${esc(f.prep)}</div>` : ""}
@@ -2671,9 +3048,142 @@ function patternFormulasHTML(p, ctx, op = () => "", hl = null) {
 }
 /* single-herb add: "Rx (custom): Bo He 6 g, …" in the Final diagnosis / treatment field */
 const RX_LINE = /^\s*Rx\b[^:\n]*:/i;
+/* ---------- herb-name display (Pinyin | 中文 | Both; Simplified / Traditional) ---------- */
+const HN_KEY = "tcm_herb_names";
+const HN = (() => { try { const o = JSON.parse(localStorage.getItem(HN_KEY) || "{}"); return { mode: ["py", "zh", "both"].includes(o.mode) ? o.mode : "py", script: o.script === "t" ? "t" : "s", updatedAt: o.updatedAt || "" }; } catch { return { mode: "py", script: "s", updatedAt: "" }; } })();
+const hasZh = () => typeof HERB_ZH !== "undefined";
+function herbZh(name, script = HN.script) { const z = hasZh() && HERB_ZH[name]; return z ? z[script === "t" ? 1 : 0] : ""; }
+function herbLabel(name, mode = HN.mode, script = HN.script) {
+  const z = herbZh(name, script);
+  if (!z || mode === "py") return name;
+  return mode === "zh" ? z : `${z} ${name}`;
+}
+function formulaZh(id, script = HN.script) {
+  const f = FORMULAS[id]; if (!f || !f.zh) return "";
+  return script === "t" ? f.zh : ((typeof FORMULA_ZH_S !== "undefined" && FORMULA_ZH_S[id]) || f.zh);
+}
+const zhLang = (script = HN.script) => script === "t" ? "zh-Hant" : "zh-Hans";
+function zhSpan(name, cls = "zh-name") { const z = herbZh(name); return z ? ` <span class="${cls}" lang="${zhLang()}">${esc(z)}</span>` : ""; }
+/* herb items inside Rx lines: "Dang Gui 9 g" | "当归 9 g" | "當歸 9 g" | "当归 Dang Gui 9 g" → herb identity */
+const RX_SEP = "[:,;，；、]";
+let RX_ITEM = null, RX_KEY = null;
+const rxKey = s => s.toLowerCase().replace(/\s+/g, "");
+function rxItemRe() {
+  if (RX_ITEM) return RX_ITEM;
+  RX_KEY = new Map(); const forms = [];
+  for (const n of Object.keys(HERBS)) {
+    const z = hasZh() && HERB_ZH[n] ? [...new Set(HERB_ZH[n])] : [];
+    const pyRe = escapeRegExp(n).replace(/ /g, "\\s+");
+    const fs = [...z.map(c => [c + " " + n, escapeRegExp(c) + "\\s*" + pyRe]), ...z.map(c => [c, escapeRegExp(c)]), [n, pyRe]];
+    for (const [raw, re] of fs) { RX_KEY.set(rxKey(raw), n); forms.push([raw.length, re]); }
+  }
+  forms.sort((a, b) => b[0] - a[0]);
+  RX_ITEM = new RegExp(`(^|${RX_SEP}\\s*)(${forms.map(f => f[1]).join("|")})(?=\\s*\\d)`, "gi");
+  return RX_ITEM;
+}
+// items of ONE line (only if it is an Rx line): [{ start, end, id }] — offsets in the line
+function rxItems(line) {
+  const m0 = RX_LINE.exec(line); if (!m0) return [];
+  const off = m0[0].length - 1, body = ":" + line.slice(m0[0].length), re = rxItemRe(), out = [];
+  re.lastIndex = 0; let m;
+  while ((m = re.exec(body))) {
+    const id = RX_KEY.get(rxKey(m[2]));
+    if (id) out.push({ start: off + m.index + m[1].length, end: off + m.index + m[1].length + m[2].length, id });
+    if (m[0].length === 0) re.lastIndex++;
+  }
+  return out;
+}
+let RX_IDS_CACHE = { text: null, ids: null };
+function rxIdSet(text) {
+  if (RX_IDS_CACHE.text === text) return RX_IDS_CACHE.ids;
+  const ids = new Set(); for (const l of String(text || "").split("\n")) for (const it of rxItems(l)) ids.add(it.id);
+  RX_IDS_CACHE = { text, ids }; return ids;
+}
+function convertRxLine(line, mode = HN.mode, script = HN.script) {
+  if (!RX_LINE.test(line)) return line;
+  let out = line;
+  for (const it of rxItems(line).reverse()) out = out.slice(0, it.start) + herbLabel(it.id, mode, script) + out.slice(it.end);
+  for (const id in FORMULAS) {   // formula header "Si Jun Zi Tang 四君子湯 (…)" → chosen script
+    const f = FORMULAS[id]; if (!f.zh) continue;
+    const want = formulaZh(id, script);
+    for (const z of [formulaZh(id, "s"), formulaZh(id, "t")]) if (z !== want && out.includes(f.name + " " + z)) out = out.split(f.name + " " + z).join(f.name + " " + want);
+  }
+  return out;
+}
+const convertRxText = (text, mode = HN.mode, script = HN.script) => String(text || "").split("\n").map(l => convertRxLine(l, mode, script)).join("\n");
+function applyHerbNamesToField(opt = {}) {
+  const s = state.session; if (!s) return false;
+  const next = convertRxText(s.diagnosis || "");
+  if (next === (s.diagnosis || "")) return false;
+  s.diagnosis = next; const inp = $("#diagnosisInput"); if (inp) inp.value = next;
+  if (!opt.quiet) markDirty(); else s.dirty = s.dirty || false;
+  return true;
+}
+function renderHnUI() {
+  document.querySelectorAll("[data-hn-mode]").forEach(b => { const on = b.dataset.hnMode === HN.mode; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); });
+  document.querySelectorAll("[data-hn-script]").forEach(b => { const on = b.dataset.hnScript === HN.script; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); });
+  const sc = $("#hnScript"); if (sc) sc.hidden = HN.mode === "py";
+  document.documentElement.classList.toggle("hn-t", HN.script === "t");
+}
+function setHerbNames(mode, script, opt = {}) {
+  const m = ["py", "zh", "both"].includes(mode) ? mode : HN.mode, sc = script === "t" || script === "s" ? script : HN.script;
+  const changed = m !== HN.mode || sc !== HN.script;
+  HN.mode = m; HN.script = sc; if (!opt.fromSync) HN.updatedAt = new Date().toISOString(); else if (opt.updatedAt) HN.updatedAt = opt.updatedAt;
+  lsSet(HN_KEY, JSON.stringify(HN));
+  renderHnUI();
+  if (!changed && !opt.force) return false;
+  const conv = applyHerbNamesToField({ quiet: !!opt.fromSync });
+  // re-render tables that show Chinese names
+  const pl = $("#patternList"); if (pl) pl._html = null;
+  if (state.analysis) try { renderPatterns(); } catch {}
+  if ($("#patternsDialog") && $("#patternsDialog").open) try { $("#refList")._html = null; renderPatternsRef(); } catch {}
+  if ($("#herbsDialog") && $("#herbsDialog").open) renderHerbList();
+  try { renderHistory(); } catch {}
+  refreshHerbButtons();
+  if (!opt.fromSync) {
+    saveSettings();
+    toast(`Herb names: ${m === "py" ? "Pinyin" : m === "zh" ? "中文 " + (sc === "t" ? "繁體" : "简体") : "Both (中文 + pinyin)"}${conv ? " — Rx lines converted" : ""}`);
+  }
+  return conv;
+}
+/* ---------- consult date at the top of Final diagnosis / treatment ---------- */
+const DATE_LINE_RE = /^\s*Date:\s*\S/i;
+const DX_MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function dxDateText(iso) {   // "27 Sep 2026" — the consult date in Asia/Manila
+  const d = iso ? new Date(iso) : new Date();
+  let y = d.getFullYear(), m = d.getMonth() + 1, day = d.getDate();
+  try { const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Manila", year: "numeric", month: "numeric", day: "numeric" }).formatToParts(d).map(x => [x.type, x.value])); y = +p.year; m = +p.month; day = +p.day; } catch {}
+  return `${day} ${DX_MON[m - 1]} ${y}`;
+}
+const dxDateLine = s => "Date: " + dxDateText((s || state.session).startedAt);
+const hasDateLine = text => String(text || "").split("\n").some(l => DATE_LINE_RE.test(l));
+const stripDateLines = text => String(text || "").split("\n").filter(l => !DATE_LINE_RE.test(l)).join("\n");
+// once per session: prepend "Date: 27 Sep 2026" unless a Date line is already there (never replaces typed text)
+function ensureDxDate(s = state.session) {
+  if (!s || s.dxDated) return false;
+  s.dxDated = true;
+  if (hasDateLine(s.diagnosis)) return false;
+  const cur = s.diagnosis || "";
+  s.diagnosis = dxDateLine(s) + "\n" + cur.replace(/^\n+/, "");
+  if (s === state.session) {
+    const inp = $("#diagnosisInput");
+    if (inp) { const pos = inp.selectionStart, had = document.activeElement === inp; inp.value = s.diagnosis; if (had) { const p = (pos || 0) + dxDateLine(s).length + 1; try { inp.setSelectionRange(p, p); } catch {} } }
+  }
+  return true;
+}
+function dxCopyText(s = state.session) {
+  const body = convertRxText(s.diagnosis || "").replace(/\s+$/, "");
+  return hasDateLine(body) ? body : dxDateLine(s) + (body ? "\n" + body : "");
+}
+async function copyDiagnosis(btn) {
+  const text = dxCopyText();
+  if (!stripDateLines(text).trim()) { toast("Final diagnosis / treatment is empty — nothing to copy yet"); return false; }
+  const ok = await copyText(text, "Copied ✓ Final diagnosis / treatment");
+  if (ok && btn) { clearTimeout(btn._t); btn.classList.add("copied"); btn.textContent = "Copied ✓"; btn._t = setTimeout(() => { btn.classList.remove("copied"); btn.textContent = "📋 Copy"; }, 1600); }
+  return ok;
+}
 function herbInRx(name, text = state.session ? state.session.diagnosis || "" : "") {
-  const re = new RegExp("(?:^|[:,;]\\s*)" + escapeRegExp(name) + "\\s+\\d", "i");
-  return text.split("\n").some(line => RX_LINE.test(line) && re.test(line.replace(RX_LINE, ":")));
+  return rxIdSet(text).has(name);   // herb identity — matches pinyin, 简体, 繁體 or "中文 pinyin" forms
 }
 function refreshHerbButtons(root = document) {
   root.querySelectorAll("[data-add-herb]").forEach(b => {
@@ -2682,13 +3192,14 @@ function refreshHerbButtons(root = document) {
   });
 }
 function addHerb(name, doseTxt, btn) {
+  if (!herbInRx(name)) ensureDxDate();
   const cur = state.session.diagnosis || "";
   if (herbInRx(name, cur)) {
     toast(`${name} is already added`);
     if (btn) { btn.classList.remove("pulse"); void btn.offsetWidth; btn.classList.add("pulse"); }
     return false;
   }
-  const item = `${name} ${doseTxt.replace(/ g$/, "")}${/ g$/.test(doseTxt) ? " g" : ""}`;
+  const item = `${herbLabel(name)} ${doseTxt.replace(/ g$/, "")}${/ g$/.test(doseTxt) ? " g" : ""}`;
   const lines = cur ? cur.replace(/\s+$/, "").split("\n") : [];
   const i = lines.findIndex(l => /^\s*Rx \(custom\):/i.test(l));
   if (i >= 0) lines[i] = lines[i].replace(/[\s,]+$/, "") + ", " + item;
@@ -2703,8 +3214,9 @@ function addHerb(name, doseTxt, btn) {
 function useFormula(id) {
   const f = FORMULAS[id]; if (!f) return;
   const line = "Rx: " + rxText(id);
+  if (!(state.session.diagnosis || "").split("\n").some(l => convertRxLine(l.trim()) === line)) ensureDxDate();
   const cur = state.session.diagnosis || "";
-  if (cur.includes(line)) { toast(`${f.name} is already in the Final diagnosis / treatment field.`); return; }
+  if (cur.split("\n").some(l => convertRxLine(l.trim()) === line)) { toast(`${f.name} is already in the Final diagnosis / treatment field.`); return; }
   state.session.diagnosis = cur ? cur.replace(/\s+$/, "") + "\n" + line : line;
   const inp = $("#diagnosisInput"); if (inp) inp.value = state.session.diagnosis;
   markDirty();
@@ -2716,7 +3228,7 @@ function rxPrintHTML(pid) {
   if (!f) return "";
   const flags = rxFlags(id);
   return `<h2>Reference formula for top pattern: ${esc(p.name)}</h2>
-    <p><b>${esc(f.name)}</b>${f.zh ? " " + esc(f.zh) : ""} — ${esc(f.en)}<br><span class="muted">${esc(f.src)} · ${esc(f.form || "Decoction")}</span></p>
+    <p><b>${esc(f.name)}</b>${f.zh ? " " + esc(formulaZh(id)) : ""} — ${esc(f.en)}<br><span class="muted">${esc(f.src)} · ${esc(f.form || "Decoction")}</span></p>
     <table><tr><th>Herb</th><th>TCM category</th><th>Dose (g)</th><th>Role</th></tr>${rxHerbs(id).map(h => `<tr><td>${esc(h.name)}${h.latin ? ` <small><i>${esc(h.latin)}</i></small>` : ""}${h.note ? ` <small>(${esc(h.note)})</small>` : ""}</td><td>${esc(h.cat)}</td><td>${esc(h.dose)}${h.unit !== "g" ? " " + esc(h.unit) : ""}</td><td>${esc(rxRoleName(h.role))}</td></tr>`).join("")}</table>
     ${f.prep ? `<p><b>Preparation:</b> ${esc(f.prep)}</p>` : ""}
     ${f.caution ? `<p><b>Cautions:</b> ${esc(f.caution)}</p>` : ""}
@@ -2765,7 +3277,7 @@ function herbDoseInfo(name) {
 const herbNorm = s => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 function herbMatches(name, q) {
   if (!q) return true;
-  const h = HERBS[name] || [], hay = herbNorm([name, h[0], h[2]].join(" | ")), flat = hay.replace(/[\s\-–]+/g, "");
+  const h = HERBS[name] || [], hay = herbNorm([name, h[0], h[2], herbZh(name, "s"), herbZh(name, "t"), (typeof HERB_ZH_ALIAS !== "undefined" && HERB_ZH_ALIAS[name]) || ""].join(" | ")), flat = hay.replace(/[\s\-–]+/g, "");
   return herbNorm(q).split(/\s+/).filter(Boolean).every(t => hay.includes(t)) || flat.includes(herbNorm(q).replace(/[\s\-–]+/g, ""));
 }
 const HERB_NAMES_AZ = () => Object.keys(HERBS).sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
@@ -2777,7 +3289,7 @@ function herbRowHTML(n) {
   const doseTxt = di.doseTxt || "";
   const srcTitle = di.src ? `${HERB_DOSE_SRC[di.src]}${di.fx ? ` · in formulas: ${di.fx[0] === di.fx[1] ? fmtG(di.fx[0]) : fmtG(di.fx[0]) + "–" + fmtG(di.fx[1])} g` : ""}${doseTxt ? ` · + adds ${doseTxt}` : ""}` : "";
   const btn = doseTxt ? `<button type="button" class="rx-add hb-add${added ? " added" : ""}" data-add-herb="${esc(n)}" data-dose="${esc(doseTxt)}" title="${added ? `${esc(n)} is already in the treatment field` : `Add ${esc(n)} ${esc(doseTxt)} to Final diagnosis / treatment`}" aria-label="Add ${esc(n)} ${esc(doseTxt)} to treatment">${added ? "✓" : "+"}</button>` : "";
-  return `<tr data-herb="${esc(n)}"><td class="rx-addc">${btn}</td><td class="hb-name"><b title="${esc(h[0] || "")}">${esc(n)}</b>${fl ? ` <span class="rx-flag rx-${fl.type}" title="${esc(fl.text)}">⚠ ${esc(RX_FLAG_LABEL[fl.type] || fl.type)}</span>` : ""}${h[0] ? `<div class="hb-latin">${esc(h[0])}</div>` : ""}${h[1] ? `<div class="rx-hnote">${esc(h[1])}</div>` : ""}</td><td class="hb-cat">${esc(h[2] || "—")}</td><td class="hb-dose" title="${esc(srcTitle)}"><span class="hb-range">${esc(di.range)}${di.unit !== "g" ? " " + esc(di.unit) : ""}</span>${di.src ? ` <span class="hb-src hb-src-${di.src}">${di.src}</span>` : ""}</td></tr>`;
+  return `<tr data-herb="${esc(n)}"><td class="rx-addc">${btn}</td><td class="hb-name"><b title="${esc(h[0] || "")}">${esc(n)}</b>${zhSpan(n)}${fl ? ` <span class="rx-flag rx-${fl.type}" title="${esc(fl.text)}">⚠ ${esc(RX_FLAG_LABEL[fl.type] || fl.type)}</span>` : ""}${h[0] ? `<div class="hb-latin">${esc(h[0])}</div>` : ""}${h[1] ? `<div class="rx-hnote">${esc(h[1])}</div>` : ""}</td><td class="hb-cat">${esc(h[2] || "—")}</td><td class="hb-dose" title="${esc(srcTitle)}"><span class="hb-range">${esc(di.range)}${di.unit !== "g" ? " " + esc(di.unit) : ""}</span>${di.src ? ` <span class="hb-src hb-src-${di.src}">${di.src}</span>` : ""}</td></tr>`;
 }
 function renderHerbList() {
   const list = $("#herbList"); if (!list) return;
@@ -2988,7 +3500,8 @@ function openVisit(vid) {
   if (v.id === state.session.id) {
     if (!state.session.dirty || !confirm("Revert this visit to its last saved version? Unsaved changes will be lost.")) return;
   } else if (!confirmDiscard()) return;
-  state.session = { ...newSession(v.patientId), ...JSON.parse(JSON.stringify(v)), dirty: false };
+  state.session = { ...newSession(v.patientId), ...JSON.parse(JSON.stringify(v)), diagnosis: v.diagnosis || "", dxDated: false, dirty: false };
+  ensureDxDate(state.session);   // show that visit's date (not today's) if it has none
   ["entries", "tongue", "pulse"].forEach(k => state.session[k] = state.session[k] || []);
   state.session.entries = mergeLegacyEntries(state.session.entries);
   state.session.overrides = state.session.overrides || {};
@@ -3124,7 +3637,7 @@ function relAgo(iso, ref) {
   return Math.round(d / 365.25) + " years ago";
 }
 const rxLinesOf = text => String(text || "").split("\n").map(l => l.trim()).filter(l => RX_LINE.test(l));
-const dxLinesOf = text => String(text || "").split("\n").map(l => l.trim()).filter(l => l && !RX_LINE.test(l));
+const dxLinesOf = text => String(text || "").split("\n").map(l => l.trim()).filter(l => l && !RX_LINE.test(l) && !DATE_LINE_RE.test(l));
 function visitFindings(v) {
   const sy = (v && v.symptoms) || [];
   return {
@@ -3247,7 +3760,7 @@ function visitSummaryHTML(v, ref) {
   const dx = dxLinesOf(v.diagnosis), rx = rxLinesOf(v.diagnosis), f = visitFindings(v), tops = (v.patterns || []).slice(0, 3);
   const row = (k, html) => `<div class="hv-row"><span class="hv-k">${k}</span><span class="hv-v">${html}</span></div>`;
   return row("Diagnosis", dx.length ? esc(dx.join(" · ")) : `<i class="muted">not recorded</i>`)
-    + row("Rx", rx.length ? rx.map(l => `<div class="hv-rx">${esc(l)}</div>`).join("") : `<i class="muted">none recorded</i>`)
+    + row("Rx", rx.length ? rx.map(l => `<div class="hv-rx">${esc(convertRxLine(l))}</div>`).join("") : `<i class="muted">none recorded</i>`)
     + row("Tongue", f.tongue.length ? esc(f.tongue.map(tName).join(", ")) : `<i class="muted">—</i>`)
     + row("Pulse", f.pulse.length ? esc(f.pulse.map(pName).join(", ")) : `<i class="muted">—</i>`)
     + row("Patterns", tops.length ? tops.map(p => `${esc(shortPat(p.name))} <b>${p.pct}%</b>`).join(", ") : `<i class="muted">—</i>`);
@@ -3305,20 +3818,23 @@ function renderHistory() {
 }
 
 /* ---------- carry forward ---------- */
-const herbsInLine = line => { const l = line.replace(RX_LINE, ":"); return Object.keys(HERBS).filter(n => new RegExp("(?:^|[:,;]\\s*)" + escapeRegExp(n) + "\\s+\\d", "i").test(l)); };
+const herbsInLine = line => rxItems(line).map(it => it.id);
 function carryForwardRx(vid) {
   const v = state.visits.find(x => x.id === vid) || priorVisits()[0];
   if (!v) return 0;
   const lines = rxLinesOf(v.diagnosis);
   if (!lines.length) { toast("That visit has no Rx lines to carry forward"); return 0; }
+  const pre = state.session.diagnosis || "";
+  ensureDxDate();
   let cur = state.session.diagnosis || "", added = 0;
-  for (const line of lines) {
-    const curLines = cur.split("\n").map(l => l.trim());
+  for (const raw of lines) {
+    const line = convertRxLine(raw);   // today's herb-name form (pinyin / 中文 / both)
+    const curLines = cur.split("\n").map(l => convertRxLine(l.trim()));
     if (curLines.includes(line)) continue;
     const herbs = herbsInLine(line);
     if (/^Rx \(custom\):/i.test(line)) {
       const items = line.replace(/^Rx \(custom\):\s*/i, "").split(/\s*,\s*/).filter(Boolean);
-      const missing = items.filter(it => { const n = herbs.find(h => it.toLowerCase().startsWith(h.toLowerCase() + " ")); return !(n && herbInRx(n, cur)); });
+      const missing = items.filter(it => { const ids = herbsInLine("Rx: " + it); return !(ids.length && ids.every(id => herbInRx(id, cur))); });
       if (!missing.length) continue;
       const ls = cur ? cur.replace(/\s+$/, "").split("\n") : [];
       const i = ls.findIndex(l => /^\s*Rx \(custom\):/i.test(l));
@@ -3329,7 +3845,7 @@ function carryForwardRx(vid) {
     cur = cur ? cur.replace(/\s+$/, "") + "\n" + line : line; added++;
   }
   const when = relAgo(v.startedAt, state.session.startedAt);
-  if (!added) { toast(`The Rx from ${when} is already in today's Final diagnosis / treatment`); return 0; }
+  if (!added) { if (state.session.diagnosis !== pre) { const inp = $("#diagnosisInput"); if (inp) inp.value = state.session.diagnosis; } toast(`The Rx from ${when} is already in today's Final diagnosis / treatment`); return 0; }
   state.session.diagnosis = cur; state.session.carriedFrom = v.id;
   const inp = $("#diagnosisInput"); if (inp) inp.value = cur;
   markDirty(); refreshHerbButtons();
@@ -3347,7 +3863,7 @@ function buildHistorySummary(session, a, n = 2) {
     const f = visitFindings(v), dx = dxLinesOf(v.diagnosis), rx = rxLinesOf(v.diagnosis);
     L.push(`${i === 0 ? "Previous visit" : "Visit before that"} — ${relAgo(v.startedAt, ref)}:`);
     L.push(`- Practitioner's diagnosis: ${dx.length ? deidentify(dx.join("; "), p) : "not recorded"}`);
-    L.push(`- Prescription given: ${rx.length ? deidentify(rx.join(" | "), p) : "none recorded"}`);
+    L.push(`- Prescription given: ${rx.length ? deidentify(rx.map(l => convertRxLine(l, "both")).join(" | "), p) : "none recorded"}`);
     L.push(`- Key symptoms then: ${list(f.present.slice(0, 15))}`);
     if (f.negated.length) L.push(`- Denied then: ${list(f.negated.slice(0, 10))}`);
     L.push(`- Tongue: ${f.tongue.length ? f.tongue.map(tName).join(", ") : "not recorded"}; Pulse: ${f.pulse.length ? f.pulse.map(pName).join(", ") : "not recorded"}`);
@@ -3715,7 +4231,8 @@ function buildAICaseSummary(session, includeTranscript, includeHistory = true) {
   lines.push("");
   lines.push("Practitioner notes:");
   lines.push(deidentify(session.notes, p).trim() || "(none)");
-  if (session.diagnosis && session.diagnosis.trim()) { lines.push(""); lines.push("Practitioner's working diagnosis:"); lines.push(deidentify(session.diagnosis, p).trim()); }
+  const dxAI = convertRxText(stripDateLines(session.diagnosis || ""), "both");   // herbs as "中文 pinyin" for the AI
+  if (dxAI.trim()) { lines.push(""); lines.push("Practitioner's working diagnosis:"); lines.push(deidentify(dxAI, p).trim()); }
   if (includeTranscript) {
     lines.push("");
     lines.push("Consultation transcript (speech-to-text, may contain recognition errors; typed notes marked [typed]):");
@@ -4118,7 +4635,7 @@ async function dataDel(kind, id) {
   await DB.put("meta", { id: "tombstones", map });
   markDataChanged();
 }
-function currentSettings() { return { lang: $("#langSel").value, aiModel: AI.model }; }
+function currentSettings() { return { lang: $("#langSel").value, aiModel: AI.model, herbNames: { mode: HN.mode, script: HN.script } }; }
 async function saveSettings() {
   const data = { ...currentSettings(), updatedAt: new Date().toISOString() };
   try { await DB.put("meta", { id: "settings", data }); markDataChanged(); } catch (e) { console.warn(e); }
@@ -4127,6 +4644,7 @@ function applySettings(s) {
   if (!s) return;
   if (s.lang && [...$("#langSel").options].some(o => o.value === s.lang)) { $("#langSel").value = s.lang; lsSet("tcm_lang", s.lang); if (state.session && !sessionHasContent(state.session)) state.session.lang = s.lang; }
   if (s.aiModel) AI.model = s.aiModel;
+  if (s.herbNames && (s.updatedAt || "") >= (HN.updatedAt || "")) setHerbNames(s.herbNames.mode, s.herbNames.script, { fromSync: true, updatedAt: s.updatedAt });
 }
 function markDataChanged() {
   if (!Cloud.account) return;
@@ -4263,7 +4781,7 @@ async function switchNamespace(ns, carrySession) {
   let d = null; try { d = await DB.get("meta", "draft"); } catch {}
   if (carrySession && sessionHasContent(carrySession)) state.session = carrySession;
   else if (d && d.session && sessionHasContent(d.session)) {
-    state.session = { ...newSession(null), ...d.session, dirty: true };
+    state.session = { ...newSession(null), dxDated: false, ...d.session, dirty: true };
     state.session.entries = mergeLegacyEntries(state.session.entries);
     toast("Restored unsaved session draft from " + fmtDateTime(d.at), 4000);
   } else state.session = newSession(null);
@@ -4500,6 +5018,11 @@ function bindEvents() {
   $("#herbSearch").oninput = () => { clearTimeout(renderHerbList._t); renderHerbList._t = setTimeout(renderHerbList, 60); };
   $("#herbSearch").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); clearTimeout(renderHerbList._t); renderHerbList(); } });
   $("#herbCat").onchange = () => renderHerbList();
+  document.querySelectorAll("[data-hn-mode]").forEach(b => b.addEventListener("click", () => setHerbNames(b.dataset.hnMode, null)));
+  document.querySelectorAll("[data-hn-script]").forEach(b => b.addEventListener("click", () => setHerbNames(null, b.dataset.hnScript)));
+  $("#dxCopyBtn").addEventListener("click", e => { e.preventDefault(); copyDiagnosis(e.currentTarget); });
+  $("#diagnosisInput").addEventListener("focus", () => ensureDxDate());
+  renderHnUI();
   $("#herbAZ").addEventListener("click", e => { const b = e.target.closest("button[data-az]"); if (b && !b.disabled) herbJump(b.dataset.az); });
   $("#exportBtn").onclick = exportAll;
   $("#importBtn").onclick = () => $("#importFile").click();
@@ -4611,7 +5134,7 @@ async function init() {
   try {
     const d = await DB.get("meta", "draft");
     if (d && d.session && sessionHasContent(d.session)) {
-      state.session = { ...newSession(null), ...d.session, dirty: true };
+      state.session = { ...newSession(null), dxDated: false, ...d.session, dirty: true };
       state.session.entries = mergeLegacyEntries(state.session.entries);
       state.selectedPatientId = state.session.patientId || null;
       toast("Restored unsaved session draft from " + fmtDateTime(d.at), 4000);
@@ -4627,7 +5150,7 @@ async function init() {
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>
