@@ -190,7 +190,15 @@ details.all-matches>summary{cursor:pointer;color:var(--accent);font-weight:600}
 .rx-title{font-size:13.5px;line-height:1.35}.rx-zh{color:#555}.rx-en{color:#5b6b67;font-style:italic;font-weight:normal}
 .rx-src{font-size:11.5px;color:#5b6b67;margin:1px 0 4px}
 .rx-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;border:1px solid #e3ece9;border-radius:6px}
-.rx-table{border-collapse:collapse;width:100%;min-width:430px;font-size:12px;background:#fff}
+.rx-table{border-collapse:collapse;width:100%;min-width:460px;font-size:12px;background:#fff}
+.rx-table .rx-addc{width:30px;padding:2px 0 2px 4px;text-align:center}
+.rx-add{width:26px;height:26px;min-width:26px;padding:0;border-radius:50%;font-size:16px;line-height:1;font-weight:600;color:var(--accent);border:1px solid #b9d8cf;background:#f3faf7;display:inline-flex;align-items:center;justify-content:center;touch-action:manipulation}
+.rx-add:hover{background:#e3f3ed}
+.rx-add.added{background:var(--accent);color:#fff;border-color:var(--accent);font-size:14px}
+.rx-add.pulse{animation:rxpulse .5s}
+@keyframes rxpulse{0%{box-shadow:0 0 0 0 rgba(47,125,109,.55)}100%{box-shadow:0 0 0 9px rgba(47,125,109,0)}}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (pointer:coarse),(max-width:760px){.rx-add{width:32px;height:32px;min-width:32px;font-size:18px}.rx-table .rx-addc{width:38px}.rx-table{min-width:480px}}
 .rx-table th{background:#eef5f2;text-align:left;font-weight:600;padding:4px 6px;white-space:nowrap;color:#2f4b44}
 .rx-table td{padding:3px 6px;border-top:1px solid #edf2f0;vertical-align:top}
 .rx-table td.rx-latin{font-style:italic;color:#44524f}.rx-table td.rx-dose{white-space:nowrap;font-variant-numeric:tabular-nums;text-align:right}
@@ -2434,12 +2442,13 @@ function formulaHTML(id, opt = {}) {
   const hl = opt.hl, flags = rxFlags(id), flagBy = Object.fromEntries(flags.map(x => [x.herb, x]));
   const rows = rxHerbs(id).map(h => {
     const fl = flagBy[h.name], hit = hl && hl.test((h.name + " " + h.latin).toLowerCase().replace(/[\s\-]+/g, " "));
-    return `<tr class="${hit ? "rx-hit" : ""}"><td class="rx-herb"><b>${esc(h.name)}</b>${fl ? ` <span class="rx-flag rx-${fl.type}" title="${esc(fl.text)}">⚠ ${esc(RX_FLAG_LABEL[fl.type] || fl.type)}</span>` : ""}${h.note ? `<div class="rx-hnote">${esc(h.note)}</div>` : ""}</td><td class="rx-latin">${esc(h.latin)}</td><td class="rx-dose">${esc(h.dose)}${h.unit !== "g" ? " " + esc(h.unit) : ""}</td><td class="rx-role">${esc(rxRoleName(h.role))}</td></tr>`;
+    const doseTxt = `${h.dose} ${h.unit}`, added = herbInRx(h.name);
+    return `<tr class="${hit ? "rx-hit" : ""}"><td class="rx-addc"><button type="button" class="rx-add${added ? " added" : ""}" data-add-herb="${esc(h.name)}" data-dose="${esc(doseTxt)}" title="${added ? `${esc(h.name)} is already in the treatment field` : `Add ${esc(h.name)} ${esc(doseTxt)} to Final diagnosis / treatment`}" aria-label="Add ${esc(h.name)} ${esc(doseTxt)} to treatment">${added ? "✓" : "+"}</button></td><td class="rx-herb"><b>${esc(h.name)}</b>${fl ? ` <span class="rx-flag rx-${fl.type}" title="${esc(fl.text)}">⚠ ${esc(RX_FLAG_LABEL[fl.type] || fl.type)}</span>` : ""}${h.note ? `<div class="rx-hnote">${esc(h.note)}</div>` : ""}</td><td class="rx-latin">${esc(h.latin)}</td><td class="rx-dose">${esc(h.dose)}${h.unit !== "g" ? " " + esc(h.unit) : ""}</td><td class="rx-role">${esc(rxRoleName(h.role))}</td></tr>`;
   }).join("");
   return `<div class="rx" data-rx="${id}">
     <div class="rx-title"><b>${esc(f.name)}</b>${f.zh ? ` <span class="rx-zh">${esc(f.zh)}</span>` : ""} <span class="rx-en">${esc(f.en)}</span></div>
     <div class="rx-src">${esc(f.src)} · ${esc(f.form || "Decoction")}</div>
-    <div class="rx-wrap"><table class="rx-table"><thead><tr><th>Herb (pinyin)</th><th>Latin / pharmaceutical</th><th>Dose (g)</th><th>Role</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="rx-wrap"><table class="rx-table"><thead><tr><th class="rx-addc" title="Add a single herb to the treatment field"><span class="sr-only">Add</span></th><th>Herb (pinyin)</th><th>Latin / pharmaceutical</th><th>Dose (g)</th><th>Role</th></tr></thead><tbody>${rows}</tbody></table></div>
     ${f.prep ? `<div class="rx-prep"><b>Preparation:</b> ${esc(f.prep)}</div>` : ""}
     ${f.caution ? `<div class="rx-caution"><b>Cautions:</b> ${esc(f.caution)}</div>` : ""}
     ${flags.length ? `<ul class="rx-flags">${flags.map(x => `<li><b>${esc(x.herb)}</b> <span class="rx-flag rx-${x.type}">${esc(RX_FLAG_LABEL[x.type] || x.type)}</span> ${esc(x.text)}</li>`).join("")}</ul>` : ""}
@@ -2458,6 +2467,37 @@ function patternFormulasHTML(p, ctx, op = () => "", hl = null) {
     <div class="rx-disc">${esc(RX_DISCLAIMER)}</div>
   </div>`;
 }
+/* single-herb add: "Rx (custom): Bo He 6 g, …" in the Final diagnosis / treatment field */
+const RX_LINE = /^\s*Rx\b[^:\n]*:/i;
+function herbInRx(name, text = state.session ? state.session.diagnosis || "" : "") {
+  const re = new RegExp("(?:^|[:,;]\\s*)" + escapeRegExp(name) + "\\s+\\d", "i");
+  return text.split("\n").some(line => RX_LINE.test(line) && re.test(line.replace(RX_LINE, ":")));
+}
+function refreshHerbButtons(root = document) {
+  root.querySelectorAll("[data-add-herb]").forEach(b => {
+    const on = herbInRx(b.dataset.addHerb);
+    if (b.classList.contains("added") !== on) { b.classList.toggle("added", on); b.textContent = on ? "✓" : "+"; b.title = on ? `${b.dataset.addHerb} is already in the treatment field` : `Add ${b.dataset.addHerb} ${b.dataset.dose} to Final diagnosis / treatment`; }
+  });
+}
+function addHerb(name, doseTxt, btn) {
+  const cur = state.session.diagnosis || "";
+  if (herbInRx(name, cur)) {
+    toast(`${name} is already added`);
+    if (btn) { btn.classList.remove("pulse"); void btn.offsetWidth; btn.classList.add("pulse"); }
+    return false;
+  }
+  const item = `${name} ${doseTxt.replace(/ g$/, "")}${/ g$/.test(doseTxt) ? " g" : ""}`;
+  const lines = cur ? cur.replace(/\s+$/, "").split("\n") : [];
+  const i = lines.findIndex(l => /^\s*Rx \(custom\):/i.test(l));
+  if (i >= 0) lines[i] = lines[i].replace(/[\s,]+$/, "") + ", " + item;
+  else lines.push("Rx (custom): " + item);
+  state.session.diagnosis = lines.join("\n");
+  const inp = $("#diagnosisInput"); if (inp) inp.value = state.session.diagnosis;
+  markDirty();
+  refreshHerbButtons();
+  toast(`Added ${item} to Final diagnosis / treatment`);
+  return true;
+}
 function useFormula(id) {
   const f = FORMULAS[id]; if (!f) return;
   const line = "Rx: " + rxText(id);
@@ -2466,6 +2506,7 @@ function useFormula(id) {
   state.session.diagnosis = cur ? cur.replace(/\s+$/, "") + "\n" + line : line;
   const inp = $("#diagnosisInput"); if (inp) inp.value = state.session.diagnosis;
   markDirty();
+  refreshHerbButtons();
   toast(`${f.name} added to Final diagnosis / treatment — adjust doses to the patient.`);
 }
 function rxPrintHTML(pid) {
@@ -2521,6 +2562,7 @@ function renderPatterns() {
     ${groups.map(x => `<div class="am-group">${esc(x.g)}</div>${x.rows.map(r => `<button class="am-row${topIds.has(r.id) ? " top5" : ""}" data-ref-pattern="${r.id}" title="Open in Patterns reference"><span>${esc(r.name)}</span><b>${r.pct}%</b></button>`).join("")}`).join("")}
   </details>`;
   setHTML(el, top + allHtml);
+  refreshHerbButtons(el);
 }
 
 /* ---------- Patterns reference (read-only view of the knowledge base) ---------- */
@@ -2566,6 +2608,7 @@ function renderPatternsRef(focusId) {
   $("#refCount").textContent = `${shown.length} of ${PATTERNS.length} patterns shown` + (rxMatches.length ? ` · ${rxMatches.length} formula${rxMatches.length === 1 ? "" : "s"} match` : "");
   const rxHead = rxMatches.length ? `<div class="ref-rx-hits"><b>Formulas matching “${esc(q)}” (${rxMatches.length}):</b> ${rxMatches.map(id => { const users = PATTERNS.filter(p => (p.rx || []).includes(id)); return `<span class="ref-rx-hit" title="Used for: ${esc(users.map(p => p.name).join("; "))}">${esc(FORMULAS[id].name)}</span>`; }).join(", ")}<div class="muted">Matching herbs are highlighted in the tables below.</div></div>` : "";
   refEl.innerHTML = rxHead + (html || `<div class="empty">No pattern matches this search.</div>`);
+  refreshHerbButtons(refEl);
   if (focusId) {
     const t = $("#refList").querySelector(`[data-ref-id="${focusId}"]`);
     if (t) { t.classList.add("flash"); setTimeout(() => t.scrollIntoView({ block: "center" }), 30); setTimeout(() => t.classList.remove("flash"), 2500); }
@@ -2584,6 +2627,7 @@ function renderAll() {
   renderSessionInfo(); renderPatients(); renderProfile(); renderFindings();
   $("#notesInput").value = state.session.notes || "";
   $("#diagnosisInput").value = state.session.diagnosis || "";
+  refreshHerbButtons();
   refreshAnalysis();
   renderAISection();
 }
@@ -3791,7 +3835,11 @@ function bindEvents() {
   $("#refOrgan").onchange = () => renderPatternsRef();
   $("#refMatchedOnly").onchange = () => renderPatternsRef();
   $("#patternList").addEventListener("click", e => { const b = e.target.closest("[data-ref-pattern]"); if (b) { e.stopPropagation(); openPatternsRef(b.dataset.refPattern); } });
-  const onUseRx = e => { const u = e.target.closest("[data-use-rx]"); if (u) { e.preventDefault(); e.stopPropagation(); useFormula(u.dataset.useRx); } };
+  const onUseRx = e => {
+    const h = e.target.closest("[data-add-herb]");
+    if (h) { e.preventDefault(); e.stopPropagation(); addHerb(h.dataset.addHerb, h.dataset.dose, h); return; }
+    const u = e.target.closest("[data-use-rx]"); if (u) { e.preventDefault(); e.stopPropagation(); useFormula(u.dataset.useRx); }
+  };
   $("#patternList").addEventListener("click", onUseRx);
   $("#refList").addEventListener("click", onUseRx);
   $("#exportBtn").onclick = exportAll;
@@ -3836,7 +3884,7 @@ function bindEvents() {
     if (id) { state.session.entries = state.session.entries.filter(x => x.id !== id); markDirty(); refreshAnalysis(); }
   };
   $("#notesInput").oninput = e => { state.session.notes = e.target.value; markDirty(); };
-  $("#diagnosisInput").oninput = e => { state.session.diagnosis = e.target.value; markDirty(); };
+  $("#diagnosisInput").oninput = e => { state.session.diagnosis = e.target.value; markDirty(); clearTimeout(refreshHerbButtons._t); refreshHerbButtons._t = setTimeout(() => refreshHerbButtons(), 250); };
 
   $("#rightPanel").onclick = e => {
     const t = e.target.closest("button"); if (!t) return;
@@ -3888,7 +3936,7 @@ async function init() {
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { herbInRx, addHerb, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>
