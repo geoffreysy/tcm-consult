@@ -4,6 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TCM Consult Assistant</title>
+<script>
+/* =====================================================================
+   CONFIGURATION — Google sign-in / Drive storage
+   ---------------------------------------------------------------------
+   GOOGLE_CLIENT_ID: OAuth 2.0 "Web application" client ID from Google Cloud
+   Console (APIs & Services → Credentials), e.g.
+     "1234567890-abc123.apps.googleusercontent.com"
+   It is NOT a secret (no client secret is used). Add the site origin
+   (https://geoffreysy.github.io) to "Authorised JavaScript origins" and
+   enable the Google Drive API. Leave "" to keep the app in local-only mode.
+   ===================================================================== */
+const GOOGLE_CLIENT_ID = "";
+</script>
 <style>
 :root{
   --bg:#f3f5f4; --panel:#ffffff; --ink:#1f2d2a; --muted:#6b7a76; --line:#dde4e1;
@@ -47,7 +60,9 @@ h3{font-size:13px;margin:0 0 6px;font-weight:600}
 .menu{position:relative}
 .menu-list{display:none;position:absolute;right:0;top:calc(100% + 4px);background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);z-index:30;min-width:210px;padding:4px}
 .menu.open .menu-list{display:block}
-.menu-list button{display:block;width:100%;text-align:left;border:none;border-radius:6px}
+.menu-list button,.menu-list .menu-link{display:block;width:100%;text-align:left;border:none;border-radius:6px}
+.menu-list .menu-link{padding:6px 11px;color:inherit;text-decoration:none;box-sizing:border-box}
+.menu-list .menu-link:hover{background:#f2f6f5}
 
 .banner{display:none;padding:8px 14px;font-size:13px;background:#fff7e6;border-bottom:1px solid #f0dcb0;color:#6d4c10}
 .banner.show{display:block}
@@ -287,6 +302,36 @@ dialog::backdrop{background:rgba(20,35,30,.35)}
 
 #printArea{display:none}
 
+
+/* Google account / Drive sync */
+.auth{display:flex;align-items:center;gap:6px;flex-wrap:nowrap}
+.auth .acct-btn{display:flex;align-items:center;gap:6px;padding:3px 9px 3px 3px;border-radius:18px;max-width:230px}
+.auth .acct-btn .em{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px}
+.avatar{width:24px;height:24px;border-radius:50%;flex:none;object-fit:cover;background:#dfe9e6;color:#2f5f55;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
+.avatar.lg{width:44px;height:44px;font-size:18px}
+.gbtn{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #c9d3d0;border-radius:18px;padding:5px 12px 5px 9px;font-weight:500}
+.gbtn .g{width:16px;height:16px;flex:none}
+.sync-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;border-radius:12px;padding:3px 9px;white-space:nowrap;background:#eef2f1;color:#51605c;border:1px solid transparent}
+.sync-chip::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.8}
+.sync-chip.synced{background:#e5f4ee;color:#1f7a55}
+.sync-chip.saving,.sync-chip.connecting{background:#eaf1fb;color:#2a5b9a}
+.sync-chip.offline{background:#fff4e0;color:#8a5a00}
+.sync-chip.reauth,.sync-chip.error{background:#fdeceb;color:#a12d2d}
+.sync-chip.notconfigured,.sync-chip.local{background:#f1f3f2;color:#6b7a76}
+.acct-card{display:flex;gap:12px;align-items:center;margin-bottom:10px}
+.acct-card .nm{font-weight:600}.acct-card .em{color:var(--muted);font-size:13px}
+.acct-note{font-size:12.5px;color:#44524f;line-height:1.5;background:#f6f9f8;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:8px 0}
+.acct-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.acct-kv{font-size:12.5px;line-height:1.7}
+.acct-kv b{display:inline-block;min-width:110px;color:#44615a;font-weight:600}
+footer a{color:var(--accent)}
+.btnlink{display:inline-block;border:1px solid var(--line);border-radius:8px;padding:6px 11px;color:inherit;text-decoration:none;background:#fff}
+.btnlink:hover{background:#f2f6f5}
+@media (max-width:760px){
+  .auth{order:4;flex-basis:100%;justify-content:flex-end}
+  .auth .acct-btn{max-width:60vw}
+}
+
 /* responsive: tablet */
 @media (max-width:1200px){
   .layout{grid-template-columns:240px minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto}
@@ -371,9 +416,12 @@ dialog::backdrop{background:rgba(20,35,30,.35)}
         <button id="aiSettingsBtn">⚙ AI settings (xAI Grok)…</button>
         <button id="exportBtn">⬇ Export all data (JSON backup)</button>
         <button id="importBtn">⬆ Import data from JSON…</button>
+        <button id="accountMenuBtn">☁ Google account &amp; Drive sync…</button>
+        <a class="menu-link" href="privacy.html" target="_blank" rel="noopener">🔒 Privacy policy</a>
       </div>
     </div>
   </div>
+  <div class="auth" id="authArea" aria-live="polite"></div>
 </header>
 <div class="banner" id="banner"></div>
 
@@ -440,8 +488,25 @@ dialog::backdrop{background:rgba(20,35,30,.35)}
 
 <footer>
   <span>Speech is transcribed by the browser's speech service; no audio is saved.</span>
-  <span id="storageStatus">Records are stored only in this browser.</span>
+  <span><span id="storageStatus">Records are stored only in this browser.</span> · <a href="privacy.html" target="_blank" rel="noopener" id="privacyLink">Privacy</a></span>
 </footer>
+
+<!-- Google account / Drive sync -->
+<dialog id="accountDialog">
+  <div class="dlg-head"><h3>Google account &amp; Drive storage</h3><button type="button" class="link" data-close>✕</button></div>
+  <div class="dlg-body" id="accountBody"></div>
+  <div class="dlg-foot"><button type="button" data-close>Close</button></div>
+</dialog>
+<dialog id="migrateDialog">
+  <div class="dlg-head"><h3>Copy records into your Google Drive?</h3></div>
+  <div class="dlg-body" id="migrateBody"></div>
+  <div class="dlg-foot"><button type="button" id="migrateNoBtn">Not now</button><button type="button" class="primary" id="migrateYesBtn">Copy to my Drive</button></div>
+</dialog>
+<dialog id="signOutDialog">
+  <div class="dlg-head"><h3>Sign out of Google</h3><button type="button" class="link" data-close>✕</button></div>
+  <div class="dlg-body" id="signOutBody"></div>
+  <div class="dlg-foot"><button type="button" data-close>Cancel</button><button type="button" class="primary" id="signOutConfirmBtn">Sign out</button></div>
+</dialog>
 
 <!-- Patient dialog -->
 <dialog id="patientDialog">
@@ -2056,15 +2121,23 @@ function analyzeSession(session, liveMatches) {
 
 /* =====================================================================
    STORAGE (IndexedDB, falls back to localStorage, then memory)
+   Namespaced: "" = local-only (not signed in, the original database);
+   "g_<google sub>" = offline cache for one Google account, so two
+   practitioners sharing a device never see each other's records.
    ===================================================================== */
+const DB_BASE = "tcm-consult-assistant";
 const DB = {
-  mode: "memory", db: null, mem: { patients: {}, visits: {}, meta: {} },
+  mode: "memory", db: null, ns: "", memAll: {}, mem: null,
   STORES: ["patients", "visits", "meta"],
-  async init() {
+  dbName(ns) { return ns ? DB_BASE + "::" + ns : DB_BASE; },
+  async init(ns = "") {
+    if (this.db) { try { this.db.close(); } catch {} this.db = null; }
+    this.ns = ns;
+    this.mem = this.memAll[ns] || (this.memAll[ns] = { patients: {}, visits: {}, meta: {} });
     try {
       if (!window.indexedDB) throw new Error("IndexedDB unavailable");
       this.db = await new Promise((resolve, reject) => {
-        const req = indexedDB.open("tcm-consult-assistant", 1);
+        const req = indexedDB.open(this.dbName(ns), 1);
         req.onupgradeneeded = () => {
           const db = req.result;
           if (!db.objectStoreNames.contains("patients")) db.createObjectStore("patients", { keyPath: "id" });
@@ -2076,6 +2149,7 @@ const DB = {
         req.onblocked = () => reject(new Error("IndexedDB blocked"));
         setTimeout(() => reject(new Error("IndexedDB open timeout")), 4000);
       });
+      this.db.onversionchange = () => { try { this.db.close(); } catch {} };
       this.mode = "indexeddb";
     } catch (err) {
       console.warn("IndexedDB failed, falling back:", err);
@@ -2084,8 +2158,16 @@ const DB = {
     }
     return this.mode;
   },
-  _ls(store) { try { return JSON.parse(localStorage.getItem("tcm_" + store) || "{}"); } catch { return {}; } },
-  _lsSave(store, obj) { localStorage.setItem("tcm_" + store, JSON.stringify(obj)); },
+  // remove one namespace's cache completely (used by "Sign out and remove cached records")
+  async destroy(ns) {
+    if (!ns) return;
+    delete this.memAll[ns];
+    try { for (const st of this.STORES) localStorage.removeItem(this._lsKey(st, ns)); } catch {}
+    if (window.indexedDB) await new Promise(res => { const r = indexedDB.deleteDatabase(this.dbName(ns)); r.onsuccess = r.onerror = r.onblocked = () => res(); setTimeout(res, 3000); });
+  },
+  _lsKey(store, ns = this.ns) { return "tcm_" + (ns ? ns + "_" : "") + store; },
+  _ls(store) { try { return JSON.parse(localStorage.getItem(this._lsKey(store)) || "{}"); } catch { return {}; } },
+  _lsSave(store, obj) { localStorage.setItem(this._lsKey(store), JSON.stringify(obj)); },
   _tx(store, mode, fn) {
     return new Promise((resolve, reject) => {
       const tx = this.db.transaction(store, mode);
@@ -2575,7 +2657,7 @@ function openVisit(vid) {
 
 function buildVisitRecord() {
   const s = state.session, a = analyzeSession(s);
-  return {
+  const rec = {
     id: s.id, patientId: s.patientId, startedAt: s.startedAt, savedAt: new Date().toISOString(), lang: s.lang,
     transcript: s.entries.map(e => e.text).join("\n\n"),
     entries: s.entries.map(e => ({ id: e.id, ts: e.ts, lastTs: e.lastTs || e.ts, src: e.src, text: e.text })),
@@ -2586,6 +2668,8 @@ function buildVisitRecord() {
     notes: s.notes, diagnosis: s.diagnosis,
     ai: s.ai || null
   };
+  rec.updatedAt = rec.savedAt;
+  return rec;
 }
 async function saveSession() {
   const s = state.session;
@@ -2595,7 +2679,7 @@ async function saveSession() {
   }
   const rec = buildVisitRecord();
   try {
-    await DB.put("visits", rec);
+    await dataPut("visits", rec);
     const i = state.visits.findIndex(v => v.id === rec.id);
     if (i >= 0) state.visits[i] = rec; else state.visits.push(rec);
     s.savedAt = rec.savedAt; s.dirty = false;
@@ -2625,7 +2709,7 @@ async function savePatientFromForm() {
   const now = new Date().toISOString();
   let p = editingPatientId ? patientById(editingPatientId) : null;
   p = p ? { ...p, ...data, updatedAt: now } : { id: uid(), ...data, createdAt: now, updatedAt: now };
-  await DB.put("patients", p);
+  await dataPut("patients", p);
   const i = state.patients.findIndex(x => x.id === p.id);
   if (i >= 0) state.patients[i] = p; else state.patients.push(p);
   selectPatient(p.id);
@@ -2641,8 +2725,8 @@ async function deletePatient(id) {
   const p = patientById(id); if (!p) return;
   const vs = state.visits.filter(v => v.patientId === id);
   if (!confirm(`Delete patient “${p.name}” and ${vs.length} visit record(s)? This cannot be undone.\n\nTip: export a JSON backup first.`)) return;
-  await DB.del("patients", id);
-  for (const v of vs) await DB.del("visits", v.id);
+  await dataDel("patients", id);
+  for (const v of vs) await dataDel("visits", v.id);
   state.patients = state.patients.filter(x => x.id !== id);
   state.visits = state.visits.filter(v => v.patientId !== id);
   if (state.session.patientId === id) { state.session = newSession(null); clearDraft(); }
@@ -2653,7 +2737,7 @@ async function deletePatient(id) {
 async function deleteVisit(vid) {
   const v = state.visits.find(x => x.id === vid); if (!v) return;
   if (!confirm(`Delete the visit from ${fmtDateTime(v.startedAt)}? This cannot be undone.`)) return;
-  await DB.del("visits", vid);
+  await dataDel("visits", vid);
   state.visits = state.visits.filter(x => x.id !== vid);
   if (state.session.id === vid) state.session.dirty = true;
   renderPatients(); renderProfile(); renderSessionInfo();
@@ -2677,8 +2761,10 @@ async function importData(text) {
   if (!data || !Array.isArray(data.patients) || !Array.isArray(data.visits)) { alert("Unrecognised file: expected { patients: [...], visits: [...] }."); return; }
   if (!confirm(`Import ${data.patients.length} patients and ${data.visits.length} visits?\nRecords with the same ID will be overwritten; others are kept.`)) return;
   let np = 0, nv = 0;
-  for (const p of data.patients) if (p && p.id && p.name) { await DB.put("patients", p); np++; }
-  for (const v of data.visits) if (v && v.id && v.patientId) { await DB.put("visits", v); nv++; }
+  const now = new Date().toISOString();   // an explicit import overrides older copies (also in Google Drive)
+  for (const p of data.patients) if (p && p.id && p.name) { await DB.put("patients", { ...p, updatedAt: now }); np++; }
+  for (const v of data.visits) if (v && v.id && v.patientId) { await DB.put("visits", { ...v, updatedAt: now }); nv++; }
+  markDataChanged();
   await loadData();
   renderAll();
   toast(`Imported ${np} patients, ${nv} visits`);
@@ -2906,8 +2992,10 @@ const AI = {
   defaultModel: "grok-4.7",
   timeoutMs: 180000,
   controller: null, busy: false,
-  get key() { try { return localStorage.getItem("tcm_xai_key") || ""; } catch { return ""; } },
-  set key(v) { try { v ? localStorage.setItem("tcm_xai_key", v) : localStorage.removeItem("tcm_xai_key"); } catch {} },
+  // device-local only, never synced; separate per signed-in Google account on a shared device
+  get keyName() { return "tcm_xai_key" + (DB.ns ? "::" + DB.ns : ""); },
+  get key() { try { return localStorage.getItem(AI.keyName) || ""; } catch { return ""; } },
+  set key(v) { try { v ? localStorage.setItem(AI.keyName, v) : localStorage.removeItem(AI.keyName); } catch {} },
   get model() { try { return localStorage.getItem("tcm_xai_model") || AI.defaultModel; } catch { return AI.defaultModel; } },
   set model(v) { try { localStorage.setItem("tcm_xai_model", v || AI.defaultModel); } catch {} }
 };
@@ -3178,6 +3266,7 @@ function bindAIEvents() {
     e.preventDefault();
     AI.key = $("#aiKeyInput").value.trim();
     AI.model = $("#aiModelInput").value.trim() || AI.defaultModel;
+    saveSettings();
     $("#aiSettingsDialog").close();
     toast(AI.key ? "AI settings saved" : "AI settings saved (no key)");
   });
@@ -3188,6 +3277,490 @@ function bindAIEvents() {
   $("#aiCancelBtn").onclick = () => { if (AI.controller) AI.controller.abort("user"); };
   $("#aiCopyBtn").onclick = () => state.session.ai && copyText(state.session.ai.content);
   $("#aiCopyPanelBtn").onclick = () => state.session.ai && copyText(state.session.ai.content);
+}
+
+/* =====================================================================
+   GOOGLE SIGN-IN + GOOGLE DRIVE STORAGE (optional)
+   - Dormant while GOOGLE_CLIENT_ID (config block at the top of the file) is "".
+   - Google Identity Services token model, browser only, no client secret.
+   - Scope drive.file: the app can only see files it created itself.
+   - Each practitioner's records live in THEIR OWN Drive:
+       My Drive / "TCM Consult Assistant" / tcm-consult-data.json
+     holding patients, visits (incl. AI responses), deletion tombstones and
+     settings. The xAI API key is never written to Drive.
+   - IndexedDB keeps an offline cache per Google account (DB namespace
+     "g_<sub>"); local-only mode uses the original un-namespaced database.
+   - Sync = download → merge per record (id + updatedAt, last write wins,
+     tombstones for deletes) → write local cache → upload if different.
+   ===================================================================== */
+const GAUTH = {
+  scope: "https://www.googleapis.com/auth/drive.file openid email profile",
+  gisUrl: "https://accounts.google.com/gsi/client",
+  drive: "https://www.googleapis.com/drive/v3",
+  upload: "https://www.googleapis.com/upload/drive/v3",
+  userinfo: "https://www.googleapis.com/oauth2/v3/userinfo",
+  folderName: "TCM Consult Assistant",
+  fileName: "tcm-consult-data.json",
+  appId: "tcm-consult-assistant",
+  debounceMs: 1500,
+  pullEveryMs: 5 * 60 * 1000
+};
+const Cloud = {
+  configured: typeof GOOGLE_CLIENT_ID === "string" && GOOGLE_CLIENT_ID.trim() !== "",
+  account: null, token: null, tokenExp: 0, tokenClient: null, gisPromise: null,
+  status: "local", detail: "", lastSyncAt: null, folderId: null,
+  timer: null, running: null, again: false, changeSeq: 0, pending: false, retryTimer: null, retryDelay: 0,
+  _tokCb: null, _tokErr: null
+};
+const LS_ACCOUNT = "tcm_google_account", LS_CHOICE = "tcm_auth_choice";
+function lsGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
+function lsSet(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} }
+function lastAccount() { try { const a = JSON.parse(lsGet(LS_ACCOUNT) || "null"); return a && a.sub ? a : null; } catch { return null; } }
+const nsFor = acc => acc ? "g_" + String(acc.sub).replace(/[^\w.-]/g, "_") : "";
+
+/* ---------- Google Identity Services ---------- */
+function loadGIS() {
+  if (window.google && google.accounts && google.accounts.oauth2) return Promise.resolve();
+  if (Cloud.gisPromise) return Cloud.gisPromise;
+  Cloud.gisPromise = new Promise((resolve, reject) => {
+    const sc = document.createElement("script");
+    sc.src = GAUTH.gisUrl; sc.async = true; sc.defer = true;
+    const t = setTimeout(() => reject(new Error("gis_load_timeout")), 20000);
+    sc.onload = () => { const wait = Date.now(); (function chk() { if (window.google && google.accounts && google.accounts.oauth2) { clearTimeout(t); resolve(); } else if (Date.now() - wait > 5000) { clearTimeout(t); reject(new Error("gis_unavailable")); } else setTimeout(chk, 50); })(); };
+    sc.onerror = () => { clearTimeout(t); reject(new Error("gis_load_failed")); };
+    document.head.appendChild(sc);
+  }).catch(e => { Cloud.gisPromise = null; throw e; });
+  return Cloud.gisPromise;
+}
+// mode: "silent" (prompt:'' + login_hint), "reconnect" (user click, same account), "select" (user click, choose account)
+async function requestToken(mode) {
+  await loadGIS();
+  if (!Cloud.tokenClient) Cloud.tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID.trim(), scope: GAUTH.scope,
+    callback: r => Cloud._tokCb && Cloud._tokCb(r),
+    error_callback: e => Cloud._tokErr && Cloud._tokErr(e)
+  });
+  if (Cloud._tokErr) Cloud._tokErr({ type: "superseded" });
+  return new Promise((resolve, reject) => {
+    const done = () => { clearTimeout(t); Cloud._tokCb = Cloud._tokErr = null; };
+    const t = setTimeout(() => { done(); reject(new Error("token_timeout")); }, mode === "silent" ? 20000 : 180000);
+    Cloud._tokCb = r => {
+      done();
+      if (!r || !r.access_token) return reject(new Error((r && r.error) || "no_token"));
+      if (r.scope && !/drive\.file/.test(r.scope)) return reject(new Error("drive_permission_not_granted"));
+      Cloud.token = r.access_token; Cloud.tokenExp = Date.now() + (Math.max(120, +r.expires_in || 3600) - 90) * 1000;
+      resolve(r.access_token);
+    };
+    Cloud._tokErr = e => { done(); reject(new Error((e && e.type) || "popup_error")); };
+    const opt = { prompt: mode === "select" ? "select_account" : "" };
+    const hint = mode === "select" ? "" : (Cloud.account && Cloud.account.email) || "";
+    if (hint) opt.login_hint = hint;
+    try { Cloud.tokenClient.requestAccessToken(opt); } catch (e) { done(); reject(e); }
+  });
+}
+async function ensureToken() {
+  if (Cloud.token && Date.now() < Cloud.tokenExp) return Cloud.token;
+  Cloud.token = null;
+  return requestToken("silent");
+}
+async function gfetch(url, opt = {}, retried = false) {
+  const tok = await ensureToken();
+  const res = await fetch(url, { ...opt, headers: { ...(opt.headers || {}), Authorization: "Bearer " + tok } });
+  if (res.status === 401 && !retried) { Cloud.token = null; return gfetch(url, opt, true); }   // expired → one silent refresh
+  if (!res.ok) { const err = new Error(`Google API ${res.status}`); err.status = res.status; try { err.body = await res.text(); } catch {} throw err; }
+  return res;
+}
+const gjson = async (url, opt) => (await gfetch(url, opt)).json();
+async function fetchUserInfo(tok) {
+  const r = await fetch(GAUTH.userinfo, { headers: { Authorization: "Bearer " + tok } });
+  if (!r.ok) { const e = new Error("userinfo " + r.status); e.status = r.status; throw e; }
+  const u = await r.json();
+  if (!u.sub) throw new Error("no_account_id");
+  return { sub: String(u.sub), email: u.email || "", name: u.name || u.email || "", picture: u.picture || "" };
+}
+
+/* ---------- Drive REST v3 ---------- */
+const qEsc = s => s.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+async function driveList(q) {
+  const u = `${GAUTH.drive}/files?q=${encodeURIComponent(q)}&spaces=drive&orderBy=modifiedTime%20desc&pageSize=20&fields=${encodeURIComponent("files(id,name,parents,modifiedTime)")}`;
+  return (await gjson(u)).files || [];
+}
+async function driveFindDataFile() {
+  const files = await driveList(`name='${qEsc(GAUTH.fileName)}' and trashed=false`);
+  return files[0] || null;
+}
+async function driveEnsureFolder() {
+  const found = await driveList(`name='${qEsc(GAUTH.folderName)}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  if (found.length) return found[0].id;
+  const f = await gjson(`${GAUTH.drive}/files?fields=id`, { method: "POST", headers: { "Content-Type": "application/json; charset=UTF-8" },
+    body: JSON.stringify({ name: GAUTH.folderName, mimeType: "application/vnd.google-apps.folder", description: "Created by TCM Consult Assistant — your patient records (only this app and you can use them)." }) });
+  return f.id;
+}
+async function driveCreateDataFile(folderId, doc) {
+  const b = "tcm_" + uid();
+  const meta = { name: GAUTH.fileName, mimeType: "application/json", parents: [folderId], appProperties: { tcmConsult: "data" }, description: "TCM Consult Assistant data (patients, visits). Do not edit by hand." };
+  const body = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(doc)}\r\n--${b}--`;
+  return gjson(`${GAUTH.upload}/files?uploadType=multipart&fields=id,parents,modifiedTime`, { method: "POST", headers: { "Content-Type": `multipart/related; boundary=${b}` }, body });
+}
+async function driveDownload(id) { return (await gfetch(`${GAUTH.drive}/files/${encodeURIComponent(id)}?alt=media`)).json(); }
+async function driveUpdate(id, doc) {
+  return gjson(`${GAUTH.upload}/files/${encodeURIComponent(id)}?uploadType=media&fields=id,modifiedTime`, { method: "PATCH", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify(doc) });
+}
+
+/* ---------- local data helpers (all record writes go through these) ---------- */
+const recTime = r => (r && (r.updatedAt || r.savedAt || r.createdAt)) || "";
+async function getTombstones() { const t = await DB.get("meta", "tombstones"); return (t && t.map) || {}; }
+async function dataPut(kind, rec) {
+  if (!rec.updatedAt) rec.updatedAt = new Date().toISOString();
+  await DB.put(kind, rec);
+  markDataChanged();
+}
+async function dataDel(kind, id) {
+  await DB.del(kind, id);
+  const map = await getTombstones(); map[kind + "/" + id] = new Date().toISOString();
+  await DB.put("meta", { id: "tombstones", map });
+  markDataChanged();
+}
+function currentSettings() { return { lang: $("#langSel").value, aiModel: AI.model }; }
+async function saveSettings() {
+  const data = { ...currentSettings(), updatedAt: new Date().toISOString() };
+  try { await DB.put("meta", { id: "settings", data }); markDataChanged(); } catch (e) { console.warn(e); }
+}
+function applySettings(s) {
+  if (!s) return;
+  if (s.lang && [...$("#langSel").options].some(o => o.value === s.lang)) { $("#langSel").value = s.lang; lsSet("tcm_lang", s.lang); if (state.session && !sessionHasContent(state.session)) state.session.lang = s.lang; }
+  if (s.aiModel) AI.model = s.aiModel;
+}
+function markDataChanged() {
+  if (!Cloud.account) return;
+  Cloud.changeSeq++; Cloud.pending = true;
+  DB.put("meta", { id: "syncPending", pending: true, at: new Date().toISOString() }).catch(() => {});
+  if (Cloud.status !== "reauth") setSync(navigator.onLine ? "saving" : "offline");
+  scheduleSync();
+}
+function scheduleSync(ms = GAUTH.debounceMs) {
+  if (!Cloud.account) return;
+  clearTimeout(Cloud.timer);
+  Cloud.timer = setTimeout(() => syncNow(), ms);
+}
+
+/* ---------- merge (pure) ---------- */
+function mergeDocs(a, b) {
+  a = a || {}; b = b || {};
+  const deleted = { ...(a.deleted || {}) };
+  for (const [k, t] of Object.entries(b.deleted || {})) if (!deleted[k] || t > deleted[k]) deleted[k] = t;
+  const out = { deleted };
+  for (const kind of ["patients", "visits"]) {
+    const m = new Map();
+    for (const r of [...(a[kind] || []), ...(b[kind] || [])]) {
+      if (!r || !r.id) continue;
+      const cur = m.get(r.id);
+      if (!cur || recTime(r) > recTime(cur)) m.set(r.id, r);           // last write wins (ties keep the local copy)
+    }
+    out[kind] = [...m.values()].filter(r => { const t = deleted[kind + "/" + r.id]; return !t || recTime(r) > t; });
+    for (const r of out[kind]) delete deleted[kind + "/" + r.id];        // edited after the delete → record revived
+  }
+  const cutoff = new Date(Date.now() - 400 * 864e5).toISOString();
+  for (const [k, t] of Object.entries(deleted)) if (t < cutoff) delete deleted[k];
+  const sa = a.settings, sb = b.settings;
+  out.settings = !sa ? (sb || null) : !sb ? sa : ((sb.updatedAt || "") > (sa.updatedAt || "") ? sb : sa);
+  return out;
+}
+function docSignature(d) {
+  if (!d) return "";
+  const parts = [];
+  for (const kind of ["patients", "visits"]) for (const r of d[kind] || []) parts.push(kind + "/" + r.id + "@" + recTime(r));
+  for (const [k, t] of Object.entries(d.deleted || {})) parts.push("x:" + k + "@" + t);
+  parts.push("s@" + ((d.settings && d.settings.updatedAt) || ""));
+  return parts.sort().join("|");
+}
+async function localDoc() {
+  const s = await DB.get("meta", "settings");
+  return { patients: await DB.all("patients"), visits: await DB.all("visits"), deleted: await getTombstones(), settings: (s && s.data) || null };
+}
+// write the merged result into the local cache, never overwriting a newer local edit
+async function applyToLocal(merged) {
+  let changed = false;
+  for (const kind of ["patients", "visits"]) {
+    const keep = new Set(merged[kind].map(r => r.id));
+    for (const r of merged[kind]) {
+      const cur = await DB.get(kind, r.id);
+      if (!cur || recTime(r) > recTime(cur)) { await DB.put(kind, r); changed = true; }
+    }
+    for (const cur of await DB.all(kind)) {
+      const t = merged.deleted[kind + "/" + cur.id];
+      if (!keep.has(cur.id) && t && t >= recTime(cur)) { await DB.del(kind, cur.id); changed = true; }
+    }
+  }
+  const lt = await getTombstones();
+  await DB.put("meta", { id: "tombstones", map: { ...lt, ...merged.deleted } });
+  const ls = await DB.get("meta", "settings");
+  if (merged.settings && (!ls || !ls.data || (merged.settings.updatedAt || "") > (ls.data.updatedAt || ""))) { await DB.put("meta", { id: "settings", data: merged.settings }); applySettings(merged.settings); }
+  if (changed) {
+    await loadData();
+    if (state.selectedPatientId && !patientById(state.selectedPatientId)) state.selectedPatientId = null;
+    renderPatients(); renderProfile(); renderSessionInfo();
+  }
+  return changed;
+}
+
+/* ---------- sync ---------- */
+function syncNow() {
+  if (!Cloud.account) return Promise.resolve();
+  clearTimeout(Cloud.timer);
+  if (Cloud.running) { Cloud.again = true; return Cloud.running; }
+  Cloud.running = (async () => {
+    if (!navigator.onLine) { setSync("offline"); return; }
+    const acc = Cloud.account, seq = Cloud.changeSeq;
+    if (Cloud.pending) setSync("saving"); else if (Cloud.status !== "synced") setSync("connecting");
+    try {
+      const meta = (await DB.get("meta", "sync")) || { id: "sync" };
+      let fileId = meta.fileId || null, remote = null, folderId = meta.folderId || null;
+      if (fileId) { try { remote = await driveDownload(fileId); } catch (e) { if (e.status === 404) fileId = null; else throw e; } }
+      if (!fileId) { const f = await driveFindDataFile(); if (f) { fileId = f.id; folderId = (f.parents || [])[0] || folderId; remote = await driveDownload(fileId); } }
+      if (Cloud.account !== acc) return;                     // signed out / switched meanwhile
+      if (remote && remote.app !== GAUTH.appId) remote = null;
+      const merged = mergeDocs(await localDoc(), remote);
+      await applyToLocal(merged);
+      if (!remote || docSignature(merged) !== docSignature(remote)) {
+        const doc = { app: GAUTH.appId, format: 2, updatedAt: new Date().toISOString(), owner: acc.email,
+          note: "Created by TCM Consult Assistant in your own Google Drive. Contains patient records — keep private. The xAI API key is never stored here.",
+          patients: merged.patients, visits: merged.visits, deleted: merged.deleted, settings: merged.settings };
+        if (fileId) await driveUpdate(fileId, doc);
+        else { folderId = await driveEnsureFolder(); const f = await driveCreateDataFile(folderId, doc); fileId = f.id; }
+      }
+      if (Cloud.account !== acc) return;
+      Object.assign(meta, { fileId, folderId, lastSyncAt: new Date().toISOString() });
+      await DB.put("meta", meta);
+      Cloud.folderId = folderId; Cloud.lastSyncAt = meta.lastSyncAt; Cloud.retryDelay = 0; clearTimeout(Cloud.retryTimer);
+      if (Cloud.changeSeq === seq) { Cloud.pending = false; await DB.put("meta", { id: "syncPending", pending: false, at: meta.lastSyncAt }); }
+      setSync(Cloud.pending ? "saving" : "synced");
+    } catch (e) { if (Cloud.account === acc) handleSyncError(e); }
+  })().finally(() => {
+    Cloud.running = null;
+    if (Cloud.again) { Cloud.again = false; scheduleSync(200); }
+    else if (Cloud.pending && Cloud.status === "saving") scheduleSync(300);
+  });
+  return Cloud.running;
+}
+const AUTH_ERRORS = /popup|token|interaction_required|access_denied|consent|login_required|superseded|immediate_failed|drive_permission|gis_|no_token/i;
+function handleSyncError(e) {
+  console.warn("Drive sync:", e);
+  if (!navigator.onLine || e instanceof TypeError) { setSync("offline"); return retryLater(); }
+  if (e.status === 401 || (!e.status && AUTH_ERRORS.test(e.message || ""))) { Cloud.token = null; setSync("reauth", e.message); return; }
+  setSync("error", e.status ? `Google Drive error ${e.status}` : (e.message || "error"));
+  retryLater();
+}
+function retryLater() {
+  clearTimeout(Cloud.retryTimer);
+  Cloud.retryDelay = Math.min(Cloud.retryDelay ? Cloud.retryDelay * 2 : 15000, 300000);
+  Cloud.retryTimer = setTimeout(() => { if (Cloud.account && Cloud.status !== "reauth") syncNow(); }, Cloud.retryDelay);
+}
+
+/* ---------- account switching ---------- */
+async function switchNamespace(ns, carrySession) {
+  if (state.session && state.session.dirty && sessionHasContent(state.session) && state.session !== carrySession) await saveDraft();
+  clearTimeout(draftTimer);
+  const mode = await DB.init(ns);
+  await loadData();
+  let d = null; try { d = await DB.get("meta", "draft"); } catch {}
+  if (carrySession && sessionHasContent(carrySession)) state.session = carrySession;
+  else if (d && d.session && sessionHasContent(d.session)) {
+    state.session = { ...newSession(null), ...d.session, dirty: true };
+    state.session.entries = mergeLegacyEntries(state.session.entries);
+    toast("Restored unsaved session draft from " + fmtDateTime(d.at), 4000);
+  } else state.session = newSession(null);
+  const s = await DB.get("meta", "settings"); if (s && s.data) applySettings(s.data);
+  state.selectedPatientId = state.session.patientId && patientById(state.session.patientId) ? state.session.patientId : null;
+  state.interim = "";
+  updateStorageStatus(mode);
+  renderAll();
+  return mode;
+}
+async function activateAccount(acc, fromLocal) {
+  const carry = fromLocal && state.session && sessionHasContent(state.session) ? state.session : null;
+  const snap = fromLocal ? { patients: state.patients.slice(), visits: state.visits.slice() } : null;
+  Cloud.account = acc;
+  lsSet(LS_ACCOUNT, JSON.stringify(acc)); lsSet(LS_CHOICE, null);
+  if (carry) await saveDraft();                       // keep a copy in the local namespace too
+  await switchNamespace(nsFor(acc), carry);
+  const p = await DB.get("meta", "syncPending"); Cloud.pending = !!(p && p.pending);
+  const sm = await DB.get("meta", "sync"); Cloud.lastSyncAt = sm && sm.lastSyncAt; Cloud.folderId = sm && sm.folderId;
+  renderAuth();
+  const mig = await DB.get("meta", "migration");
+  if (snap && (snap.patients.length || snap.visits.length) && !mig) offerMigration(snap);
+  else if (carry && carry.patientId && !patientById(carry.patientId)) carry.patientId = null;
+  syncNow();
+}
+function offerMigration(snap) {
+  $("#migrateBody").innerHTML = `<p>This browser has <b>${snap.patients.length} patient${snap.patients.length === 1 ? "" : "s"}</b> and <b>${snap.visits.length} visit${snap.visits.length === 1 ? "" : "s"}</b> saved without signing in.</p>
+    <p>Copy them into <b>${esc(Cloud.account.email)}</b>'s Google Drive (folder “${esc(GAUTH.folderName)}”)? The local copy stays in this browser's not-signed-in storage.</p>
+    <p class="muted" style="font-size:12.5px">Only do this if these are your own records. You can also copy them later by exporting and importing a JSON backup.</p>`;
+  const dlg = $("#migrateDialog");
+  const finish = async copy => {
+    dlg.close();
+    const acc = Cloud.account; if (!acc) return;
+    await DB.put("meta", { id: "migration", decided: copy ? "copied" : "declined", at: new Date().toISOString(), counts: { patients: snap.patients.length, visits: snap.visits.length } });
+    if (copy) {
+      for (const r of snap.patients) { const cur = await DB.get("patients", r.id); if (!cur || recTime(r) > recTime(cur)) await DB.put("patients", r); }
+      for (const r of snap.visits) { const cur = await DB.get("visits", r.id); if (!cur || recTime(r) > recTime(cur)) await DB.put("visits", r); }
+      await loadData(); markDataChanged(); renderAll();
+      toast(`Copied ${snap.patients.length} patients and ${snap.visits.length} visits — saving to Google Drive…`, 4000);
+    } else if (state.session.patientId && !patientById(state.session.patientId)) { state.session.patientId = null; renderAll(); }
+  };
+  $("#migrateYesBtn").onclick = () => finish(true);
+  $("#migrateNoBtn").onclick = () => finish(false);
+  dlg.oncancel = e => { e.preventDefault(); };
+  if (!dlg.open) dlg.showModal();
+}
+async function signIn() {
+  if (!Cloud.configured) { openAccountDialog(); return; }
+  const fromLocal = !Cloud.account;
+  setSync("connecting");
+  try {
+    const tok = await requestToken(fromLocal ? "select" : "reconnect");
+    const acc = await fetchUserInfo(tok);
+    if (!fromLocal && acc.sub !== Cloud.account.sub) {
+      try { google.accounts.oauth2.revoke(tok, () => {}); } catch {}
+      Cloud.token = null;
+      setSync("reauth");
+      alert(`You picked ${acc.email}, but this device is signed in as ${Cloud.account.email}.\nSign out first to switch accounts.`);
+      return;
+    }
+    if ($("#accountDialog").open) $("#accountDialog").close();
+    if (fromLocal) { await activateAccount(acc, true); toast("Signed in as " + acc.email); }
+    else { Cloud.account = { ...Cloud.account, ...acc }; lsSet(LS_ACCOUNT, JSON.stringify(Cloud.account)); renderAuth(); await syncNow(); if (Cloud.status === "synced") toast("Reconnected to Google Drive"); }
+  } catch (e) {
+    console.warn("Sign-in:", e);
+    if (Cloud.account) setSync("reauth", e.message); else setSync("local");
+    const m = e.message || "";
+    toast(/popup_failed/.test(m) ? "The Google sign-in window was blocked — allow pop-ups for this site and try again." : /popup_closed|access_denied|superseded/.test(m) ? "Google sign-in was cancelled." : /drive_permission/.test(m) ? "Google Drive permission is needed to store records — please tick the Drive box when signing in." : "Google sign-in did not complete (" + m + ").", 5000);
+  }
+}
+function openSignOut() {
+  if (!Cloud.account) return;
+  const unsynced = Cloud.pending, draft = state.session.dirty && sessionHasContent(state.session);
+  $("#signOutBody").innerHTML = `<p>Sign out <b>${esc(Cloud.account.email)}</b> on this device?</p>
+    ${unsynced ? `<p class="acct-note" style="color:#8a4b00">Some changes are not in Google Drive yet. The app will try to save them first; if that fails they stay in this device's cache for this account.</p>` : ""}
+    ${draft ? `<p class="acct-note">The unsaved session in progress is kept as a draft for this account (on this device).</p>` : ""}
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="checkbox" id="signOutClear"> <span>Also remove this account's cached records from this device (recommended on a shared computer). Your Google Drive copy is not affected.</span></label>`;
+  $("#signOutConfirmBtn").onclick = async () => {
+    const clear = $("#signOutClear").checked;
+    if (clear && (Cloud.pending || draft) && !confirm("Unsynced changes or an unsaved draft on this device will be deleted with the cache. Continue?")) return;
+    $("#signOutDialog").close();
+    await signOut(clear);
+  };
+  $("#signOutDialog").showModal();
+}
+async function signOut(clearCache) {
+  const acc = Cloud.account; if (!acc) return;
+  if (Cloud.pending && navigator.onLine && Cloud.token) { try { await syncNow(); } catch {} }
+  if (Cloud.running) { try { await Cloud.running; } catch {} }
+  if (state.session.dirty && sessionHasContent(state.session)) await saveDraft();
+  const tok = Cloud.token;
+  Cloud.account = null; Cloud.token = null; Cloud.tokenExp = 0; Cloud.pending = false; Cloud.lastSyncAt = null; Cloud.folderId = null;
+  clearTimeout(Cloud.timer); clearTimeout(Cloud.retryTimer);
+  if (tok) { try { google.accounts.oauth2.revoke(tok, () => {}); } catch {} }
+  lsSet(LS_ACCOUNT, null);
+  await switchNamespace("", null);                   // never carry one practitioner's session into another's space
+  if (clearCache) { await DB.destroy(nsFor(acc)); lsSet("tcm_xai_key::" + nsFor(acc), null); }
+  setSync(Cloud.configured ? "local" : "notconfigured");
+  toast(`Signed out ${acc.email}${clearCache ? " and removed its cached records from this device" : ""}.`, 4000);
+}
+
+/* ---------- UI ---------- */
+const SYNC_TEXT = { local: "Local only", notconfigured: "Google sign-in not configured yet", connecting: "Connecting…", saving: "Saving…", synced: "Synced", offline: "Offline, will sync", reauth: "Sign in again", error: "Sync error — will retry" };
+function setSync(st, detail = "") { Cloud.status = st; Cloud.detail = detail; renderAuth(); if ($("#accountDialog").open) renderAccountDialog(); }
+const G_LOGO = `<svg class="g" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.2l7.9 6.2C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.8c4.3-4 6.9-9.9 6.9-17.2z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.2C1 16.6 0 20.2 0 24s1 7.4 2.7 10.8l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.8c-2.1 1.4-4.8 2.3-8.5 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.2C6.6 42.6 14.6 48 24 48z"/></svg>`;
+function avatarHTML(acc, lg) {
+  const ini = esc(((acc.name || acc.email || "?").trim()[0] || "?").toUpperCase());
+  return acc.picture ? `<img class="avatar${lg ? " lg" : ""}" src="${esc(acc.picture)}" alt="" referrerpolicy="no-referrer" onerror="this.outerHTML='<span class=&quot;avatar${lg ? " lg" : ""}&quot;>${ini}</span>'">` : `<span class="avatar${lg ? " lg" : ""}">${ini}</span>`;
+}
+function syncTitle() {
+  if (Cloud.status === "synced" && Cloud.lastSyncAt) return "Saved in your Google Drive · last sync " + fmtDateTime(Cloud.lastSyncAt);
+  if (Cloud.status === "offline") return "No connection — changes are kept on this device and uploaded when you are back online";
+  if (Cloud.status === "reauth") return "Google access expired or was blocked — click Reconnect Google. Your work is kept on this device.";
+  if (Cloud.status === "notconfigured") return "Google sign-in is not configured yet — records are stored only in this browser";
+  if (Cloud.status === "local") return "Not signed in — records are stored only in this browser";
+  return Cloud.detail || "";
+}
+function renderAuth() {
+  const el = $("#authArea"); if (!el) return;
+  const st = Cloud.status, chip = `<span class="sync-chip ${st}" id="syncChip" title="${esc(syncTitle())}">${esc(SYNC_TEXT[st] || st)}</span>`;
+  let html;
+  if (!Cloud.configured) html = `<button class="sync-chip notconfigured" id="syncChip" data-acct-open title="${esc(syncTitle())}">${esc(SYNC_TEXT.notconfigured)}</button>`;
+  else if (!Cloud.account) html = `<button class="gbtn" data-signin title="Store your records in your own Google Drive">${G_LOGO}<span>Sign in with Google</span></button>${chip}`;
+  else html = `<button class="acct-btn" data-acct-open title="${esc(Cloud.account.name)} — ${esc(Cloud.account.email)}">${avatarHTML(Cloud.account)}<span class="em">${esc(Cloud.account.email)}</span></button>${chip}${st === "reauth" ? `<button class="small primary" data-reconnect>Reconnect Google</button>` : ""}`;
+  setHTML(el, html);
+}
+function updateStorageStatus(mode = DB.mode) {
+  const el = $("#storageStatus"); if (!el) return;
+  if (Cloud.account) el.textContent = `Signed in as ${Cloud.account.email} — records saved in your Google Drive (folder “${GAUTH.folderName}”) with an offline copy in this browser.`;
+  else el.textContent = mode === "indexeddb" ? "Records stored locally in this browser (IndexedDB) — export regularly as backup."
+    : mode === "localstorage" ? "IndexedDB unavailable — records stored in localStorage (limited size). Export regularly."
+    : "⚠ Browser storage unavailable — records will be lost when the page closes. Use Export.";
+}
+function renderAccountDialog() {
+  const b = $("#accountBody");
+  const perm = `<div class="acct-note">Your records are saved in <b>your own Google Drive</b>, in a folder named “${esc(GAUTH.folderName)}” (one file, <code>${esc(GAUTH.fileName)}</code>). The app asks only for the <b>drive.file</b> permission, so it can see <b>only the files it created</b> — not the rest of your Drive. Nothing is sent to the app developer. The xAI API key stays on this device. <a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></div>`;
+  if (!Cloud.configured) {
+    b.innerHTML = `<p><b>Google sign-in not configured yet.</b></p><p>The app is working in <b>local-only mode</b>: records are stored in this browser (IndexedDB). Use <i>Export all data</i> regularly as a backup.</p>
+      <div class="acct-note">When the developer adds a Google OAuth client ID, each practitioner will be able to sign in with their own Google account and keep their records in their own Google Drive.</div>`;
+  } else if (!Cloud.account) {
+    b.innerHTML = `<p>Sign in with <b>your own Google account</b> to keep your patient records in your Google Drive and open them on any device. Each practitioner signs in separately and sees only their own records.</p>${perm}
+      <div class="acct-actions"><button class="gbtn" data-signin>${G_LOGO}<span>Sign in with Google</span></button><button id="useLocalBtn">Use without signing in</button></div>
+      <p class="muted" style="font-size:12px;margin-top:10px">Without signing in, records stay only in this browser (export regularly).</p>`;
+  } else {
+    const a = Cloud.account;
+    b.innerHTML = `<div class="acct-card">${avatarHTML(a, true)}<div><div class="nm">${esc(a.name)}</div><div class="em">${esc(a.email)}</div></div></div>
+      <div class="acct-kv"><div><b>Status</b><span class="sync-chip ${Cloud.status}">${esc(SYNC_TEXT[Cloud.status])}</span></div>
+      <div><b>Last synced</b>${Cloud.lastSyncAt ? esc(fmtDateTime(Cloud.lastSyncAt)) : "—"}</div>
+      <div><b>Records</b>${state.patients.length} patient${state.patients.length === 1 ? "" : "s"} · ${state.visits.length} visit${state.visits.length === 1 ? "" : "s"}</div></div>${perm}
+      <div class="acct-actions">${Cloud.status === "reauth" ? `<button class="primary" data-reconnect>Reconnect Google</button>` : `<button id="syncNowBtn">Sync now</button>`}
+      ${Cloud.folderId ? `<a class="btnlink" href="https://drive.google.com/drive/folders/${encodeURIComponent(Cloud.folderId)}" target="_blank" rel="noopener">Open Drive folder</a>` : ""}
+      <button class="danger" id="signOutBtn">Sign out…</button></div>`;
+  }
+}
+function openAccountDialog() { renderAccountDialog(); if (!$("#accountDialog").open) $("#accountDialog").showModal(); }
+function bindCloudEvents() {
+  const onClick = e => {
+    const t = e.target.closest("button,[data-acct-open]"); if (!t) return;
+    if (t.hasAttribute("data-signin")) { e.preventDefault(); signIn(); }
+    else if (t.hasAttribute("data-reconnect")) { e.preventDefault(); signIn(); }
+    else if (t.hasAttribute("data-acct-open")) openAccountDialog();
+    else if (t.id === "useLocalBtn") { lsSet(LS_CHOICE, "local"); $("#accountDialog").close(); setSync("local"); toast("Using local-only mode — records stay in this browser."); }
+    else if (t.id === "syncNowBtn") syncNow();
+    else if (t.id === "signOutBtn") { $("#accountDialog").close(); openSignOut(); }
+  };
+  $("#authArea").addEventListener("click", onClick);
+  $("#accountBody").addEventListener("click", onClick);
+  $("#accountMenuBtn").onclick = () => openAccountDialog();
+  window.addEventListener("online", () => { if (Cloud.account && Cloud.status !== "reauth") syncNow(); });
+  window.addEventListener("offline", () => { if (Cloud.account && Cloud.status !== "reauth") setSync("offline"); });
+  document.addEventListener("visibilitychange", () => {
+    if (!Cloud.account || Cloud.status === "reauth") return;
+    if (document.visibilityState === "hidden") { if (Cloud.pending) syncNow(); }
+    else if (Cloud.pending || !Cloud.lastSyncAt || Date.now() - new Date(Cloud.lastSyncAt).getTime() > 30000) syncNow();
+  });
+  setInterval(() => { if (Cloud.account && document.visibilityState === "visible" && Cloud.status === "synced") syncNow(); }, GAUTH.pullEveryMs);
+}
+// start-up: returns the namespace to open (last signed-in account, if any)
+function cloudBootNamespace() {
+  if (!Cloud.configured) { Cloud.status = "notconfigured"; return ""; }
+  loadGIS().catch(e => console.warn("Google Identity Services:", e.message));
+  const acc = lastAccount();
+  if (acc) { Cloud.account = acc; Cloud.status = "connecting"; return nsFor(acc); }
+  Cloud.status = "local"; return "";
+}
+async function cloudAfterBoot() {
+  renderAuth();
+  if (!Cloud.configured) return;
+  if (Cloud.account) {
+    const p = await DB.get("meta", "syncPending"); Cloud.pending = !!(p && p.pending);
+    const sm = await DB.get("meta", "sync"); Cloud.lastSyncAt = sm && sm.lastSyncAt; Cloud.folderId = sm && sm.folderId;
+    updateStorageStatus();
+    syncNow();                                     // silent token (prompt:'' + login_hint), then load/merge from Drive
+  } else if (lsGet(LS_CHOICE) !== "local") openAccountDialog();
 }
 
 /* =====================================================================
@@ -3203,6 +3776,7 @@ function bindEvents() {
   $("#langSel").onchange = () => {
     state.session.lang = $("#langSel").value;
     try { localStorage.setItem("tcm_lang", $("#langSel").value); } catch {}
+    saveSettings();
     if (state.listening && recognizer) { try { recognizer.stop(); } catch {} }  // onend restarts with the new language
     setListeningUI();
   };
@@ -3290,10 +3864,9 @@ async function init() {
   state.analysis = analyzeSession(state.session);
   renderLegend();
   bindEvents();
-  const mode = await DB.init();
-  $("#storageStatus").textContent = mode === "indexeddb" ? "Records stored locally in this browser (IndexedDB) — export regularly as backup."
-    : mode === "localstorage" ? "IndexedDB unavailable — records stored in localStorage (limited size). Export regularly."
-    : "⚠ Browser storage unavailable — records will be lost when the page closes. Use Export.";
+  bindCloudEvents();
+  const mode = await DB.init(cloudBootNamespace());
+  updateStorageStatus(mode);
   if (mode === "memory") banner("Browser storage is unavailable, so records are kept in memory only. Use <b>Export</b> to save a backup file.", "error");
   await loadData();
   try {
@@ -3306,14 +3879,16 @@ async function init() {
     }
   } catch (e) { console.warn(e); }
   if (!SR) banner("Live speech recognition is not available in this browser — use Chrome or Edge for live transcription. Typing/pasting notes still works.");
+  try { const st = await DB.get("meta", "settings"); if (st && st.data) applySettings(st.data); } catch {}
   renderAll();
   setListeningUI();
   window.__tcmReady = true;
+  cloudAfterBoot();
 }
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { FORMULAS, HERBS, HERB_FLAGS, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — TCM Consult Assistant</title>
+<style>
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;max-width:760px;margin:0 auto;padding:24px 18px 48px;line-height:1.6;color:#1f2d2a}
+h1{font-size:24px;margin-bottom:4px}h2{font-size:17px;margin-top:28px}
+.muted{color:#6b7a76;font-size:14px}a{color:#2f7d6d}code{background:#f1f4f3;padding:1px 4px;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>Privacy Policy — TCM Consult Assistant</h1>
+<p class="muted">Effective 26 September 2026 · App: <a href="https://geoffreysy.github.io/tcm-consult/">https://geoffreysy.github.io/tcm-consult/</a></p>
+
+<p>TCM Consult Assistant is a static web app for Traditional Chinese Medicine practitioners. It runs entirely in your web browser. There is no app server and no developer database: the developer never receives, stores or can see your patient records.</p>
+
+<h2>What data the app stores</h2>
+<ul>
+  <li>Patient details you enter (name, date of birth or age, sex, contact, notes).</li>
+  <li>Consultation records: typed or transcribed text, detected symptoms, tongue and pulse findings, pattern suggestions, practitioner notes, diagnosis/treatment, and any AI responses you requested.</li>
+  <li>App settings such as the speech-recognition language and AI model name.</li>
+</ul>
+
+<h2>Where it is stored</h2>
+<ul>
+  <li><b>In your browser</b> (IndexedDB on your device). When you are signed in with Google, this is an offline copy kept separately for each Google account, so practitioners sharing a device do not see each other's records.</li>
+  <li><b>In your own Google Drive</b>, only if you choose “Sign in with Google”: one file, <code>tcm-consult-data.json</code>, in a folder named “TCM Consult Assistant” in your My Drive. It is stored under your Google account and your Google privacy settings apply.</li>
+</ul>
+<p>The app requests only these Google permissions: <code>drive.file</code> (which lets the app create files and use only the files it created itself; it cannot see or change any other files in your Drive), and <code>openid email profile</code> (to show which account is signed in). Google sign-in uses Google Identity Services in your browser. Access tokens stay in the page's memory, expire after about an hour, and are revoked when you sign out.</p>
+
+<h2>What is sent to whom</h2>
+<ul>
+  <li><b>Nothing is sent to the developer.</b> The app has no analytics, advertising or tracking.</li>
+  <li><b>Google</b>: when you are signed in, your data file is sent to and from your own Google Drive using Google's APIs.</li>
+  <li><b>xAI (optional “Ask AI” feature)</b>: only when you press <i>Ask AI</i>, a de-identified case summary (patient name and contact details removed; transcript only if you tick that option) is sent directly from your browser to xAI's API using <i>your own</i> xAI API key. Your API key is stored only on your device (never in Google Drive). See xAI's privacy policy for how xAI handles requests.</li>
+  <li><b>Speech recognition</b>: live transcription uses your browser's built-in speech service (for example Google in Chrome), which processes the audio to produce text. The app does not record or store audio.</li>
+</ul>
+
+<h2>Your choices</h2>
+<ul>
+  <li>You can use the app without signing in; records then stay only in your browser.</li>
+  <li>You can export all data as a JSON file and import it again.</li>
+  <li>Sign out at any time; you can also remove that account's cached records from the device. You can delete the Drive folder yourself in Google Drive, and remove the app's access at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
+  <li>As a practitioner you are responsible for obtaining patient consent and complying with applicable law (in the Philippines, the Data Privacy Act of 2012).</li>
+</ul>
+
+<h2>Security</h2>
+<p>Data travels over HTTPS. Data in your browser is protected by your device and browser account; use a device lock and sign out on shared computers. The Google Drive file is protected by your Google account security.</p>
+
+<h2>Changes and contact</h2>
+<p>Changes to this policy will be posted on this page. Questions: contact the developer, <b>geoffreysy</b>, via GitHub — <a href="https://github.com/geoffreysy">github.com/geoffreysy</a> (or open an issue on the app's repository).</p>
+<p><a href="./">← Back to TCM Consult Assistant</a></p>
+</body>
+</html>
