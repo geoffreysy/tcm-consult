@@ -469,6 +469,52 @@ fieldset.direct-fields.off{opacity:.5}
   .pattern-strip .ps-ai{margin-left:auto}
   #aiPromptText{height:46vh;font-size:12.5px}
 }
+/* (v11) herbs list */
+.dx-field{display:flex;flex-direction:column;gap:3px;min-width:0}
+.dx-head{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.dx-head label{font-size:12px;color:var(--muted)}
+.dx-field textarea{resize:vertical;min-height:54px;height:62px}
+.herbs-btn{padding:2px 9px;font-size:12px;white-space:nowrap}
+dialog.herbs-dlg{height:min(88vh,860px);overflow:hidden}
+dialog.herbs-dlg[open]{display:flex;flex-direction:column}
+.hb-controls{padding:8px 14px 4px;border-bottom:1px solid var(--line);flex:none;background:#fff;position:relative;z-index:3}
+.hb-row1{display:flex;gap:8px;flex-wrap:wrap}
+.hb-row1 input{flex:1 1 240px;min-width:0}
+.hb-row1 select{flex:0 1 250px;min-width:0;max-width:100%}
+.hb-az{display:flex;flex-wrap:wrap;gap:2px;margin:6px 0 2px}
+.hb-az button{min-width:26px;height:28px;padding:0 4px;font-size:12.5px;font-weight:600;border-radius:5px;color:var(--accent);background:#f3faf7;border:1px solid #d3e7e0;touch-action:manipulation}
+.hb-az button:disabled{color:#c3ccca;background:#fafafa;border-color:#eee;cursor:default}
+.hb-count{font-size:11.5px;color:var(--muted)}
+.hb-list{flex:1 1 auto;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:0 14px 8px;position:relative}
+.hb-table{width:100%;min-width:0!important;border-collapse:separate;border-spacing:0}
+.hb-table thead th{position:sticky;top:0;background:#fff;z-index:1;box-shadow:0 1px 0 var(--line)}
+.hb-table td{vertical-align:top}
+.hb-table tr.hb-letter th{background:#eef6f3;color:#1f4f45;text-align:left;font-size:12.5px;padding:3px 8px;scroll-margin-top:30px}
+.hb-name b{font-weight:600}
+.hb-latin{font-size:11px;color:#6b7a76;font-style:italic}
+.hb-cat{font-size:12px;color:#44524f}
+.hb-dose{white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
+.hb-src{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.3px;border-radius:3px;padding:0 3px;vertical-align:1px}
+.hb-src-MM{background:#e1f0ea;color:#1f5d50}
+.hb-src-Fx{background:#fff1d6;color:#8a5a00}
+.hb-foot{flex:none;align-items:flex-end}
+.hb-legend{font-size:11px;color:var(--muted);margin-right:auto;line-height:1.35}
+.hb-legend-short{display:none}
+@media (max-width:760px){
+  dialog.herbs-dlg{width:100vw;max-width:100vw;height:94vh;max-height:94vh;margin:auto 0 0;border-radius:12px 12px 0 0}
+  .hb-controls{padding:6px 8px 4px}
+  .hb-row1 input,.hb-row1 select{font-size:16px;flex-basis:100%;min-height:36px}
+  .hb-az{gap:3px}
+  .hb-az button{min-width:32px;height:32px;font-size:13px}
+  .hb-list{padding:0 6px 8px}
+  .hb-table td,.hb-table th{padding:4px 4px}
+  .hb-table .hb-latin{display:block}
+  .hb-cat{font-size:11.5px}
+  .hb-legend-long{display:none}
+  .hb-legend-short{display:inline;font-size:11px}
+  .hb-foot{padding:6px 8px}
+  .herbs-btn{padding:6px 10px;min-height:32px}
+}
 </style>
 </head>
 <body>
@@ -493,6 +539,7 @@ fieldset.direct-fields.off{opacity:.5}
       <div class="menu-list">
         <button id="printBtn">🖨 Print / PDF summary of this visit</button>
         <button id="patternsRefBtn">📖 Patterns reference (knowledge base)</button>
+        <button id="herbsMenuBtn" data-open-herbs>🌿 Herbs — all herbs A–Z (add to Rx)</button>
         <button id="aiSettingsBtn">⚙ AI settings (Copy for AI / optional Grok)…</button>
         <button id="exportBtn">⬇ Export all data (JSON backup)</button>
         <button id="importBtn">⬆ Import data from JSON…</button>
@@ -542,7 +589,7 @@ fieldset.direct-fields.off{opacity:.5}
     </div>
     <div class="notes">
       <label>Practitioner notes<textarea id="notesInput" placeholder="Observations, history, plan…"></textarea></label>
-      <label>Final TCM diagnosis / treatment<textarea id="diagnosisInput" placeholder="Pattern differentiation, treatment principle, formula / points…"></textarea></label>
+      <div class="dx-field"><div class="dx-head"><label for="diagnosisInput">Final TCM diagnosis / treatment</label><button type="button" class="small herbs-btn" id="herbsBtn" data-open-herbs title="All herbs A–Z with TCM category and dose range — tap + to add to the Rx line">🌿 Herbs</button></div><textarea id="diagnosisInput" placeholder="Pattern differentiation, treatment principle, formula / points…"></textarea></div>
     </div>
   </section>
 
@@ -690,6 +737,21 @@ fieldset.direct-fields.off{opacity:.5}
     <div id="refList"></div>
   </div>
   <div class="dlg-foot"><span class="ref-legend">Read-only. ★ key sign · dark = weight 3, light = 2, plain = 1 · outlined = present in this session · red = argues against</span><button type="button" data-close>Close</button></div>
+</dialog>
+
+<!-- Herbs list (all herbs A–Z) -->
+<dialog id="herbsDialog" class="wide herbs-dlg" aria-labelledby="herbsTitle">
+  <div class="dlg-head"><h3 id="herbsTitle">🌿 Herbs — A–Z by pinyin</h3><button type="button" class="link" data-close aria-label="Close">✕</button></div>
+  <div class="hb-controls">
+    <div class="hb-row1">
+      <input type="search" id="herbSearch" placeholder="Search pinyin, Latin or category… (e.g. bai zhu, Poria, tonify yin)" autocomplete="off" spellcheck="false" enterkeyhint="search" aria-label="Search herbs">
+      <select id="herbCat" aria-label="Filter by TCM category"><option value="">All categories</option></select>
+    </div>
+    <div class="hb-az" id="herbAZ" role="navigation" aria-label="Jump to letter"></div>
+    <div class="hb-count" id="herbCount"></div>
+  </div>
+  <div class="hb-list" id="herbList"></div>
+  <div class="dlg-foot hb-foot"><span class="hb-legend hb-legend-short">Adult daily g · <span class="hb-src hb-src-MM">MM</span> Materia Medica · <span class="hb-src hb-src-Fx">Fx</span> formulas min–max · + adds typical dose (edit in field)</span><span class="hb-legend hb-legend-long">Dose = adult daily decoction range (g). <span class="hb-src hb-src-MM">MM</span> standard Materia Medica (Chinese Pharmacopoeia 2020 / Bensky 3rd ed.) · <span class="hb-src hb-src-Fx">Fx</span> no standard range stored — min–max across this app's formulas. + adds the typical dose (midpoint; low end for toxic / restricted herbs) — edit in the field. Verify before prescribing.</span><button type="button" data-close>Close</button></div>
 </dialog>
 
 <!-- Symptom picker -->
@@ -1548,6 +1610,53 @@ const HERBS = {
   "Zi Su Ye": ["Perillae Folium", "add near end", "Release exterior – warm acrid"],
   "Zi Su Zi": ["Perillae Fructus", "", "Relieve cough & wheezing"],
   "Zi Wan": ["Asteris Radix", "", "Relieve cough & wheezing"]
+};
+/* HERB_DOSE: standard ADULT daily decoction dose range per herb, in grams, from the standard
+   Materia Medica: Chinese Pharmacopoeia (2020) 用法用量 where listed, otherwise Bensky "Chinese Herbal
+   Medicine: Materia Medica" (3rd ed.). Format: pinyin -> [min, max] or [min, max, typical, unit].
+   Herbs not listed here (a few food/sub-part items) fall back to the min–max dose used across this
+   app's formulas and are labelled "Fx" instead of "MM" in the Herbs list. Verify before prescribing. */
+const HERB_DOSE = {
+  "Ba Dou": [0.1, 0.3], "Bai Bian Dou": [9, 15], "Bai He": [6, 12], "Bai Jie Zi": [3, 9], "Bai Kou Ren": [3, 6],
+  "Bai Shao": [6, 15], "Bai Tou Weng": [9, 15], "Bai Zhi": [3, 10], "Bai Zhu": [6, 12], "Bai Zi Ren": [3, 10],
+  "Ban Xia Qu": [6, 10], "Bei Sha Shen": [5, 12], "Bian Xu": [9, 15], "Bing Lang": [3, 10], "Bo He": [3, 6],
+  "Bu Gu Zhi": [6, 10], "Can Sha": [5, 15], "Cang Zhu": [3, 9], "Cao Dou Kou": [3, 6], "Chai Hu": [3, 10],
+  "Che Qian Zi": [9, 15], "Chen Pi": [3, 10], "Chen Xiang": [1, 5], "Chi Fu Ling": [9, 15], "Chi Shao": [6, 12],
+  "Chuan Bei Mu": [3, 10], "Chuan Bi Xie": [9, 15], "Chuan Lian Zi": [4.5, 9], "Chuan Niu Xi": [5, 10], "Chuan Xiong": [3, 10],
+  "Da Fu Pi": [5, 10], "Da Huang": [3, 15], "Da Zao": [6, 15], "Dai Zhe Shi": [9, 30], "Dan Dou Chi": [6, 12],
+  "Dan Nan Xing": [3, 6], "Dan Shen": [6, 15], "Dan Zhu Ye": [6, 10], "Dang Gui": [6, 12], "Dang Shen": [9, 30],
+  "Deng Xin Cao": [1, 3], "Di Gu Pi": [9, 15], "Ding Xiang": [1, 3], "Du Huo": [3, 10], "Du Zhong": [6, 10],
+  "E Jiao": [3, 9], "Fang Feng": [5, 10], "Feng Mi": [15, 30], "Fu Ling": [10, 15], "Fu Shen": [9, 15],
+  "Gan Cao": [2, 10], "Gan Jiang": [3, 10], "Gao Ben": [3, 10], "Gao Liang Jiang": [3, 6], "Ge Gen": [10, 15],
+  "Ge Jie": [3, 6], "Ge Ke": [6, 15], "Gou Qi Zi": [6, 12], "Gou Teng": [3, 12], "Gua Lou": [9, 15],
+  "Gua Lou Ren": [9, 15], "Gui Ban": [9, 24], "Gui Ban Jiao": [3, 9], "Gui Zhi": [3, 10], "Hai Feng Teng": [6, 12],
+  "Hai Zao": [6, 12], "Han Fang Ji": [5, 10], "Hong Hua": [3, 10], "Hou Po": [3, 10], "Hu Ma Ren": [9, 15],
+  "Hu Tao Ren": [6, 9], "Hua Shi": [10, 20], "Huai Niu Xi": [5, 12], "Huang Bai": [3, 12], "Huang Lian": [2, 5],
+  "Huang Qi": [9, 30], "Huang Qin": [3, 10], "Huo Ma Ren": [10, 15], "Huo Xiang": [3, 10], "Ji Zi Huang": [1, 2, 2, "yolks"],
+  "Jie Geng": [3, 10], "Jin Yin Hua": [6, 15], "Jing Jie": [5, 10], "Jing Mi": [15, 30], "Ju Hua": [5, 10],
+  "Kun Bu": [6, 12], "Lai Fu Zi": [5, 12], "Lian Qiao": [6, 15], "Lian Xu": [3, 5], "Lian Zi": [6, 15],
+  "Long Chi": [10, 15], "Long Dan Cao": [3, 6], "Long Gu": [15, 30], "Long Yan Rou": [9, 15], "Lu Gen": [15, 30],
+  "Lu Jiao Jiao": [3, 6], "Luo Shi Teng": [6, 12], "Ma Huang": [2, 10], "Mai Men Dong": [6, 12], "Mai Ya": [10, 15],
+  "Man Jing Zi": [5, 10], "Mang Xiao": [6, 12], "Mo Yao": [3, 5], "Mu Dan Pi": [6, 12], "Mu Gua": [6, 9],
+  "Mu Li": [9, 30], "Mu Tong": [3, 6], "Mu Xiang": [3, 6], "Niu Bang Zi": [6, 12], "Ou Jie": [9, 15],
+  "Pi Pa Ye": [6, 10], "Pu Huang": [5, 10], "Qian Hu": [3, 10], "Qian Shi": [9, 15], "Qiang Huo": [3, 10],
+  "Qin Jiao": [3, 10], "Qin Pi": [6, 12], "Qing Dai": [1, 3], "Qing Hao": [6, 12], "Qing Pi": [3, 10],
+  "Qu Mai": [9, 15], "Ren Shen": [3, 9], "Rou Dou Kou": [3, 10], "Rou Gui": [1, 5], "Ru Xiang": [3, 5],
+  "Sang Bai Pi": [6, 12], "Sang Ji Sheng": [9, 15], "Sang Piao Xiao": [5, 10], "Sang Ye": [5, 10], "Sang Zhi": [9, 15],
+  "Sha Ren": [3, 6], "Sha Shen": [9, 15], "Sha Yuan Zi": [9, 15], "Shan Yang Jiao": [15, 30], "Shan Yao": [15, 30],
+  "Shan Zha": [9, 12], "Shan Zhu Yu": [6, 12], "Shen Qu": [6, 15], "Sheng Di Huang": [10, 15], "Sheng Jiang": [3, 10],
+  "Sheng Ma": [3, 10], "Shi Chang Pu": [3, 10], "Shi Di": [5, 10], "Shi Gao": [15, 60], "Shi Hu": [6, 12],
+  "Shi Jue Ming": [6, 20], "Shu Di Huang": [9, 15], "Shui Niu Jiao": [15, 30], "Suan Zao Ren": [10, 15], "Tan Xiang": [2, 5],
+  "Tao Ren": [5, 10], "Tian Hua Fen": [10, 15], "Tian Ma": [3, 10], "Tian Men Dong": [6, 12], "Tong Cao": [3, 5],
+  "Tu Si Zi": [6, 12], "Wu Ling Zhi": [3, 10], "Wu Mei": [6, 12], "Wu Wei Zi": [2, 6], "Wu Yao": [6, 10],
+  "Wu Zhu Yu": [1.5, 4.5], "Xi Gua Cui Yi": [9, 30], "Xi Xin": [1, 3], "Xi Yang Shen": [3, 6], "Xiang Fu": [6, 10],
+  "Xiang Ru": [3, 10], "Xiao Hui Xiang": [3, 6], "Xiao Ji": [5, 12], "Xing Ren": [3, 10], "Xuan Fu Hua": [3, 9],
+  "Xuan Shen": [9, 15], "Yan Hu Suo": [3, 10], "Ye Jiao Teng": [9, 15], "Yi Mu Cao": [9, 30], "Yi Tang": [30, 60],
+  "Yi Yi Ren": [9, 30], "Yi Zhi Ren": [3, 10], "Yin Chen": [6, 15], "Yu Zhu": [6, 12], "Yuan Zhi": [3, 10],
+  "Ze Xie": [6, 10], "Zhe Bei Mu": [5, 10], "Zhi Ban Xia": [3, 9], "Zhi Chuan Wu": [1.5, 3], "Zhi Fu Zi": [3, 15],
+  "Zhi Gan Cao": [2, 10], "Zhi He Shou Wu": [6, 12], "Zhi Ke": [3, 10], "Zhi Mu": [6, 12], "Zhi Shi": [3, 10],
+  "Zhi Zi": [6, 10], "Zhu Ling": [6, 12], "Zhu Ru": [5, 10], "Zhu Ye": [6, 15], "Zi Su Ye": [5, 10],
+  "Zi Su Zi": [3, 10], "Zi Wan": [5, 10]
 };
 /* Safety flags. type: toxic | restricted | endangered | aristolochic | animal | pregnancy | interaction */
 const HERB_FLAGS = {
@@ -2614,6 +2723,102 @@ function rxPrintHTML(pid) {
     ${flags.length ? `<p><b>Flagged herbs:</b> ${flags.map(x => `${esc(x.herb)} (${esc(RX_FLAG_LABEL[x.type] || x.type)}): ${esc(x.text)}`).join("<br>")}</p>` : ""}
     ${(p.rx || []).length > 1 ? `<p><b>Alternatives:</b> ${p.rx.slice(1).map(a => esc(FORMULAS[a].name)).join("; ")}</p>` : ""}
     <div class="muted" style="font-size:10.5px">${esc(RX_DISCLAIMER)}</div>`;
+}
+
+/* ---------- Herbs list (all herbs A–Z, add single herbs to the custom Rx line) ---------- */
+const HERB_DOSE_SRC = {
+  MM: "Standard Materia Medica range (Chinese Pharmacopoeia 2020 / Bensky Materia Medica, 3rd ed.)",
+  Fx: "No standard range stored — min–max dose used across this app's formulas"
+};
+const HERB_CAUTION_TYPES = new Set(["toxic", "restricted", "aristolochic"]);
+let HERB_FX_RANGE = null;
+function herbFxRange(name) {
+  if (!HERB_FX_RANGE) {
+    HERB_FX_RANGE = {};
+    for (const id in FORMULAS) for (const s of FORMULAS[id].herbs) {
+      const h = parseRxHerb(s); if (h.unit !== "g") continue;
+      for (const x of String(h.dose).split("–").map(Number).filter(v => v > 0)) {
+        const r = HERB_FX_RANGE[h.name] || (HERB_FX_RANGE[h.name] = [x, x]);
+        r[0] = Math.min(r[0], x); r[1] = Math.max(r[1], x);
+      }
+    }
+  }
+  return HERB_FX_RANGE[name] || null;
+}
+const fmtG = x => String(+(+x).toFixed(2));
+function roundDose(mid) {
+  if (mid < 3) return Math.round(mid * 2) / 2 || 0.1;   // 0.5 g steps
+  if (mid < 15) return Math.ceil(mid - 0.5);            // whole grams, .5 rounds down
+  return Math.ceil(mid / 5 - 0.5) * 5;                  // 5 g steps
+}
+function herbDoseInfo(name) {
+  const d = typeof HERB_DOSE !== "undefined" && HERB_DOSE[name], fx = herbFxRange(name);
+  let min, max, typ, unit = "g", src;
+  if (d) { [min, max, typ, unit = "g"] = d; src = "MM"; }
+  else if (fx) { [min, max] = fx; src = "Fx"; }
+  else return { src: "", min: null, max: null, def: null, unit: "g", range: "—", fx };
+  const fl = HERB_FLAGS[name], cautious = !!(fl && HERB_CAUTION_TYPES.has(fl.type));
+  const def = typ != null ? typ : cautious ? min : roundDose((min + max) / 2);
+  const range = min === max ? fmtG(min) : `${fmtG(min)}–${fmtG(max)}`;
+  return { src, min, max, def, unit, range, fx, cautious, doseTxt: `${fmtG(def)} ${unit}` };
+}
+const herbNorm = s => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+function herbMatches(name, q) {
+  if (!q) return true;
+  const h = HERBS[name] || [], hay = herbNorm([name, h[0], h[2]].join(" | ")), flat = hay.replace(/[\s\-–]+/g, "");
+  return herbNorm(q).split(/\s+/).filter(Boolean).every(t => hay.includes(t)) || flat.includes(herbNorm(q).replace(/[\s\-–]+/g, ""));
+}
+const HERB_NAMES_AZ = () => Object.keys(HERBS).sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
+function herbsFiltered(q = "", cat = "") {
+  return HERB_NAMES_AZ().filter(n => (!cat || (HERBS[n][2] || "") === cat) && herbMatches(n, q));
+}
+function herbRowHTML(n) {
+  const h = HERBS[n] || [], fl = HERB_FLAGS[n], di = herbDoseInfo(n), added = herbInRx(n);
+  const doseTxt = di.doseTxt || "";
+  const srcTitle = di.src ? `${HERB_DOSE_SRC[di.src]}${di.fx ? ` · in formulas: ${di.fx[0] === di.fx[1] ? fmtG(di.fx[0]) : fmtG(di.fx[0]) + "–" + fmtG(di.fx[1])} g` : ""}${doseTxt ? ` · + adds ${doseTxt}` : ""}` : "";
+  const btn = doseTxt ? `<button type="button" class="rx-add hb-add${added ? " added" : ""}" data-add-herb="${esc(n)}" data-dose="${esc(doseTxt)}" title="${added ? `${esc(n)} is already in the treatment field` : `Add ${esc(n)} ${esc(doseTxt)} to Final diagnosis / treatment`}" aria-label="Add ${esc(n)} ${esc(doseTxt)} to treatment">${added ? "✓" : "+"}</button>` : "";
+  return `<tr data-herb="${esc(n)}"><td class="rx-addc">${btn}</td><td class="hb-name"><b title="${esc(h[0] || "")}">${esc(n)}</b>${fl ? ` <span class="rx-flag rx-${fl.type}" title="${esc(fl.text)}">⚠ ${esc(RX_FLAG_LABEL[fl.type] || fl.type)}</span>` : ""}${h[0] ? `<div class="hb-latin">${esc(h[0])}</div>` : ""}${h[1] ? `<div class="rx-hnote">${esc(h[1])}</div>` : ""}</td><td class="hb-cat">${esc(h[2] || "—")}</td><td class="hb-dose" title="${esc(srcTitle)}"><span class="hb-range">${esc(di.range)}${di.unit !== "g" ? " " + esc(di.unit) : ""}</span>${di.src ? ` <span class="hb-src hb-src-${di.src}">${di.src}</span>` : ""}</td></tr>`;
+}
+function renderHerbList() {
+  const list = $("#herbList"); if (!list) return;
+  list._html = null;
+  const q = $("#herbSearch").value.trim(), cat = $("#herbCat").value;
+  const names = herbsFiltered(q, cat), total = Object.keys(HERBS).length;
+  const letters = new Set(names.map(n => n[0].toUpperCase()));
+  let cur = "", rows = "";
+  for (const n of names) {
+    const L = n[0].toUpperCase();
+    if (L !== cur) { cur = L; rows += `<tr class="hb-letter" id="hb-L-${L}" data-letter="${L}"><th colspan="4">${L}</th></tr>`; }
+    rows += herbRowHTML(n);
+  }
+  setHTML(list, names.length
+    ? `<table class="rx-table hb-table"><thead><tr><th class="rx-addc"><span class="sr-only">Add</span></th><th>Herb (pinyin)</th><th>TCM category</th><th class="hb-dose">Dose (g)</th></tr></thead><tbody>${rows}</tbody></table>`
+    : `<div class="empty">No herbs match “${esc(q)}”${cat ? ` in ${esc(cat)}` : ""}.</div>`);
+  $("#herbCount").textContent = names.length === total ? `${total} herbs, A–Z by pinyin` : `${names.length} of ${total} herbs`;
+  $("#herbAZ").querySelectorAll("button[data-az]").forEach(b => { b.disabled = !letters.has(b.dataset.az); });
+}
+function herbJump(L) {
+  const list = $("#herbList"), row = list && list.querySelector(`#hb-L-${L}`);
+  if (!row) return false;
+  const th = list.querySelector("thead th"), off = th ? th.getBoundingClientRect().height : 0;
+  list.scrollTop += row.getBoundingClientRect().top - list.getBoundingClientRect().top - off;
+  return true;
+}
+function openHerbs(opt = {}) {
+  const dlg = $("#herbsDialog");
+  if (!$("#herbAZ")._init) {
+    setHTML($("#herbAZ"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map(L => `<button type="button" data-az="${L}" aria-label="Jump to ${L}">${L}</button>`).join(""));
+    const counts = {}; for (const n in HERBS) counts[HERBS[n][2]] = (counts[HERBS[n][2]] || 0) + 1;
+    setHTML($("#herbCat"), `<option value="">All categories</option>` + HERB_CATEGORIES.filter(c => counts[c]).map(c => `<option value="${esc(c)}">${esc(c)} (${counts[c]})</option>`).join(""));
+    $("#herbAZ")._init = true;
+  }
+  if (opt.q != null) $("#herbSearch").value = opt.q;
+  if (opt.cat != null) $("#herbCat").value = opt.cat;
+  renderHerbList();
+  $("#menu").classList.remove("open");
+  if (!dlg.open) dlg.showModal();
+  $("#herbList").scrollTop = 0;
+  if (!matchMedia("(pointer:coarse)").matches) setTimeout(() => $("#herbSearch").focus(), 30);
 }
 
 function renderPatterns() {
@@ -4290,6 +4495,12 @@ function bindEvents() {
   };
   $("#patternList").addEventListener("click", onUseRx);
   $("#refList").addEventListener("click", onUseRx);
+  $("#herbList").addEventListener("click", onUseRx);
+  document.querySelectorAll("[data-open-herbs]").forEach(b => b.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); openHerbs(); }));
+  $("#herbSearch").oninput = () => { clearTimeout(renderHerbList._t); renderHerbList._t = setTimeout(renderHerbList, 60); };
+  $("#herbSearch").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); clearTimeout(renderHerbList._t); renderHerbList(); } });
+  $("#herbCat").onchange = () => renderHerbList();
+  $("#herbAZ").addEventListener("click", e => { const b = e.target.closest("button[data-az]"); if (b && !b.disabled) herbJump(b.dataset.az); });
   $("#exportBtn").onclick = exportAll;
   $("#importBtn").onclick = () => $("#importFile").click();
   $("#importFile").onchange = async e => { const f = e.target.files[0]; if (f) await importData(await f.text()); e.target.value = ""; };
@@ -4416,7 +4627,7 @@ async function init() {
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>
