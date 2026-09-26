@@ -1,0 +1,1420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TCM Consult Assistant</title>
+<style>
+:root{
+  --bg:#f3f5f4; --panel:#ffffff; --ink:#1f2d2a; --muted:#6b7a76; --line:#dde4e1;
+  --accent:#2f7d6d; --accent-2:#e7f2ef; --danger:#b54646; --warn:#b7791f;
+  --radius:10px; --shadow:0 1px 2px rgba(20,40,35,.06),0 2px 8px rgba(20,40,35,.05);
+  font-size:14px;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;line-height:1.4}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 11px;transition:background .15s,border-color .15s}
+button:hover{background:#f2f6f5;border-color:#c6d3cf}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.primary:hover{background:#276a5c}
+button.danger{color:var(--danger);border-color:#e6c4c4}
+button.danger:hover{background:#fbf0f0}
+button.small{padding:3px 8px;font-size:12px}
+button.link{border:none;background:none;color:var(--accent);padding:2px 4px}
+button:disabled{opacity:.5;cursor:not-allowed}
+input[type=text],input[type=search],input[type=date],input[type=number],input[type=tel],select,textarea{border:1px solid var(--line);border-radius:8px;padding:6px 9px;background:#fff;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(47,125,109,.12)}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0;font-weight:600}
+h3{font-size:13px;margin:0 0 6px;font-weight:600}
+
+/* top bar */
+.topbar{display:flex;align-items:center;gap:12px;padding:8px 14px;background:#fff;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{font-weight:700;font-size:16px;color:var(--accent);display:flex;align-items:center;gap:8px;white-space:nowrap}
+.brand .yy{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--accent-2);font-size:16px}
+.session-info{flex:1;min-width:180px;color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.session-info b{color:var(--ink)}
+.session-info .dirty{color:var(--warn);font-weight:600}
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.mic{display:inline-flex;align-items:center;gap:8px;font-weight:600;border-color:var(--accent);color:var(--accent);min-width:150px;justify-content:center}
+.mic .dot{width:10px;height:10px;border-radius:50%;background:var(--accent)}
+.mic.on{background:var(--danger);border-color:var(--danger);color:#fff}
+.mic.on:hover{background:#9e3b3b}
+.mic.on .dot{background:#fff;animation:pulse 1.2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.8)}70%{box-shadow:0 0 0 8px rgba(255,255,255,0)}100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}}
+.menu{position:relative}
+.menu-list{display:none;position:absolute;right:0;top:calc(100% + 4px);background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);z-index:30;min-width:210px;padding:4px}
+.menu.open .menu-list{display:block}
+.menu-list button{display:block;width:100%;text-align:left;border:none;border-radius:6px}
+
+.banner{display:none;padding:8px 14px;font-size:13px;background:#fff7e6;border-bottom:1px solid #f0dcb0;color:#6d4c10}
+.banner.show{display:block}
+.banner.error{background:#fbeeee;border-color:#ecc9c9;color:#7a2727}
+
+/* layout */
+.layout{flex:1;display:grid;grid-template-columns:270px minmax(0,1fr) 380px;gap:12px;padding:12px;min-height:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.panel-body{padding:10px 12px;overflow:auto;min-height:0}
+.scroll{overflow:auto;min-height:0}
+
+/* left */
+#leftPanel .search{margin:10px 12px 6px;width:calc(100% - 24px)}
+.patient-list{list-style:none;margin:0;padding:0 6px 6px;overflow:auto;flex:0 1 auto;max-height:34%;min-height:60px}
+.patient-list li{padding:7px 8px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;gap:6px;align-items:center}
+.patient-list li:hover{background:#f2f6f5}
+.patient-list li.active{background:var(--accent-2);box-shadow:inset 3px 0 0 var(--accent)}
+.patient-list .pname{font-weight:600}
+.patient-list .pmeta{font-size:12px;color:var(--muted)}
+.empty{color:var(--muted);font-size:13px;padding:8px;text-align:center}
+.profile{border-top:1px solid var(--line);padding:10px 12px;overflow:auto;flex:1;min-height:0}
+.profile .name{font-size:17px;font-weight:700;margin-bottom:2px}
+.profile dl{display:grid;grid-template-columns:70px 1fr;gap:3px 8px;margin:8px 0;font-size:13px}
+.profile dt{color:var(--muted)}
+.profile dd{margin:0;word-break:break-word;white-space:pre-wrap}
+.btn-row{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.visit-list{list-style:none;padding:0;margin:6px 0 0}
+.visit-list li{border:1px solid var(--line);border-radius:8px;padding:7px 9px;margin-bottom:6px;cursor:pointer;font-size:13px;position:relative}
+.visit-list li:hover{border-color:#b9cbc6;background:#fafcfb}
+.visit-list li.current{border-color:var(--accent);background:var(--accent-2)}
+.visit-list .vdate{font-weight:600}
+.visit-list .vsub{color:var(--muted);font-size:12px}
+.visit-list .vdel{position:absolute;right:6px;top:5px;opacity:.0}
+.visit-list li:hover .vdel{opacity:1}
+
+/* center */
+.legend{display:flex;flex-wrap:wrap;gap:4px 10px;padding:6px 12px;border-bottom:1px solid var(--line);font-size:11.5px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:4px}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block;background:var(--c)}
+.listen-state{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.listen-state.on{color:var(--danger);font-weight:600}
+.listen-state.on::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--danger);animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.25}}
+.transcript{flex:1;overflow:auto;padding:12px 14px;font-size:15.5px;line-height:1.75;min-height:120px}
+.entry{position:relative;padding:3px 34px 3px 0;border-radius:6px}
+.entry:hover{background:#fafcfb}
+.entry .ts{font-size:11px;color:var(--muted);margin-right:6px;user-select:none;font-variant-numeric:tabular-nums}
+.entry .src{font-size:10px;text-transform:uppercase;letter-spacing:.05em;border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-right:6px;color:var(--muted);user-select:none}
+.entry .del{position:absolute;right:2px;top:4px;opacity:0;border:none;background:none;color:var(--muted);font-size:15px;padding:0 6px}
+.entry:hover .del{opacity:1}
+.interim{color:#9aa6a3;font-style:italic}
+.placeholder{color:var(--muted);font-size:14px;line-height:1.6;padding:10px 0}
+mark.sym{background:color-mix(in srgb,var(--c) 20%,white);border-bottom:2px solid var(--c);color:inherit;border-radius:3px;padding:0 2px;cursor:help}
+mark.sym.neg{background:#f1f1f1;border-bottom:2px dashed #999;text-decoration:line-through;text-decoration-color:#888;color:#666}
+mark.sym.removed{background:none;border-bottom:1px dotted #bbb;color:inherit}
+.manual{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line);align-items:stretch}
+.manual textarea{flex:1;resize:vertical;min-height:44px;height:48px}
+.manual .col{display:flex;flex-direction:column;gap:4px}
+.notes{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 12px 12px}
+.notes label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+.notes textarea{resize:vertical;min-height:54px;height:62px}
+
+/* right */
+.section{padding:10px 12px;border-bottom:1px solid var(--line)}
+.section:last-child{border-bottom:none}
+.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:999px;padding:2px 4px 2px 9px;font-size:12.5px;background:#fff;line-height:1.5}
+.chip.sym{background:color-mix(in srgb,var(--c) 14%,white);border-color:color-mix(in srgb,var(--c) 45%,white)}
+.chip .cnt{font-size:10.5px;color:var(--muted)}
+.chip .x{border:none;background:none;padding:0 5px;font-size:14px;line-height:1;color:#6b7a76;border-radius:50%}
+.chip .x:hover{background:rgba(0,0,0,.07);color:var(--danger)}
+.chip.neg{background:#f5f5f5;color:#666;text-decoration:line-through;text-decoration-color:#aaa}
+.chip.neg .x,.chip.neg .ok{text-decoration:none}
+.chip .ok{border:none;background:none;padding:0 4px;font-size:12px;color:var(--accent)}
+.chip.manual{border-style:dashed}
+.subhead{font-size:11.5px;color:var(--muted);margin:8px 0 4px;text-transform:uppercase;letter-spacing:.05em}
+.toggle{border-radius:999px;padding:2px 9px;font-size:12px}
+.toggle.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.disclaimer{font-size:11.5px;color:#7a5a12;background:#fff8e8;border:1px solid #f1e0b5;border-radius:6px;padding:5px 8px;margin-bottom:8px}
+.pattern{padding:8px 0;border-top:1px dashed var(--line)}
+.pattern:first-of-type{border-top:none}
+.p-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.p-name{font-weight:600}
+.p-pct{font-weight:700;font-variant-numeric:tabular-nums;color:var(--accent)}
+.bar{height:8px;background:#edf1f0;border-radius:6px;overflow:hidden;margin:4px 0 5px}
+.bar>div{height:100%;background:linear-gradient(90deg,#5aa897,#2f7d6d);border-radius:6px;transition:width .4s ease}
+.p-rank1 .bar>div{background:linear-gradient(90deg,#3f9a86,#1f6b5c)}
+.ind{display:flex;flex-wrap:wrap;gap:3px;font-size:11.5px}
+.ind span{border-radius:4px;padding:0 5px;background:#eef4f2;border:1px solid #d9e6e2}
+.ind span.card{background:#e1f0ea;border-color:#a9d2c4;font-weight:600}
+.ind span.contra{background:#fbeeee;border-color:#ecc9c9;color:#8a2c2c}
+.ind span.negc{background:#f5f5f5;border-color:#ddd;color:#777;text-decoration:line-through}
+.ask{font-size:11.5px;color:var(--muted);margin-top:3px}
+details.more{font-size:12px;color:var(--muted);margin-top:3px}
+details.more summary{cursor:pointer}
+.p-score-meta{font-size:11px;color:var(--muted)}
+
+footer{padding:6px 14px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;border-top:1px solid var(--line);background:#fff}
+
+/* dialogs */
+dialog{border:none;border-radius:12px;padding:0;box-shadow:0 10px 40px rgba(0,0,0,.25);width:min(520px,94vw)}
+dialog::backdrop{background:rgba(20,35,30,.35)}
+.dlg-head{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.dlg-head h3{margin:0;font-size:15px}
+.dlg-body{padding:14px 16px;max-height:70vh;overflow:auto}
+.dlg-foot{padding:10px 16px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form-grid label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+.form-grid .full{grid-column:1/-1}
+.picker-list{list-style:none;margin:8px 0 0;padding:0}
+.picker-list li{padding:6px 8px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.picker-list li:hover,.picker-list li.hl{background:var(--accent-2)}
+.picker-list .syn{font-size:11.5px;color:var(--muted)}
+.picker-list .cat{font-size:11px;border-radius:4px;padding:0 6px;background:color-mix(in srgb,var(--c) 18%,white);white-space:nowrap}
+.picker-list li.added{opacity:.5}
+
+.toast{position:fixed;left:50%;bottom:44px;transform:translateX(-50%) translateY(20px);background:#1f2d2a;color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;pointer-events:none;transition:all .25s;z-index:100}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+#printArea{display:none}
+
+/* responsive: tablet */
+@media (max-width:1200px){
+  .layout{grid-template-columns:240px minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto}
+  #rightPanel{grid-column:1/-1;max-height:none}
+  body{height:auto;min-height:100%}
+  html,body{height:auto}
+  .layout{min-height:calc(100vh - 110px)}
+  #centerPanel{min-height:560px}
+  #rightPanel .panel-body{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+  #rightPanel .section.patterns{grid-column:2;grid-row:1/span 3;border-bottom:none}
+}
+@media (max-width:760px){
+  .layout{grid-template-columns:1fr}
+  #leftPanel{max-height:none}
+  #rightPanel .panel-body{display:block}
+  .notes{grid-template-columns:1fr}
+  .session-info{order:3;flex-basis:100%}
+}
+
+/* print */
+@media print{
+  body{background:#fff;display:block}
+  body > *:not(#printArea){display:none !important}
+  #printArea{display:block !important;color:#000;font-size:12px}
+  .pr h1{font-size:18px;margin:0 0 4px}
+  .pr h2{font-size:13px;color:#000;margin:14px 0 4px;border-bottom:1px solid #999;padding-bottom:2px}
+  .pr table{border-collapse:collapse;width:100%}
+  .pr td,.pr th{border:1px solid #bbb;padding:3px 6px;text-align:left;vertical-align:top}
+  .pr .muted{color:#555}
+  .pr .transcript-print{white-space:pre-wrap;font-size:11px;line-height:1.5}
+  .pr .disc{font-size:10.5px;color:#444;border:1px solid #aaa;padding:4px 6px;margin-top:10px}
+  mark.sym{background:none !important;border-bottom:1.5px solid #000;padding:0}
+  mark.sym.neg{text-decoration:line-through}
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="yy">☯</span>TCM Consult Assistant</div>
+  <div class="session-info" id="sessionInfo">—</div>
+  <div class="controls">
+    <select id="langSel" title="Speech recognition language">
+      <option value="en-PH">English (Philippines)</option>
+      <option value="en-US">English (US)</option>
+      <option value="fil-PH">Filipino / Tagalog</option>
+      <option value="en-GB">English (UK)</option>
+      <option value="en-AU">English (Australia)</option>
+      <option value="zh-CN">中文 (普通话)</option>
+    </select>
+    <button id="micBtn" class="mic" title="Start / stop live transcription"><span class="dot"></span><span class="lbl">Start listening</span></button>
+    <button id="newSessionBtn" title="Start a new, empty session">New session</button>
+    <button id="saveBtn" class="primary" title="Save session to patient record (Ctrl+S)">Save session</button>
+    <div class="menu" id="menu">
+      <button id="menuBtn" title="More">⋯ Data</button>
+      <div class="menu-list">
+        <button id="printBtn">🖨 Print / PDF summary of this visit</button>
+        <button id="exportBtn">⬇ Export all data (JSON backup)</button>
+        <button id="importBtn">⬆ Import data from JSON…</button>
+      </div>
+    </div>
+  </div>
+</header>
+<div class="banner" id="banner"></div>
+
+<main class="layout">
+  <!-- LEFT: patients -->
+  <aside class="panel" id="leftPanel">
+    <div class="panel-head"><h2>Patients</h2><button class="small primary" id="addPatientBtn">+ New patient</button></div>
+    <input type="search" class="search" id="patientSearch" placeholder="Search name, contact, notes…">
+    <ul class="patient-list" id="patientList"></ul>
+    <div class="profile" id="patientProfile"></div>
+  </aside>
+
+  <!-- CENTER: transcript -->
+  <section class="panel" id="centerPanel">
+    <div class="panel-head">
+      <h2>Live transcript</h2>
+      <div class="listen-state" id="listenState">Not listening</div>
+      <button class="small" id="clearTranscriptBtn" title="Clear the transcript of this session">Clear</button>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="transcript" id="transcript" aria-live="polite"></div>
+    <div class="manual">
+      <textarea id="manualInput" placeholder="Type or paste notes / patient statements here — they go through the same symptom detection. (Ctrl+Enter to add)"></textarea>
+      <div class="col">
+        <button class="primary" id="addTextBtn">Add</button>
+      </div>
+    </div>
+    <div class="notes">
+      <label>Practitioner notes<textarea id="notesInput" placeholder="Observations, history, plan…"></textarea></label>
+      <label>Final TCM diagnosis / treatment<textarea id="diagnosisInput" placeholder="Pattern differentiation, treatment principle, formula / points…"></textarea></label>
+    </div>
+  </section>
+
+  <!-- RIGHT: findings & patterns -->
+  <aside class="panel" id="rightPanel">
+    <div class="panel-body">
+      <div class="section">
+        <div class="section-head"><h2>Detected symptoms</h2><button class="small" id="addSymptomBtn">+ Add symptom</button></div>
+        <div class="chips" id="symptomChips"></div>
+        <div id="negatedWrap"></div>
+      </div>
+      <div class="section patterns">
+        <div class="section-head"><h2>Likely patterns</h2></div>
+        <div class="disclaimer">Pattern fit score — decision support only, not a diagnosis.</div>
+        <div id="patternList"></div>
+      </div>
+      <div class="section">
+        <div class="section-head"><h2>Tongue</h2></div>
+        <div class="chips" id="tongueChips"></div>
+      </div>
+      <div class="section">
+        <div class="section-head"><h2>Pulse</h2></div>
+        <div class="chips" id="pulseChips"></div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  <span>Speech is transcribed by the browser's speech service; no audio is saved.</span>
+  <span id="storageStatus">Records are stored only in this browser.</span>
+</footer>
+
+<!-- Patient dialog -->
+<dialog id="patientDialog">
+  <form method="dialog" id="patientForm">
+    <div class="dlg-head"><h3 id="patientDlgTitle">New patient</h3><button type="button" class="link" data-close>✕</button></div>
+    <div class="dlg-body">
+      <div class="form-grid">
+        <label class="full">Full name *<input type="text" name="name" required autocomplete="off"></label>
+        <label>Date of birth<input type="date" name="dob"></label>
+        <label>Age (if DOB unknown)<input type="number" name="age" min="0" max="130"></label>
+        <label>Sex<select name="sex"><option value="">—</option><option>Female</option><option>Male</option><option>Other</option></select></label>
+        <label>Contact (phone / email)<input type="text" name="contact" autocomplete="off"></label>
+        <label class="full">Notes (history, allergies, medications…)<textarea name="notes" rows="4"></textarea></label>
+      </div>
+    </div>
+    <div class="dlg-foot"><button type="button" data-close>Cancel</button><button type="submit" class="primary" value="save">Save patient</button></div>
+  </form>
+</dialog>
+
+<!-- Symptom picker -->
+<dialog id="pickerDialog">
+  <div class="dlg-head"><h3>Add symptom</h3><button type="button" class="link" data-close>✕</button></div>
+  <div class="dlg-body">
+    <input type="search" id="pickerSearch" placeholder="Search symptoms (English / Tagalog)…" style="width:100%">
+    <ul class="picker-list" id="pickerList"></ul>
+  </div>
+</dialog>
+
+<input type="file" id="importFile" accept="application/json,.json" hidden>
+<div id="printArea"></div>
+<div class="toast" id="toast"></div>
+<script>
+"use strict";
+/* =====================================================================
+   KNOWLEDGE BASE — EDIT HERE
+   ---------------------------------------------------------------------
+   CATEGORIES, SYMPTOMS, TONGUE_FINDINGS, PULSE_FINDINGS and PATTERNS are
+   plain data objects. They can be edited by hand, or replaced at runtime
+   (e.g. from a JSON file) as long as the same shape is kept.
+   - Symptom synonyms are matched case-insensitively on word boundaries.
+     Spaces also match hyphens, apostrophes are optional, and a trailing
+     "s"/"es" plural is accepted automatically.
+   - IDs must be unique across symptoms, tongue (t_*) and pulse (p_*).
+   ===================================================================== */
+
+const CATEGORIES = {
+  energy:      { label: "Energy",            color: "#2f8f6f" },
+  temperature: { label: "Temperature",       color: "#d9534f" },
+  sweat:       { label: "Sweat",             color: "#17a2b8" },
+  sleep:       { label: "Sleep",             color: "#6f42c1" },
+  emotions:    { label: "Emotions",          color: "#e83e8c" },
+  head:        { label: "Head / eyes / ENT", color: "#fd7e14" },
+  respiratory: { label: "Respiratory",       color: "#20a0d8" },
+  chest:       { label: "Chest / heart",     color: "#c0392b" },
+  digestion:   { label: "Digestion",         color: "#c9a100" },
+  stool:       { label: "Stool",             color: "#8d6e4f" },
+  urination:   { label: "Urination",         color: "#3b7dd8" },
+  pain:        { label: "Pain / body",       color: "#9b59b6" },
+  menstruation:{ label: "Menstrual / repro", color: "#d63384" },
+  skin:        { label: "Skin / complexion", color: "#5c9e31" }
+};
+
+const SYMPTOMS = [
+  // ---------- Energy ----------
+  { id: "fatigue", name: "Fatigue / tiredness", cat: "energy", syn: ["tired", "tiredness", "fatigue", "fatigued", "exhausted", "exhaustion", "no energy", "low energy", "lack of energy", "worn out", "drained", "lethargic", "burned out", "burnt out", "feel weak", "feeling weak", "always weak", "pagod", "pagod na pagod", "napapagod", "nakakapagod", "nanghihina", "matamlay", "walang lakas", "lanta"] },
+  { id: "weakness_limbs", name: "Weak / tired limbs", cat: "energy", syn: ["weak limbs", "weak legs", "weak arms", "legs feel weak", "arms feel weak", "limbs feel heavy", "heavy legs", "tired legs", "nanghihina ang binti", "nanghihina ang braso"] },
+  { id: "shortness_breath", name: "Shortness of breath", cat: "respiratory", syn: ["short of breath", "shortness of breath", "breathless", "out of breath", "hard to breathe", "difficulty breathing", "can't catch my breath", "hingal", "hinihingal", "hirap huminga", "kapos sa hininga", "kinakapos ng hininga"] },
+  { id: "reluctance_speak", name: "Weak voice / reluctant to speak", cat: "energy", syn: ["weak voice", "soft voice", "don't feel like talking", "too tired to talk", "no energy to talk", "tamad magsalita", "mahina ang boses"] },
+  { id: "heaviness_body", name: "Heaviness of body", cat: "energy", syn: ["heavy body", "body feels heavy", "body is heavy", "heaviness", "feel heavy", "sluggish", "mabigat ang katawan", "bigat ng katawan", "mabigat ang pakiramdam"] },
+  { id: "somnolence", name: "Drowsiness / somnolence", cat: "energy", syn: ["sleepy all the time", "always sleepy", "drowsy", "drowsiness", "sleep a lot", "sleepy after eating", "sleepy after meals", "antukin", "inaantok", "laging inaantok"] },
+  { id: "prolapse", name: "Prolapse / bearing down / hemorrhoids", cat: "energy", syn: ["prolapse", "prolapsed", "bearing down", "dragging down sensation", "hemorrhoids", "haemorrhoids", "piles", "almoranas", "luslos"] },
+
+  // ---------- Temperature ----------
+  { id: "cold_aversion", name: "Aversion to cold / feels cold", cat: "temperature", syn: ["feel cold", "feels cold", "feeling cold", "cold easily", "get cold easily", "always cold", "sensitive to cold", "cold intolerance", "can't tolerate cold", "hate the cold", "chilly", "giniginaw", "ginaw", "lamigin", "nilalamig", "malamig ang pakiramdam", "madaling lamigin"] },
+  { id: "cold_limbs", name: "Cold hands / feet", cat: "temperature", syn: ["cold hands", "cold feet", "cold hands and feet", "cold extremities", "cold limbs", "cold legs", "hands are cold", "feet are cold", "malamig ang kamay", "malamig ang paa", "malamig ang mga paa"] },
+  { id: "chills", name: "Chills / shivering", cat: "temperature", syn: ["chills", "chill", "shivering", "shivers", "shaking with cold", "nanginginig sa lamig", "panginginig"] },
+  { id: "fever", name: "Fever", cat: "temperature", syn: ["fever", "feverish", "high temperature", "temperature is high", "lagnat", "nilalagnat", "sinat", "sinisinat"] },
+  { id: "feeling_hot", name: "Feels hot / heat intolerance", cat: "temperature", syn: ["feel hot", "feeling hot", "always hot", "heat intolerance", "hate the heat", "can't tolerate heat", "feel warm all the time", "mainit ang pakiramdam", "init na init", "maalinsangan"] },
+  { id: "afternoon_fever", name: "Afternoon / evening heat (tidal fever)", cat: "temperature", syn: ["hot in the afternoon", "feel hot in the afternoon", "hot in the evening", "feel hot in the evening", "afternoon fever", "evening fever", "low grade fever in the afternoon", "low grade fever", "low-grade fever"] },
+  { id: "five_palm_heat", name: "Hot palms & soles (five-palm heat)", cat: "temperature", syn: ["hot palms", "hot soles", "hot hands and feet", "burning feet", "burning palms", "palms are hot", "feet feel hot", "five palm heat", "mainit ang palad", "mainit ang talampakan"] },
+  { id: "hot_flashes", name: "Hot flashes", cat: "temperature", syn: ["hot flashes", "hot flash", "hot flushes", "hot flush", "flushes of heat", "waves of heat"] },
+  { id: "malar_flush", name: "Malar flush (red cheekbones)", cat: "temperature", syn: ["red cheeks", "flushed cheeks", "cheeks get red", "cheeks are red", "namumula ang pisngi"] },
+  { id: "red_face", name: "Red face", cat: "temperature", syn: ["red face", "face turns red", "flushed face", "face is red", "face gets red", "namumula ang mukha"] },
+
+  // ---------- Sweat ----------
+  { id: "night_sweats", name: "Night sweats", cat: "sweat", syn: ["night sweats", "night sweat", "sweat at night", "sweating at night", "sweats at night", "wake up sweating", "wake up soaked", "wake up drenched", "pinagpapawisan sa gabi", "pawis sa gabi", "nagpapawis sa gabi"] },
+  { id: "spontaneous_sweating", name: "Spontaneous sweating (daytime, with little exertion)", cat: "sweat", syn: ["sweat easily", "sweating easily", "sweat a lot", "sweats a lot", "sweat without exertion", "sweat even when resting", "spontaneous sweating", "sweat during the day", "pawis nang pawis", "madaling pagpawisan", "pawisin"] },
+  { id: "no_sweat", name: "Absence of sweating", cat: "sweat", syn: ["no sweating", "not sweating", "don't sweat", "can't sweat", "absence of sweating", "hindi pinagpapawisan", "walang pawis"] },
+
+  // ---------- Sleep ----------
+  { id: "insomnia", name: "Insomnia / difficulty sleeping", cat: "sleep", syn: ["insomnia", "can't sleep", "cannot sleep", "couldn't sleep", "trouble sleeping", "difficulty sleeping", "hard to sleep", "hard time sleeping", "hard to fall asleep", "trouble falling asleep", "difficulty falling asleep", "sleepless", "don't sleep well", "not sleeping well", "poor sleep", "hindi makatulog", "di makatulog", "hindi ako makatulog", "hindi ako nakakatulog", "hindi nakakatulog", "hirap matulog", "hirap makatulog", "puyat", "napupuyat"] },
+  { id: "waking_night", name: "Waking during the night", cat: "sleep", syn: ["wake up at night", "waking up at night", "wake up in the middle of the night", "wake up often", "keep waking up", "wake up at 3", "wake up at 1", "wake up at 2", "wake up early and can't go back to sleep", "nagigising sa gabi", "nagigising sa madaling araw", "gising nang gising"] },
+  { id: "dream_disturbed", name: "Excessive dreaming / nightmares", cat: "sleep", syn: ["lots of dreams", "many dreams", "vivid dreams", "dream a lot", "dreaming a lot", "nightmares", "nightmare", "bad dreams", "disturbing dreams", "bangungot", "laging nananaginip", "masamang panaginip"] },
+  { id: "restless_sleep", name: "Restless / unrefreshing sleep", cat: "sleep", syn: ["restless sleep", "light sleeper", "sleep lightly", "unrefreshing sleep", "wake up tired", "not rested", "don't feel rested", "toss and turn", "tossing and turning", "hindi mahimbing ang tulog", "mababaw ang tulog"] },
+
+  // ---------- Emotions ----------
+  { id: "irritability", name: "Irritability / anger", cat: "emotions", syn: ["irritable", "irritability", "easily angered", "easily irritated", "short temper", "short tempered", "quick tempered", "angry", "anger", "frustrated", "frustration", "mainitin ang ulo", "iritable", "naiinis", "inis", "madaling magalit", "bugnutin", "magagalitin"] },
+  { id: "stress", name: "Stress / tension", cat: "emotions", syn: ["stressed", "stress", "stressful", "stressed out", "under pressure", "tense", "na-stress", "stress na stress"] },
+  { id: "depression_mood", name: "Low mood / depression", cat: "emotions", syn: ["depressed", "depression", "low mood", "sad", "sadness", "feel down", "feeling down", "feeling low", "unhappy", "hopeless", "malungkot", "lungkot", "nalulungkot"] },
+  { id: "mood_swings", name: "Mood swings", cat: "emotions", syn: ["mood swings", "mood swing", "moody", "emotional", "pabago-bago ang mood", "pabago bago ang mood"] },
+  { id: "anxiety", name: "Anxiety / worry", cat: "emotions", syn: ["anxious", "anxiety", "worried", "worry a lot", "worry too much", "nervous", "panic", "panic attack", "overthinking", "overthink", "nag-aalala", "balisa", "kinakabahan", "praning"] },
+  { id: "sighing", name: "Frequent sighing", cat: "emotions", syn: ["sigh a lot", "sighing", "frequent sighing", "sigh often", "keep sighing", "buntong hininga", "napapabuntong-hininga", "bumubuntong hininga"] },
+  { id: "poor_memory", name: "Poor memory / forgetfulness", cat: "emotions", syn: ["forgetful", "forgetfulness", "poor memory", "bad memory", "memory is bad", "memory is poor", "can't remember things", "makakalimutin", "makalimutin", "ulyanin", "nakakalimot"] },
+  { id: "poor_concentration", name: "Poor concentration", cat: "emotions", syn: ["can't concentrate", "poor concentration", "hard to focus", "can't focus", "trouble focusing", "lack of focus", "difficulty concentrating", "hirap mag-focus", "hindi makapag-focus"] },
+  { id: "restlessness", name: "Mental restlessness / agitation", cat: "emotions", syn: ["restless", "restlessness", "agitated", "can't sit still", "mental restlessness", "hindi mapakali", "di mapakali"] },
+  { id: "easily_startled", name: "Easily startled / fearful", cat: "emotions", syn: ["easily startled", "jumpy", "fearful", "scared easily", "timid", "magugulatin", "madaling magulat", "matatakutin"] },
+
+  // ---------- Head / eyes / ENT ----------
+  { id: "headache", name: "Headache", cat: "head", syn: ["headache", "head ache", "head hurts", "head pain", "migraine", "sakit ng ulo", "masakit ang ulo", "masakit ulo", "sumasakit ang ulo", "kumikirot ang ulo", "masakit yung ulo"] },
+  { id: "temporal_headache", name: "Temporal / one-sided headache", cat: "head", syn: ["temples hurt", "pain in my temples", "pain at the temples", "temple pain", "side of my head", "sides of my head", "one side of my head", "throbbing temples", "sakit sa sentido", "masakit ang sentido", "sentido"] },
+  { id: "heavy_head", name: "Heavy / foggy head", cat: "head", syn: ["heavy head", "head feels heavy", "heavy headed", "foggy head", "brain fog", "muzzy head", "fuzzy head", "mabigat ang ulo", "mabigat ulo"] },
+  { id: "dizziness", name: "Dizziness", cat: "head", syn: ["dizzy", "dizziness", "lightheaded", "light headed", "vertigo", "room is spinning", "hilo", "nahihilo", "nakakahilo", "hilong hilo", "liyo", "nalilula"] },
+  { id: "tinnitus", name: "Tinnitus", cat: "head", syn: ["tinnitus", "ringing in my ears", "ringing in the ears", "ears ringing", "ear ringing", "buzzing in my ears", "ugong sa tenga", "umuugong ang tenga", "may tunog sa tenga"] },
+  { id: "hearing_loss", name: "Diminished hearing", cat: "head", syn: ["hearing loss", "hard of hearing", "can't hear well", "hearing is poor", "humina ang pandinig", "bingi"] },
+  { id: "blurred_vision", name: "Blurred vision / floaters", cat: "head", syn: ["blurry vision", "blurred vision", "vision is blurry", "eyes are blurry", "can't see clearly", "floaters", "spots in my vision", "malabo ang mata", "lumalabo ang paningin", "malabo ang paningin"] },
+  { id: "dry_eyes", name: "Dry eyes", cat: "head", syn: ["dry eyes", "eyes are dry", "gritty eyes", "eyes feel dry", "tuyo ang mata"] },
+  { id: "red_eyes", name: "Red / painful eyes", cat: "head", syn: ["red eyes", "bloodshot eyes", "eyes are red", "sore eyes", "namumula ang mata", "mapula ang mata"] },
+  { id: "dry_mouth", name: "Dry mouth / throat", cat: "head", syn: ["dry mouth", "mouth is dry", "mouth feels dry", "dry throat", "throat is dry", "dry lips", "tuyo ang bibig", "tuyo ang lalamunan", "nanunuyo ang lalamunan"] },
+  { id: "thirst", name: "Thirst", cat: "head", syn: ["thirsty", "thirst", "always thirsty", "drink a lot of water", "nauuhaw", "uhaw na uhaw", "laging nauuhaw"] },
+  { id: "thirst_cold_drinks", name: "Desire for cold drinks", cat: "head", syn: ["crave cold drinks", "like cold drinks", "want cold drinks", "prefer cold drinks", "want cold water", "like cold water", "prefer cold water", "gusto ng malamig na inumin", "mahilig sa malamig na tubig"] },
+  { id: "prefer_warm_drinks", name: "Prefers warm drinks", cat: "head", syn: ["prefer warm drinks", "prefer hot drinks", "like warm drinks", "like hot drinks", "crave warm drinks", "prefer warm water", "gusto ng mainit na inumin", "mas gusto ang mainit na tubig"] },
+  { id: "no_thirst", name: "Absence of thirst", cat: "head", syn: ["not thirsty", "no thirst", "rarely thirsty", "never thirsty", "don't feel thirsty", "hindi nauuhaw"] },
+  { id: "bitter_taste", name: "Bitter taste in mouth", cat: "head", syn: ["bitter taste", "mouth tastes bitter", "bitter mouth", "mapait ang bibig", "mapait ang panlasa"] },
+  { id: "sticky_taste", name: "Sticky / sweetish taste in mouth", cat: "head", syn: ["sticky mouth", "sticky taste", "mouth feels sticky", "sweet taste in my mouth", "sweetish taste", "malagkit ang bibig", "malagkit ang laway"] },
+  { id: "bad_breath", name: "Bad breath", cat: "head", syn: ["bad breath", "halitosis", "breath smells", "mabaho ang hininga", "bad smell in mouth"] },
+  { id: "mouth_ulcers", name: "Mouth / tongue ulcers", cat: "head", syn: ["mouth ulcers", "mouth ulcer", "canker sores", "canker sore", "ulcers in my mouth", "sores in my mouth", "tongue ulcers", "singaw", "sinisingaw"] },
+  { id: "bleeding_gums", name: "Bleeding / swollen gums, toothache", cat: "head", syn: ["bleeding gums", "gums bleed", "swollen gums", "gum pain", "toothache", "tooth ache", "sakit ng ngipin", "nagdudugo ang gilagid", "namamaga ang gilagid"] },
+  { id: "sore_throat", name: "Sore throat", cat: "head", syn: ["sore throat", "throat hurts", "throat is sore", "painful throat", "itchy throat", "masakit ang lalamunan", "namamagang lalamunan", "makati ang lalamunan", "sakit ng lalamunan"] },
+  { id: "runny_nose", name: "Runny nose", cat: "head", syn: ["runny nose", "running nose", "nasal discharge", "dripping nose", "sipon", "sinisipon", "tumutulo ang sipon"] },
+  { id: "stuffy_nose", name: "Blocked / stuffy nose", cat: "head", syn: ["stuffy nose", "blocked nose", "nasal congestion", "nose is blocked", "stuffed nose", "barado ang ilong", "baradong ilong"] },
+  { id: "sneezing", name: "Sneezing", cat: "head", syn: ["sneezing", "sneeze", "sneezes", "bumabahing", "bahing", "pagbahing"] },
+  { id: "neck_stiffness", name: "Stiff neck / shoulders", cat: "pain", syn: ["stiff neck", "neck pain", "neck is stiff", "neck hurts", "stiff shoulders", "shoulder tension", "tight shoulders", "ngalay ang leeg", "masakit ang batok", "masakit ang leeg", "stiff na leeg"] },
+
+  // ---------- Respiratory ----------
+  { id: "cough", name: "Cough", cat: "respiratory", syn: ["cough", "coughing", "ubo", "inuubo", "umuubo", "may ubo"] },
+  { id: "phlegm_white", name: "Phlegm (white / clear / profuse)", cat: "respiratory", syn: ["phlegm", "white phlegm", "clear phlegm", "watery phlegm", "lots of phlegm", "mucus in my throat", "sputum", "plema", "may plema", "maputing plema"] },
+  { id: "phlegm_yellow", name: "Yellow / green phlegm", cat: "respiratory", syn: ["yellow phlegm", "green phlegm", "thick yellow phlegm", "yellow mucus", "green mucus", "yellow sputum", "madilaw na plema", "berdeng plema"] },
+  { id: "plum_pit", name: "Lump in throat (plum-pit)", cat: "respiratory", syn: ["lump in my throat", "lump in the throat", "something stuck in my throat", "something in my throat", "globus", "may bara sa lalamunan", "parang may nakabara sa lalamunan"] },
+  { id: "wheezing", name: "Wheezing / asthma", cat: "respiratory", syn: ["wheeze", "wheezing", "asthma", "hika", "hinihika"] },
+  { id: "catch_colds", name: "Catches colds easily", cat: "respiratory", syn: ["catch colds easily", "catch a cold easily", "always getting sick", "get sick often", "get sick easily", "frequent colds", "low immunity", "weak immune system", "sakitin", "madaling magkasakit", "madaling sipunin"] },
+  { id: "aversion_wind", name: "Aversion to wind / drafts", cat: "respiratory", syn: ["sensitive to wind", "dislike wind", "aversion to wind", "drafts bother me", "hate the aircon", "sensitive to aircon", "ayaw sa hangin", "ayaw sa aircon"] },
+  { id: "acute_cold", name: "Acute cold / flu onset", cat: "respiratory", syn: ["have a cold", "caught a cold", "common cold", "flu", "flu-like", "trangkaso", "may trangkaso"] },
+
+  // ---------- Chest / heart ----------
+  { id: "palpitations", name: "Palpitations", cat: "chest", syn: ["palpitations", "palpitation", "heart racing", "heart pounding", "heart flutters", "racing heart", "heart beats fast", "heart skips", "kaba", "kumakabog ang dibdib", "mabilis ang tibok ng puso", "palpitate"] },
+  { id: "chest_tightness", name: "Chest tightness / oppression", cat: "chest", syn: ["tight chest", "chest tightness", "chest feels tight", "tightness in my chest", "chest oppression", "stuffy chest", "naninikip ang dibdib", "paninikip ng dibdib", "masikip ang dibdib"] },
+  { id: "chest_pain", name: "Chest pain", cat: "chest", syn: ["chest pain", "chest hurts", "pain in my chest", "stabbing chest pain", "masakit ang dibdib", "sakit sa dibdib"] },
+  { id: "hypochondriac_pain", name: "Hypochondriac / rib-side pain or distension", cat: "chest", syn: ["pain under my ribs", "under my ribs", "rib pain", "ribs hurt", "pain in my side", "side pain", "hypochondriac pain", "flank distension", "masakit ang tagiliran", "sakit sa tagiliran", "tagiliran"] },
+
+  // ---------- Digestion ----------
+  { id: "poor_appetite", name: "Poor appetite", cat: "digestion", syn: ["poor appetite", "no appetite", "lost my appetite", "loss of appetite", "low appetite", "appetite is poor", "appetite is low", "appetite is bad", "don't feel like eating", "not hungry", "walang gana", "walang ganang kumain", "walang gana kumain", "wala akong gana", "nawalan ng gana"] },
+  { id: "excessive_hunger", name: "Excessive hunger", cat: "digestion", syn: ["always hungry", "hungry all the time", "big appetite", "excessive hunger", "constantly hungry", "gutom palagi", "laging gutom", "gutumin", "matakaw"] },
+  { id: "bloating", name: "Bloating / fullness after eating", cat: "digestion", syn: ["bloated", "bloating", "bloat", "abdominal distension", "distended belly", "gassy", "lots of gas", "full of gas", "flatulence", "full quickly", "feel full quickly", "full after eating", "kabag", "kinakabag", "busog agad", "madaling mabusog", "utot nang utot"] },
+  { id: "nausea", name: "Nausea", cat: "digestion", syn: ["nausea", "nauseous", "nauseated", "feel like vomiting", "queasy", "sick to my stomach", "nasusuka", "naduduwal", "nakakaduwal"] },
+  { id: "vomiting", name: "Vomiting", cat: "digestion", syn: ["vomit", "vomiting", "vomited", "throw up", "throwing up", "threw up", "nagsusuka", "sumuka", "nagsuka"] },
+  { id: "acid_reflux", name: "Acid reflux / heartburn", cat: "digestion", syn: ["acid reflux", "heartburn", "reflux", "gerd", "sour regurgitation", "hyperacidity", "hyperacid", "acidic", "burning in my stomach", "maasim ang sikmura", "sinisikmura", "umaasim ang sikmura"] },
+  { id: "belching", name: "Belching", cat: "digestion", syn: ["burping", "burp", "belching", "belch", "dumidighay", "dighay", "dumighay"] },
+  { id: "epigastric_pain", name: "Epigastric / stomach pain", cat: "digestion", syn: ["stomach pain", "stomach ache", "stomachache", "stomach hurts", "pain in my stomach", "epigastric pain", "ulcer", "masakit ang sikmura", "sakit ng sikmura", "kumikirot ang sikmura"] },
+  { id: "abdominal_pain", name: "Abdominal pain", cat: "digestion", syn: ["abdominal pain", "belly pain", "belly ache", "tummy ache", "tummy hurts", "sakit ng tiyan", "masakit ang tiyan", "sumasakit ang tiyan", "masakit ang puson"] },
+  { id: "pain_better_warmth", name: "Pain relieved by warmth", cat: "digestion", syn: ["better with warmth", "better with heat", "warmth helps", "heat helps", "hot compress helps", "better with a hot water bottle", "gumiginhawa sa mainit"] },
+  { id: "craving_sweets", name: "Craving sweets", cat: "digestion", syn: ["crave sweets", "craving sweets", "sugar cravings", "crave sugar", "sweet tooth", "mahilig sa matamis", "hinahanap ang matamis"] },
+
+  // ---------- Stool ----------
+  { id: "loose_stools", name: "Loose stools / diarrhea", cat: "stool", syn: ["loose stool", "loose stools", "soft stool", "loose bowels", "diarrhea", "diarrhoea", "runny stool", "watery stool", "lbm", "pagtatae", "nagtatae", "malambot ang dumi", "malambot na dumi"] },
+  { id: "undigested_food_stool", name: "Undigested food in stool", cat: "stool", syn: ["undigested food in my stool", "undigested food", "food in my stool"] },
+  { id: "early_morning_diarrhea", name: "Early-morning diarrhea", cat: "stool", syn: ["early morning diarrhea", "diarrhea in the morning", "diarrhea every morning", "rush to the toilet in the morning", "cockcrow diarrhea"] },
+  { id: "constipation", name: "Constipation / dry stools", cat: "stool", syn: ["constipated", "constipation", "hard stool", "dry stool", "can't poop", "hard to pass stool", "tibi", "tinitibi", "matigas ang dumi", "hirap dumumi"] },
+  { id: "alternating_stool", name: "Alternating constipation & diarrhea", cat: "stool", syn: ["alternating constipation and diarrhea", "sometimes constipated sometimes loose", "irritable bowel", "ibs"] },
+  { id: "foul_stools", name: "Foul / sticky stools, burning anus", cat: "stool", syn: ["smelly stool", "foul smelling stool", "foul stool", "sticky stool", "burning anus", "mucus in my stool", "mabaho ang dumi", "malagkit ang dumi"] },
+
+  // ---------- Urination ----------
+  { id: "frequent_urination", name: "Frequent urination", cat: "urination", syn: ["frequent urination", "pee a lot", "pee often", "urinate often", "urinate a lot", "always peeing", "ihi nang ihi", "madalas umihi", "wiwi nang wiwi"] },
+  { id: "nocturia", name: "Night-time urination", cat: "urination", syn: ["pee at night", "wake up to pee", "urinate at night", "get up to pee", "nocturia", "naiihi sa gabi", "umiihi sa gabi", "gumigising para umihi"] },
+  { id: "clear_urine", name: "Clear / pale copious urine", cat: "urination", syn: ["clear urine", "pale urine", "copious urine", "urine is clear", "malinaw ang ihi"] },
+  { id: "dark_urine", name: "Dark / scanty yellow urine", cat: "urination", syn: ["dark urine", "yellow urine", "dark yellow urine", "concentrated urine", "scanty urine", "urine is dark", "madilaw ang ihi", "kulay tsaa ang ihi"] },
+  { id: "painful_urination", name: "Burning / painful urination", cat: "urination", syn: ["burning urination", "painful urination", "burns when i pee", "hurts to pee", "burning when i pee", "pain when urinating", "uti", "mahapdi umihi", "mahapdi ang ihi", "masakit umihi", "balisawsaw"] },
+  { id: "incontinence", name: "Dribbling / incontinence", cat: "urination", syn: ["leak urine", "leaking urine", "dribbling", "incontinence", "weak stream", "can't hold my urine", "naiihi agad", "hindi mapigil ang ihi"] },
+
+  // ---------- Pain / body ----------
+  { id: "lower_back_pain", name: "Lower back pain / weakness", cat: "pain", syn: ["lower back pain", "low back pain", "back pain", "sore back", "backache", "back ache", "lower back aches", "lower back hurts", "back hurts", "masakit ang likod", "sakit ng likod", "masakit ang balakang", "sakit sa balakang", "balakang"] },
+  { id: "knee_weakness", name: "Sore / weak knees", cat: "pain", syn: ["weak knees", "sore knees", "knee pain", "knees ache", "knees hurt", "masakit ang tuhod", "nanghihina ang tuhod", "sakit ng tuhod"] },
+  { id: "joint_pain", name: "Joint pain / stiffness", cat: "pain", syn: ["joint pain", "joints ache", "joints hurt", "arthritis", "stiff joints", "swollen joints", "rayuma", "masakit ang kasukasuan"] },
+  { id: "body_aches", name: "Body aches", cat: "pain", syn: ["body aches", "body ache", "aching all over", "achy", "sore all over", "masakit ang katawan", "sakit ng katawan", "bugbog ang katawan", "nangangalay"] },
+  { id: "fixed_stabbing_pain", name: "Fixed, stabbing pain", cat: "pain", syn: ["stabbing pain", "sharp pain", "fixed pain", "pain in one spot", "pain is worse at night", "boring pain", "tumutusok na sakit", "parang tinutusok", "parang sinasaksak"] },
+  { id: "numbness", name: "Numbness / tingling", cat: "pain", syn: ["numb", "numbness", "tingling", "pins and needles", "manhid", "namamanhid", "pamamanhid"] },
+  { id: "muscle_cramps", name: "Muscle cramps / twitching", cat: "pain", syn: ["muscle cramps", "muscle cramp", "leg cramps", "cramps in my legs", "twitching", "muscle twitch", "pulikat", "pinupulikat", "nangingisay"] },
+
+  // ---------- Menstrual / reproductive ----------
+  { id: "dysmenorrhea", name: "Painful periods", cat: "menstruation", syn: ["period pain", "period is painful", "periods are painful", "painful menstruation", "menstrual cramps", "painful periods", "painful period", "cramps during my period", "menstrual pain", "dysmenorrhea", "dismenorya", "masakit ang regla", "masakit ang mens", "sakit ng puson"] },
+  { id: "menstrual_clots", name: "Menstrual clots / dark blood", cat: "menstruation", syn: ["clots", "blood clots", "clotting", "dark blood with clots", "dark clots", "buo-buong dugo", "buo buong dugo", "may buo-buo"] },
+  { id: "heavy_periods", name: "Heavy periods", cat: "menstruation", syn: ["heavy periods", "heavy period", "heavy bleeding", "heavy flow", "flooding", "malakas ang regla", "malakas ang mens"] },
+  { id: "scanty_periods", name: "Scanty / light periods", cat: "menstruation", syn: ["light periods", "scanty periods", "light flow", "very little blood", "kaunti ang regla", "mahina ang regla", "konti ang mens"] },
+  { id: "pale_menses", name: "Pale / watery menstrual blood", cat: "menstruation", syn: ["pale blood", "pinkish blood", "light colored blood", "watery menstrual blood", "matubig ang regla"] },
+  { id: "irregular_periods", name: "Irregular / late periods", cat: "menstruation", syn: ["irregular periods", "irregular period", "irregular mens", "irregular menstruation", "delayed period", "late period", "missed period", "delayed mens", "hindi regular ang regla", "delayed ang mens"] },
+  { id: "early_periods", name: "Early periods / short cycle", cat: "menstruation", syn: ["early periods", "period comes early", "short cycle", "twice a month", "maaga ang regla"] },
+  { id: "amenorrhea", name: "Absent periods", cat: "menstruation", syn: ["no period", "no periods", "amenorrhea", "stopped menstruating", "walang regla", "hindi dinadatnan"] },
+  { id: "pms_breast", name: "PMS / breast distension", cat: "menstruation", syn: ["breast tenderness", "sore breasts", "tender breasts", "breasts are tender", "breast distension", "pms", "premenstrual", "bloated before my period", "masakit ang suso bago mens"] },
+  { id: "vaginal_discharge", name: "Vaginal discharge", cat: "menstruation", syn: ["vaginal discharge", "discharge", "leukorrhea", "yellow discharge", "white discharge", "smelly discharge", "may lumalabas na puti"] },
+  { id: "low_libido", name: "Low libido / impotence", cat: "menstruation", syn: ["low libido", "low sex drive", "no sex drive", "erectile dysfunction", "impotence", "low desire", "mahina ang libog"] },
+  { id: "infertility", name: "Infertility", cat: "menstruation", syn: ["infertility", "can't get pregnant", "trying to conceive", "hindi mabuntis", "hirap mabuntis"] },
+
+  // ---------- Skin / complexion ----------
+  { id: "pale_complexion", name: "Pale complexion", cat: "skin", syn: ["pale", "pale face", "pale complexion", "look pale", "looks pale", "maputla", "namumutla"] },
+  { id: "sallow_complexion", name: "Sallow / dull complexion", cat: "skin", syn: ["sallow", "yellowish complexion", "dull complexion", "sallow skin", "matamlay ang mukha"] },
+  { id: "dark_complexion", name: "Dark complexion / dark circles", cat: "skin", syn: ["dark circles", "dark under my eyes", "dark complexion", "dark eye circles", "eyebags", "eye bags", "nangingitim ang ilalim ng mata"] },
+  { id: "dry_skin_hair", name: "Dry skin / hair, hair loss", cat: "skin", syn: ["dry skin", "dry hair", "hair falling out", "hair loss", "losing hair", "brittle nails", "nalalagas ang buhok", "tuyo ang balat", "nanlalagas ang buhok"] },
+  { id: "edema", name: "Edema / puffiness", cat: "skin", syn: ["swelling", "swollen ankles", "swollen feet", "swollen legs", "puffy", "puffiness", "water retention", "edema", "oedema", "manas", "namamanas", "namamaga ang paa"] },
+  { id: "easy_bruising", name: "Easy bruising", cat: "skin", syn: ["bruise easily", "easy bruising", "bruises easily", "purple spots", "madaling magpasa", "pasa"] },
+  { id: "skin_itch", name: "Itchy skin / rash", cat: "skin", syn: ["itchy skin", "itchiness", "itching", "rash", "rashes", "eczema", "hives", "makati ang balat", "pantal", "kati kati"] },
+  { id: "acne", name: "Acne / pimples", cat: "skin", syn: ["acne", "pimples", "pimple", "breakouts", "tigyawat", "taghiyawat"] },
+  { id: "weight_gain", name: "Weight gain / overweight", cat: "skin", syn: ["weight gain", "gaining weight", "gained weight", "overweight", "hard to lose weight", "tumaba", "tumataba"] }
+];
+
+/* Phrases that should be consumed but NOT counted (avoid false positives in typed notes). */
+const IGNORE_PHRASES = ["pale tongue", "tongue is pale", "tongue pale", "weak pulse", "pulse is weak", "no problem", "no problems", "not bad", "hindi naman masama", "gas station", "cold drinks are fine"];
+
+const TONGUE_FINDINGS = [
+  { id: "t_pale", name: "Pale body" },
+  { id: "t_red", name: "Red body" },
+  { id: "t_red_tip", name: "Red tip" },
+  { id: "t_red_sides", name: "Red sides" },
+  { id: "t_purple", name: "Purple body" },
+  { id: "t_dark_spots", name: "Purple spots" },
+  { id: "t_swollen", name: "Swollen" },
+  { id: "t_teeth_marks", name: "Teeth marks" },
+  { id: "t_thin", name: "Thin body" },
+  { id: "t_cracked", name: "Cracked" },
+  { id: "t_peeled", name: "Peeled / no coat" },
+  { id: "t_thin_white", name: "Thin white coat" },
+  { id: "t_thick", name: "Thick coat" },
+  { id: "t_white", name: "White coat" },
+  { id: "t_yellow", name: "Yellow coat" },
+  { id: "t_greasy", name: "Greasy / sticky coat" },
+  { id: "t_dry", name: "Dry" },
+  { id: "t_wet", name: "Wet" }
+];
+
+const PULSE_FINDINGS = [
+  { id: "p_floating", name: "Floating" },
+  { id: "p_deep", name: "Deep" },
+  { id: "p_rapid", name: "Rapid" },
+  { id: "p_slow", name: "Slow" },
+  { id: "p_wiry", name: "Wiry" },
+  { id: "p_slippery", name: "Slippery" },
+  { id: "p_thin", name: "Thin" },
+  { id: "p_weak", name: "Weak" },
+  { id: "p_empty", name: "Empty" },
+  { id: "p_choppy", name: "Choppy" },
+  { id: "p_tight", name: "Tight" },
+  { id: "p_full", name: "Full" },
+  { id: "p_irregular", name: "Knotted / irregular" }
+];
+
+/* PATTERNS
+   ind:      indicator id -> weight (1 = supportive, 2 = typical, 3 = key sign)
+   cardinal: key/cardinal indicators (give a bonus when present; penalised if explicitly denied)
+   contra:   indicators that argue AGAINST the pattern (id -> penalty weight)
+   Presentations follow standard textbook descriptions (e.g. Maciocia, "The Foundations of Chinese Medicine"). */
+const PATTERNS = [
+  { id: "liver_qi_stagnation", name: "Liver Qi Stagnation", principle: "Soothe the Liver, move Qi", formulas: "Xiao Yao San; Chai Hu Shu Gan San",
+    ind: { hypochondriac_pain: 3, irritability: 3, sighing: 3, pms_breast: 3, depression_mood: 2, mood_swings: 2, stress: 2, plum_pit: 2, chest_tightness: 2, irregular_periods: 2, alternating_stool: 2, dysmenorrhea: 1, bloating: 1, belching: 1, t_red_sides: 1, p_wiry: 3 },
+    cardinal: ["irritability", "hypochondriac_pain", "sighing", "pms_breast", "p_wiry"], contra: {} },
+  { id: "liver_yang_rising", name: "Liver Yang Rising", principle: "Pacify the Liver, subdue Yang, nourish Yin", formulas: "Tian Ma Gou Teng Yin",
+    ind: { headache: 3, temporal_headache: 3, dizziness: 3, tinnitus: 2, irritability: 2, red_face: 1, dry_eyes: 1, blurred_vision: 1, insomnia: 1, dry_mouth: 1, neck_stiffness: 1, t_red: 1, t_red_sides: 1, p_wiry: 3, p_thin: 1 },
+    cardinal: ["headache", "temporal_headache", "dizziness", "p_wiry"], contra: { cold_aversion: 1, t_pale: 1 } },
+  { id: "liver_fire", name: "Liver Fire Blazing", principle: "Clear Liver Fire", formulas: "Long Dan Xie Gan Tang",
+    ind: { bitter_taste: 3, red_eyes: 3, irritability: 3, headache: 2, temporal_headache: 2, red_face: 2, tinnitus: 2, thirst: 1, dark_urine: 1, constipation: 1, insomnia: 1, dream_disturbed: 1, t_red: 2, t_red_sides: 2, t_yellow: 2, t_dry: 1, p_wiry: 2, p_rapid: 2, p_full: 1 },
+    cardinal: ["bitter_taste", "red_eyes", "irritability", "t_red_sides", "p_rapid"], contra: { cold_aversion: 2, clear_urine: 1, t_pale: 2, p_slow: 2 } },
+  { id: "spleen_qi_def", name: "Spleen Qi Deficiency", principle: "Tonify Spleen Qi", formulas: "Si Jun Zi Tang; Liu Jun Zi Tang; Bu Zhong Yi Qi Tang (if sinking)",
+    ind: { fatigue: 3, poor_appetite: 3, loose_stools: 3, bloating: 3, weakness_limbs: 2, sallow_complexion: 2, prolapse: 2, pale_complexion: 1, reluctance_speak: 1, craving_sweets: 1, somnolence: 1, easy_bruising: 1, t_pale: 2, t_teeth_marks: 2, t_swollen: 1, t_thin_white: 1, p_weak: 2, p_empty: 2 },
+    cardinal: ["fatigue", "poor_appetite", "loose_stools", "bloating"], contra: { t_red: 1, p_rapid: 1, thirst_cold_drinks: 1 } },
+  { id: "spleen_yang_def", name: "Spleen Yang Deficiency", principle: "Warm and tonify Spleen Yang", formulas: "Li Zhong Wan; Fu Zi Li Zhong Wan",
+    ind: { loose_stools: 3, cold_aversion: 3, cold_limbs: 3, fatigue: 2, poor_appetite: 2, pain_better_warmth: 2, edema: 2, undigested_food_stool: 2, bloating: 1, abdominal_pain: 1, prefer_warm_drinks: 1, no_thirst: 1, pale_complexion: 1, t_pale: 2, t_wet: 2, t_swollen: 1, p_weak: 1, p_deep: 1, p_slow: 2 },
+    cardinal: ["loose_stools", "cold_aversion", "cold_limbs"], contra: { feeling_hot: 2, thirst_cold_drinks: 2, night_sweats: 1, t_red: 2, t_yellow: 1, p_rapid: 2 } },
+  { id: "damp_spleen", name: "Dampness Encumbering the Spleen (Cold-Damp)", principle: "Dry Dampness, strengthen the Spleen", formulas: "Ping Wei San; Shen Ling Bai Zhu San",
+    ind: { heaviness_body: 3, heavy_head: 3, sticky_taste: 3, poor_appetite: 2, bloating: 2, loose_stools: 2, nausea: 2, no_thirst: 1, somnolence: 1, edema: 1, vaginal_discharge: 1, chest_tightness: 1, t_greasy: 3, t_thick: 2, t_white: 1, t_swollen: 1, p_slippery: 3 },
+    cardinal: ["heaviness_body", "heavy_head", "t_greasy", "p_slippery"], contra: { dry_mouth: 1, thirst: 1, t_peeled: 2 } },
+  { id: "kidney_yang_def", name: "Kidney Yang Deficiency", principle: "Warm and tonify Kidney Yang", formulas: "Jin Gui Shen Qi Wan; You Gui Wan",
+    ind: { lower_back_pain: 3, knee_weakness: 3, cold_limbs: 3, nocturia: 3, clear_urine: 3, early_morning_diarrhea: 3, cold_aversion: 2, frequent_urination: 2, edema: 2, low_libido: 2, infertility: 1, fatigue: 1, pale_complexion: 1, tinnitus: 1, incontinence: 1, t_pale: 2, t_wet: 2, t_swollen: 1, p_deep: 2, p_weak: 2, p_slow: 2 },
+    cardinal: ["lower_back_pain", "cold_limbs", "clear_urine", "nocturia"], contra: { feeling_hot: 2, night_sweats: 1, dark_urine: 2, t_red: 2, p_rapid: 2 } },
+  { id: "kidney_yin_def", name: "Kidney Yin Deficiency", principle: "Nourish Kidney Yin, clear Empty Heat", formulas: "Liu Wei Di Huang Wan; Zuo Gui Wan; Zhi Bai Di Huang Wan",
+    ind: { night_sweats: 3, five_palm_heat: 3, lower_back_pain: 2, knee_weakness: 2, malar_flush: 2, afternoon_fever: 2, hot_flashes: 2, tinnitus: 2, dry_mouth: 2, dizziness: 1, thirst: 1, poor_memory: 1, insomnia: 1, constipation: 1, dark_urine: 1, scanty_periods: 1, hearing_loss: 1, t_red: 2, t_peeled: 3, t_cracked: 1, p_thin: 2, p_rapid: 2 },
+    cardinal: ["night_sweats", "five_palm_heat", "t_peeled"], contra: { cold_aversion: 2, clear_urine: 1, t_pale: 1, t_wet: 1, t_greasy: 1, p_slow: 1 } },
+  { id: "heart_blood_def", name: "Heart Blood Deficiency (Heart–Spleen)", principle: "Nourish Heart Blood, calm the Shen", formulas: "Gui Pi Tang",
+    ind: { palpitations: 3, insomnia: 3, poor_memory: 2, dream_disturbed: 2, anxiety: 2, easily_startled: 2, pale_complexion: 2, dizziness: 1, fatigue: 1, poor_concentration: 1, scanty_periods: 1, t_pale: 2, t_thin: 1, p_thin: 2, p_choppy: 1, p_weak: 1 },
+    cardinal: ["palpitations", "insomnia", "poor_memory", "t_pale"], contra: { t_red: 1, feeling_hot: 1 } },
+  { id: "heart_kidney_yin", name: "Heart Yin Deficiency / Heart & Kidney Not Harmonised", principle: "Nourish Heart & Kidney Yin, calm the Shen", formulas: "Tian Wang Bu Xin Dan; Huang Lian E Jiao Tang",
+    ind: { palpitations: 3, insomnia: 3, restlessness: 3, waking_night: 2, dream_disturbed: 2, anxiety: 2, night_sweats: 2, five_palm_heat: 2, dry_mouth: 2, malar_flush: 1, poor_memory: 1, tinnitus: 1, lower_back_pain: 1, mouth_ulcers: 1, t_red_tip: 3, t_red: 2, t_peeled: 2, t_cracked: 1, p_thin: 1, p_rapid: 2 },
+    cardinal: ["palpitations", "insomnia", "restlessness", "t_red_tip"], contra: { cold_aversion: 2, t_pale: 2, p_slow: 1 } },
+  { id: "lung_qi_def", name: "Lung Qi Deficiency", principle: "Tonify Lung Qi, consolidate the exterior", formulas: "Bu Fei Tang; Yu Ping Feng San",
+    ind: { shortness_breath: 3, spontaneous_sweating: 3, catch_colds: 3, cough: 2, reluctance_speak: 2, fatigue: 2, aversion_wind: 2, pale_complexion: 1, phlegm_white: 1, t_pale: 2, p_weak: 2, p_empty: 1 },
+    cardinal: ["shortness_breath", "spontaneous_sweating", "catch_colds"], contra: { t_red: 1, p_rapid: 1, phlegm_yellow: 1 } },
+  { id: "blood_stasis", name: "Blood Stasis", principle: "Invigorate Blood, dispel stasis", formulas: "Xue Fu Zhu Yu Tang; Tao Hong Si Wu Tang; Ge Xia Zhu Yu Tang",
+    ind: { fixed_stabbing_pain: 3, dysmenorrhea: 3, menstrual_clots: 3, chest_pain: 2, dark_complexion: 2, easy_bruising: 1, numbness: 1, hypochondriac_pain: 1, dry_skin_hair: 1, irregular_periods: 1, infertility: 1, t_purple: 3, t_dark_spots: 2, p_choppy: 3, p_wiry: 1 },
+    cardinal: ["fixed_stabbing_pain", "menstrual_clots", "t_purple", "p_choppy"], contra: {} },
+  { id: "blood_def", name: "Blood Deficiency (Liver Blood)", principle: "Nourish Blood", formulas: "Si Wu Tang; Ba Zhen Tang; Dang Gui Bu Xue Tang",
+    ind: { blurred_vision: 3, scanty_periods: 3, dizziness: 2, dry_eyes: 2, numbness: 2, muscle_cramps: 2, pale_complexion: 2, dry_skin_hair: 2, pale_menses: 2, sallow_complexion: 1, amenorrhea: 1, poor_memory: 1, fatigue: 1, insomnia: 1, t_pale: 3, t_thin: 1, t_dry: 1, p_thin: 3, p_choppy: 1 },
+    cardinal: ["blurred_vision", "scanty_periods", "t_pale", "p_thin"], contra: { t_red: 1, feeling_hot: 1 } },
+  { id: "phlegm_damp", name: "Phlegm-Damp", principle: "Resolve Phlegm, dry Dampness", formulas: "Er Chen Tang; Wen Dan Tang (with Heat)",
+    ind: { phlegm_white: 3, cough: 2, chest_tightness: 2, nausea: 2, heavy_head: 2, dizziness: 2, heaviness_body: 2, weight_gain: 2, sticky_taste: 2, plum_pit: 1, poor_appetite: 1, wheezing: 1, somnolence: 1, t_greasy: 3, t_swollen: 2, t_thick: 2, t_white: 1, p_slippery: 3 },
+    cardinal: ["phlegm_white", "t_greasy", "p_slippery"], contra: { dry_mouth: 1, t_peeled: 2 } },
+  { id: "damp_heat", name: "Damp-Heat (Lower Jiao / general)", principle: "Clear Heat, resolve Dampness", formulas: "San Ren Tang; Ba Zheng San (urinary); Long Dan Xie Gan Tang",
+    ind: { painful_urination: 3, foul_stools: 3, dark_urine: 2, vaginal_discharge: 2, skin_itch: 2, loose_stools: 1, heaviness_body: 1, feeling_hot: 1, fever: 1, thirst: 1, bitter_taste: 1, acne: 1, bloating: 1, nausea: 1, t_greasy: 3, t_yellow: 2, t_red: 1, p_slippery: 2, p_rapid: 2 },
+    cardinal: ["painful_urination", "foul_stools", "t_greasy", "t_yellow"], contra: { cold_aversion: 1, clear_urine: 2, t_pale: 1, p_slow: 1 } },
+  { id: "wind_cold", name: "Wind-Cold Invasion", principle: "Release the exterior, dispel Wind-Cold", formulas: "Ma Huang Tang; Gui Zhi Tang; Jing Fang Bai Du San",
+    ind: { chills: 3, no_sweat: 3, body_aches: 3, cold_aversion: 2, headache: 2, neck_stiffness: 2, sneezing: 2, runny_nose: 2, acute_cold: 2, stuffy_nose: 1, cough: 1, phlegm_white: 1, fever: 1, aversion_wind: 1, t_thin_white: 2, p_floating: 3, p_tight: 3 },
+    cardinal: ["chills", "no_sweat", "body_aches", "p_floating", "p_tight"], contra: { sore_throat: 2, thirst: 2, phlegm_yellow: 2, t_red: 1, p_rapid: 2 } },
+  { id: "wind_heat", name: "Wind-Heat Invasion", principle: "Release the exterior, dispel Wind-Heat", formulas: "Yin Qiao San; Sang Ju Yin",
+    ind: { fever: 3, sore_throat: 3, cough: 2, phlegm_yellow: 2, acute_cold: 2, thirst: 1, spontaneous_sweating: 1, headache: 1, runny_nose: 1, chills: 1, aversion_wind: 1, t_red_tip: 2, t_thin_white: 1, t_yellow: 1, p_floating: 3, p_rapid: 3 },
+    cardinal: ["fever", "sore_throat", "p_floating", "p_rapid"], contra: { no_sweat: 1, prefer_warm_drinks: 1, p_slow: 2, p_tight: 1 } },
+  { id: "stomach_heat", name: "Stomach Heat / Fire", principle: "Clear Stomach Heat", formulas: "Qing Wei San; Yu Nu Jian",
+    ind: { excessive_hunger: 3, thirst_cold_drinks: 3, bad_breath: 3, bleeding_gums: 3, thirst: 2, epigastric_pain: 2, acid_reflux: 2, mouth_ulcers: 2, constipation: 2, dark_urine: 1, nausea: 1, vomiting: 1, acne: 1, t_red: 2, t_yellow: 2, t_dry: 1, p_rapid: 2, p_full: 1, p_slippery: 1 },
+    cardinal: ["excessive_hunger", "thirst_cold_drinks", "bleeding_gums", "bad_breath"], contra: { cold_aversion: 2, prefer_warm_drinks: 2, loose_stools: 1, t_pale: 2, p_slow: 2 } }
+];
+
+/* Scoring constants (see scorePatterns) */
+const SCORING = {
+  cardinalBonus: 0.20,       // up to +20 points when all cardinal signs are present
+  negatedCardinalFactor: 0.5,// explicitly denied cardinal sign subtracts half its weight
+  topN: 5
+};
+/* =================== END OF KNOWLEDGE BASE =================== */
+</script>
+<script>
+"use strict";
+/* =====================================================================
+   DETECTION ENGINE
+   ===================================================================== */
+const SYMPTOM_BY_ID = Object.fromEntries(SYMPTOMS.map(s => [s.id, s]));
+const TONGUE_BY_ID = Object.fromEntries(TONGUE_FINDINGS.map(t => [t.id, t]));
+const PULSE_BY_ID = Object.fromEntries(PULSE_FINDINGS.map(p => [p.id, p]));
+
+function indicatorName(id) {
+  if (SYMPTOM_BY_ID[id]) return SYMPTOM_BY_ID[id].name;
+  if (TONGUE_BY_ID[id]) return "Tongue: " + TONGUE_BY_ID[id].name.toLowerCase();
+  if (PULSE_BY_ID[id]) return "Pulse: " + PULSE_BY_ID[id].name.toLowerCase();
+  return id;
+}
+function shortIndicatorName(id) {
+  if (SYMPTOM_BY_ID[id]) return SYMPTOM_BY_ID[id].name.split(" (")[0];
+  return indicatorName(id);
+}
+
+// normalise a phrase / matched text into a lookup key
+function phraseKey(s) {
+  return s.toLowerCase().replace(/['’‘`]/g, "").replace(/[\s\-]+/g, " ").trim();
+}
+function phraseToRegexSource(p) {
+  let out = "";
+  const src = p.toLowerCase().trim();
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === "'" || ch === "’") out += "['’‘`]?";
+    else if (/[\s\-]/.test(ch)) { while (i + 1 < src.length && /[\s\-]/.test(src[i + 1])) i++; out += "[\\s\\-]+"; }
+    else if (/[.*+?^${}()|[\]\\\/]/.test(ch)) out += "\\" + ch;
+    else out += ch;
+  }
+  return out;
+}
+
+const Matcher = (function build() {
+  const map = new Map();            // key -> symptom id (null = ignore)
+  const sources = new Map();        // key -> regex source
+  const add = (phrase, id) => {
+    const key = phraseKey(phrase);
+    if (!key) return;
+    if (map.has(key) && map.get(key) !== id) console.warn("Duplicate phrase in dictionary:", phrase, map.get(key), id);
+    if (!map.has(key)) { map.set(key, id); sources.set(key, phraseToRegexSource(phrase)); }
+  };
+  IGNORE_PHRASES.forEach(p => add(p, null));
+  SYMPTOMS.forEach(s => (s.syn || []).forEach(p => add(p, s.id)));
+  const keys = [...map.keys()].sort((a, b) => b.length - a.length);   // longest first
+  const re = new RegExp("(?<![\\p{L}\\p{N}])(" + keys.map(k => sources.get(k)).join("|") + ")(?:e?s)?(?![\\p{L}\\p{N}])", "giu");
+  return { map, re, phraseCount: keys.length };
+})();
+
+/* Negation handling ------------------------------------------------------
+   A match is negated if a negation cue appears in the same clause shortly
+   before it (max 6 words), e.g. "no headaches", "I don't have night sweats",
+   "hindi naman ako nahihilo", "wala akong lagnat". Other symptom phrases in
+   between are masked so lists like "no fever, chills or sweating" work,
+   while "I don't sleep well, tired all day" does not negate "tired". */
+const NEG_CUE = /(?<![\p{L}\p{N}'])(no|not|never|without|none|nor|neither|dont|don't|doesnt|doesn't|didnt|didn't|havent|haven't|hasnt|hasn't|hadnt|hadn't|isnt|isn't|arent|aren't|wasnt|wasn't|werent|weren't|wont|won't|denies|denied|deny|negative\s+for|free\s+of|hindi|hinde|di|wala|walang|wla|ni\s+minsan)(?![\p{L}\p{N}])/iu;
+const PSEUDO_NEG = /\b(don'?t\s+know|not\s+sure|no\s+idea|not\s+only|not\s+just|no\s+matter|no\s+wonder|hindi\s+ko\s+alam|di\s+ko\s+alam|hindi\s+lang|not\s+as\s+much)\b/giu;
+const CLAUSE_BREAK = /[.;!?\n]|(?<![\p{L}\p{N}])(but|pero|however|although|though|except|yet|kaso|kaya\s+lang|tapos|also|plus|i|i'm|im|i've|ive|i'd|my|she|he|we|it's|kasi|sometimes|minsan)(?![\p{L}\p{N}'])/giu;
+
+function isNegated(maskedBefore) {
+  let scope = maskedBefore;
+  let m, lastEnd = 0;
+  CLAUSE_BREAK.lastIndex = 0;
+  while ((m = CLAUSE_BREAK.exec(scope)) !== null) { lastEnd = m.index + m[0].length; if (m[0].length === 0) CLAUSE_BREAK.lastIndex++; }
+  scope = scope.slice(lastEnd).replace(PSEUDO_NEG, " ");
+  const words = scope.split(/\s+/).filter(Boolean).slice(-6).join(" ");
+  return NEG_CUE.test(words);
+}
+
+// Detect symptoms in one piece of text. Returns [{start,end,id,text,negated}]
+function detectText(text) {
+  const out = [];
+  if (!text) return out;
+  const re = Matcher.re;
+  re.lastIndex = 0;
+  let m;
+  const raw = [];
+  while ((m = re.exec(text)) !== null) {
+    const key = phraseKey(m[1]);
+    const id = Matcher.map.has(key) ? Matcher.map.get(key) : undefined;
+    raw.push({ start: m.index, end: m.index + m[0].length, id, text: m[0] });
+  }
+  // mask all matched ranges so they don't interfere with negation scope
+  let masked = text;
+  if (raw.length) {
+    const chars = text.split("");
+    raw.forEach(r => { for (let i = r.start; i < r.end; i++) chars[i] = "#"; });
+    masked = chars.join("");
+  }
+  raw.forEach(r => {
+    if (!r.id) return;  // ignore-phrase or unknown
+    const before = masked.slice(Math.max(0, r.start - 120), r.start);
+    out.push({ ...r, negated: isNegated(before) });
+  });
+  return out;
+}
+
+/* Aggregate detection over the session transcript + manual overrides. */
+const detCache = new WeakMap();
+function entryDetections(entry) {
+  let c = detCache.get(entry);
+  if (!c || c.text !== entry.text) { c = { text: entry.text, matches: detectText(entry.text) }; detCache.set(entry, c); }
+  return c.matches;
+}
+function computeSymptoms(session) {
+  const agg = {};
+  for (const e of session.entries) {
+    for (const m of entryDetections(e)) {
+      const a = agg[m.id] || (agg[m.id] = { id: m.id, pos: 0, neg: 0, phrases: new Set(), detected: true });
+      if (m.negated) a.neg++; else a.pos++;
+      a.phrases.add(m.text.toLowerCase());
+    }
+  }
+  const ov = session.overrides || {};
+  for (const [id, v] of Object.entries(ov)) {
+    if (!SYMPTOM_BY_ID[id]) continue;
+    if (!agg[id]) agg[id] = { id, pos: 0, neg: 0, phrases: new Set(), detected: false };
+    agg[id].override = v;
+  }
+  const list = Object.values(agg).map(a => {
+    let status = a.pos > 0 ? "present" : "negated";
+    if (a.override === "present") status = "present";
+    else if (a.override === "removed") status = "removed";
+    else if (a.override === "negated") status = "negated";
+    return { ...a, phrases: [...a.phrases], status, manual: !a.detected || (a.override === "present" && a.pos === 0) };
+  });
+  return list;
+}
+
+/* =====================================================================
+   PATTERN SCORING
+   fit = (matched weight − contra penalties − ½·weight of denied cardinals) / total weight
+         + cardinalBonus × (cardinals present / cardinals total), clamped to 0–100 %.
+   ===================================================================== */
+function scorePatterns(presentIds, negatedIds) {
+  const present = new Set(presentIds), negated = new Set(negatedIds);
+  const results = PATTERNS.map(p => {
+    let total = 0, matched = 0, contraPen = 0, negPen = 0;
+    const hits = [], contraHits = [], negHits = [], missingCardinal = [];
+    const card = new Set(p.cardinal || []);
+    for (const [id, w] of Object.entries(p.ind)) {
+      total += w;
+      if (present.has(id)) { matched += w; hits.push({ id, w, cardinal: card.has(id) }); }
+      else if (card.has(id)) {
+        if (negated.has(id)) { negPen += w * SCORING.negatedCardinalFactor; negHits.push({ id, w }); }
+        else missingCardinal.push(id);
+      }
+    }
+    for (const [id, w] of Object.entries(p.contra || {})) if (present.has(id)) { contraPen += w; contraHits.push({ id, w }); }
+    const cardHit = hits.filter(h => h.cardinal).length;
+    const coverage = total ? (matched - contraPen - negPen) / total : 0;
+    const bonus = card.size ? SCORING.cardinalBonus * (cardHit / card.size) : 0;
+    let fit = matched > 0 ? Math.max(0, Math.min(1, coverage + bonus)) : 0;
+    hits.sort((a, b) => (b.cardinal - a.cardinal) || (b.w - a.w));
+    return { id: p.id, name: p.name, principle: p.principle, formulas: p.formulas, fit, pct: Math.round(fit * 100), matched, total, contraPen, negPen, cardHit, cardTotal: card.size, hits, contraHits, negHits, missingCardinal };
+  });
+  return results.filter(r => r.matched > 0).sort((a, b) => (b.fit - a.fit) || (b.matched - a.matched));
+}
+
+function analyzeSession(session) {
+  const symptoms = computeSymptoms(session);
+  const presentSym = symptoms.filter(s => s.status === "present").map(s => s.id);
+  const negatedSym = symptoms.filter(s => s.status === "negated").map(s => s.id);
+  const present = [...presentSym, ...(session.tongue || []), ...(session.pulse || [])];
+  const patterns = scorePatterns(present, negatedSym);
+  return { symptoms, presentSym, negatedSym, patterns };
+}
+
+/* =====================================================================
+   STORAGE (IndexedDB, falls back to localStorage, then memory)
+   ===================================================================== */
+const DB = {
+  mode: "memory", db: null, mem: { patients: {}, visits: {}, meta: {} },
+  STORES: ["patients", "visits", "meta"],
+  async init() {
+    try {
+      if (!window.indexedDB) throw new Error("IndexedDB unavailable");
+      this.db = await new Promise((resolve, reject) => {
+        const req = indexedDB.open("tcm-consult-assistant", 1);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains("patients")) db.createObjectStore("patients", { keyPath: "id" });
+          if (!db.objectStoreNames.contains("visits")) db.createObjectStore("visits", { keyPath: "id" }).createIndex("patientId", "patientId");
+          if (!db.objectStoreNames.contains("meta")) db.createObjectStore("meta", { keyPath: "id" });
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+        req.onblocked = () => reject(new Error("IndexedDB blocked"));
+        setTimeout(() => reject(new Error("IndexedDB open timeout")), 4000);
+      });
+      this.mode = "indexeddb";
+    } catch (err) {
+      console.warn("IndexedDB failed, falling back:", err);
+      try { localStorage.setItem("__tcm_t", "1"); localStorage.removeItem("__tcm_t"); this.mode = "localstorage"; }
+      catch (e) { this.mode = "memory"; }
+    }
+    return this.mode;
+  },
+  _ls(store) { try { return JSON.parse(localStorage.getItem("tcm_" + store) || "{}"); } catch { return {}; } },
+  _lsSave(store, obj) { localStorage.setItem("tcm_" + store, JSON.stringify(obj)); },
+  _tx(store, mode, fn) {
+    return new Promise((resolve, reject) => {
+      const tx = this.db.transaction(store, mode);
+      const os = tx.objectStore(store);
+      let result;
+      const req = fn(os);
+      if (req) req.onsuccess = () => { result = req.result; };
+      tx.oncomplete = () => resolve(result);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  },
+  async all(store) {
+    if (this.mode === "indexeddb") return (await this._tx(store, "readonly", os => os.getAll())) || [];
+    if (this.mode === "localstorage") return Object.values(this._ls(store));
+    return Object.values(this.mem[store]);
+  },
+  async get(store, id) {
+    if (this.mode === "indexeddb") return this._tx(store, "readonly", os => os.get(id));
+    if (this.mode === "localstorage") return this._ls(store)[id];
+    return this.mem[store][id];
+  },
+  async put(store, obj) {
+    obj = JSON.parse(JSON.stringify(obj));
+    if (this.mode === "indexeddb") return this._tx(store, "readwrite", os => os.put(obj));
+    if (this.mode === "localstorage") { const d = this._ls(store); d[obj.id] = obj; this._lsSave(store, d); return; }
+    this.mem[store][obj.id] = obj;
+  },
+  async del(store, id) {
+    if (this.mode === "indexeddb") return this._tx(store, "readwrite", os => os.delete(id));
+    if (this.mode === "localstorage") { const d = this._ls(store); delete d[id]; this._lsSave(store, d); return; }
+    delete this.mem[store][id];
+  }
+};
+
+/* =====================================================================
+   APP STATE
+   ===================================================================== */
+const $ = sel => document.querySelector(sel);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmtDateTime = iso => { if (!iso) return ""; const d = new Date(iso); return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); };
+const fmtTime = iso => new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+
+const state = {
+  patients: [], visits: [], selectedPatientId: null,
+  session: null, analysis: null, interim: "", listening: false, search: ""
+};
+
+function newSession(patientId) {
+  return { id: uid(), patientId: patientId || null, startedAt: new Date().toISOString(), savedAt: null,
+           lang: $("#langSel") ? $("#langSel").value : "en-PH", entries: [], overrides: {}, tongue: [], pulse: [], notes: "", diagnosis: "", dirty: false };
+}
+function sessionHasContent(s) {
+  return s && (s.entries.length || s.tongue.length || s.pulse.length || s.notes.trim() || s.diagnosis.trim() || Object.keys(s.overrides).length);
+}
+function patientById(id) { return state.patients.find(p => p.id === id); }
+function ageOf(p) {
+  if (p.dob) { const d = new Date(p.dob), n = new Date(); let a = n.getFullYear() - d.getFullYear(); if (n.getMonth() < d.getMonth() || (n.getMonth() === d.getMonth() && n.getDate() < d.getDate())) a--; return isNaN(a) ? "" : a; }
+  return p.age ?? "";
+}
+
+/* ---------- change tracking & autosave ---------- */
+let draftTimer = null;
+function markDirty() {
+  state.session.dirty = true;
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(saveDraft, 1200);
+  renderSessionInfo();
+}
+async function saveDraft() {
+  try { await DB.put("meta", { id: "draft", session: state.session, at: new Date().toISOString() }); } catch (e) { console.warn("Draft save failed", e); }
+}
+async function clearDraft() { try { await DB.del("meta", "draft"); } catch {} }
+
+function refreshAnalysis() {
+  state.analysis = analyzeSession(state.session);
+  renderTranscript(); renderSymptoms(); renderPatterns();
+}
+
+/* =====================================================================
+   RENDERING
+   ===================================================================== */
+function toast(msg, ms = 2600) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), ms);
+}
+function banner(msg, type) {
+  const b = $("#banner");
+  if (!msg) { b.className = "banner"; b.innerHTML = ""; return; }
+  b.className = "banner show" + (type === "error" ? " error" : "");
+  b.innerHTML = msg + ' <button class="link small" onclick="banner()">Dismiss</button>';
+}
+
+function renderLegend() {
+  $("#legend").innerHTML = Object.entries(CATEGORIES).map(([k, c]) => `<span style="--c:${c.color}"><i></i>${esc(c.label)}</span>`).join("")
+    + `<span><i style="background:#ccc"></i><s>negated</s></span>`;
+}
+
+function renderSessionInfo() {
+  const s = state.session, p = patientById(s.patientId);
+  const saved = state.visits.some(v => v.id === s.id);
+  $("#sessionInfo").innerHTML = `Session: <b>${p ? esc(p.name) : "No patient assigned"}</b> · started ${esc(fmtDateTime(s.startedAt))}`
+    + (saved ? ` · <span>saved visit</span>` : "") + (s.dirty ? ` · <span class="dirty">unsaved changes</span>` : (saved ? " ✓" : ""));
+}
+
+function renderPatients() {
+  const q = state.search.trim().toLowerCase();
+  const list = state.patients
+    .filter(p => !q || [p.name, p.contact, p.notes].some(f => (f || "").toLowerCase().includes(q)))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const ul = $("#patientList");
+  if (!list.length) { ul.innerHTML = `<li class="empty">${state.patients.length ? "No matches" : "No patients yet — click “+ New patient”."}</li>`; return; }
+  ul.innerHTML = list.map(p => {
+    const n = state.visits.filter(v => v.patientId === p.id).length;
+    const age = ageOf(p);
+    return `<li data-id="${p.id}" class="${p.id === state.selectedPatientId ? "active" : ""}"><div><div class="pname">${esc(p.name)}</div><div class="pmeta">${[age !== "" ? age + " y" : "", p.sex].filter(Boolean).map(esc).join(" · ") || "&nbsp;"}</div></div><div class="pmeta">${n} visit${n === 1 ? "" : "s"}</div></li>`;
+  }).join("");
+}
+
+function renderProfile() {
+  const el = $("#patientProfile");
+  const p = patientById(state.selectedPatientId);
+  if (!p) { el.innerHTML = `<div class="empty">Select a patient to see their profile and past visits.<br><br>You can start listening without a patient and assign one before saving.</div>`; return; }
+  const visits = state.visits.filter(v => v.patientId === p.id).sort((a, b) => (b.startedAt || "").localeCompare(a.startedAt || ""));
+  const age = ageOf(p);
+  el.innerHTML = `
+    <div class="name">${esc(p.name)}</div>
+    <dl>
+      <dt>Age</dt><dd>${age !== "" ? esc(age) : "—"}${p.dob ? ` <span class="pmeta">(DOB ${esc(p.dob)})</span>` : ""}</dd>
+      <dt>Sex</dt><dd>${esc(p.sex || "—")}</dd>
+      <dt>Contact</dt><dd>${esc(p.contact || "—")}</dd>
+      <dt>Notes</dt><dd>${esc(p.notes || "—")}</dd>
+    </dl>
+    <div class="btn-row">
+      <button class="small primary" id="startForPatientBtn">▶ New session</button>
+      <button class="small" id="editPatientBtn">Edit</button>
+      <button class="small danger" id="deletePatientBtn">Delete</button>
+    </div>
+    <h3 style="margin-top:12px">Past visits (${visits.length})</h3>
+    <ul class="visit-list">${visits.length ? visits.map(v => `
+      <li data-vid="${v.id}" class="${v.id === state.session.id ? "current" : ""}">
+        <div class="vdate">${esc(fmtDateTime(v.startedAt))}</div>
+        <div class="vsub">${v.patterns && v.patterns[0] ? esc(v.patterns[0].name) + " " + v.patterns[0].pct + "%" : "No pattern"}${v.diagnosis ? " · Dx: " + esc(v.diagnosis.slice(0, 60)) : ""}</div>
+        <button class="small danger vdel" data-delvid="${v.id}" title="Delete visit">✕</button>
+      </li>`).join("") : `<li class="empty" style="cursor:default;border:none">No saved visits yet.</li>`}
+    </ul>`;
+}
+
+function renderTranscript() {
+  const el = $("#transcript");
+  const s = state.session;
+  const statusById = Object.fromEntries((state.analysis?.symptoms || []).map(x => [x.id, x.status]));
+  if (!s.entries.length && !state.interim) {
+    el.innerHTML = `<div class="placeholder">Press <b>Start listening</b> to transcribe the consultation live, or type / paste text below.<br>Detected symptoms are highlighted by category; negated mentions (e.g. “no headaches”) are struck through.</div>`;
+    return;
+  }
+  const html = s.entries.map(e => {
+    const ms = entryDetections(e);
+    let out = "", pos = 0;
+    for (const m of ms) {
+      out += esc(e.text.slice(pos, m.start));
+      const sym = SYMPTOM_BY_ID[m.id], cat = CATEGORIES[sym.cat];
+      const removed = statusById[m.id] === "removed";
+      const cls = "sym" + (m.negated ? " neg" : "") + (removed ? " removed" : "");
+      const title = sym.name + " — " + cat.label + (m.negated ? " (negated)" : "") + (removed ? " (dismissed)" : "");
+      out += `<mark class="${cls}" style="--c:${cat.color}" title="${esc(title)}" data-sym="${m.id}">${esc(e.text.slice(m.start, m.end))}</mark>`;
+      pos = m.end;
+    }
+    out += esc(e.text.slice(pos));
+    return `<div class="entry" data-eid="${e.id}"><span class="ts">${esc(fmtTime(e.ts))}</span><span class="src">${e.src === "speech" ? "voice" : "typed"}</span>${out}<button class="del" data-deleid="${e.id}" title="Remove this line">×</button></div>`;
+  }).join("");
+  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+  el.innerHTML = html + (state.interim ? `<div class="entry interim">${esc(state.interim)}…</div>` : "");
+  if (atBottom) el.scrollTop = el.scrollHeight;
+}
+
+function renderSymptoms() {
+  const syms = state.analysis.symptoms;
+  const catOrder = Object.keys(CATEGORIES);
+  const byCat = (a, b) => catOrder.indexOf(SYMPTOM_BY_ID[a.id].cat) - catOrder.indexOf(SYMPTOM_BY_ID[b.id].cat) || SYMPTOM_BY_ID[a.id].name.localeCompare(SYMPTOM_BY_ID[b.id].name);
+  const present = syms.filter(s => s.status === "present").sort(byCat);
+  const negated = syms.filter(s => s.status === "negated").sort(byCat);
+  $("#symptomChips").innerHTML = present.length ? present.map(s => {
+    const sym = SYMPTOM_BY_ID[s.id], c = CATEGORIES[sym.cat];
+    const tip = `${sym.name} (${c.label})` + (s.phrases.length ? `\nHeard: “${s.phrases.join("”, “")}”` : "\nAdded manually");
+    return `<span class="chip sym${s.manual ? " manual" : ""}" style="--c:${c.color}" title="${esc(tip)}">${esc(sym.name)}${s.pos > 1 ? ` <span class="cnt">×${s.pos}</span>` : ""}<button class="x" data-remove="${s.id}" title="Remove (false positive)">×</button></span>`;
+  }).join("") : `<span class="empty" style="padding:2px 0">None yet.</span>`;
+  $("#negatedWrap").innerHTML = negated.length ? `<div class="subhead">Negated / denied</div><div class="chips">${negated.map(s => {
+    const sym = SYMPTOM_BY_ID[s.id];
+    return `<span class="chip neg" title="${esc(sym.name)} — patient denied\nHeard: “${esc(s.phrases.join("”, “"))}”">${esc(sym.name)}<button class="ok" data-present="${s.id}" title="Actually present — mark as present">✓</button><button class="x" data-remove="${s.id}" title="Dismiss">×</button></span>`;
+  }).join("")}</div>` : "";
+}
+
+function renderFindings() {
+  const s = state.session;
+  $("#tongueChips").innerHTML = TONGUE_FINDINGS.map(t => `<button class="toggle${s.tongue.includes(t.id) ? " on" : ""}" data-tongue="${t.id}">${esc(t.name)}</button>`).join("");
+  $("#pulseChips").innerHTML = PULSE_FINDINGS.map(p => `<button class="toggle${s.pulse.includes(p.id) ? " on" : ""}" data-pulse="${p.id}">${esc(p.name)}</button>`).join("");
+}
+
+function renderPatterns() {
+  const list = state.analysis.patterns.slice(0, SCORING.topN);
+  const el = $("#patternList");
+  if (!list.length) { el.innerHTML = `<div class="empty">Patterns appear here as symptoms, tongue and pulse findings are recorded.</div>`; return; }
+  el.innerHTML = list.map((r, i) => `
+    <div class="pattern${i === 0 ? " p-rank1" : ""}" data-pattern="${r.id}">
+      <div class="p-head"><span class="p-name">${i + 1}. ${esc(r.name)}</span><span class="p-pct">${r.pct}%</span></div>
+      <div class="bar"><div style="width:${r.pct}%"></div></div>
+      <div class="ind">${r.hits.map(h => `<span class="${h.cardinal ? "card" : ""}" title="${esc(indicatorName(h.id))} (weight ${h.w}${h.cardinal ? ", key sign" : ""})">${h.cardinal ? "★ " : ""}${esc(shortIndicatorName(h.id))}</span>`).join("")}
+        ${r.contraHits.map(h => `<span class="contra" title="Argues against this pattern (−${h.w})">− ${esc(shortIndicatorName(h.id))}</span>`).join("")}
+        ${r.negHits.map(h => `<span class="negc" title="Key sign explicitly denied">${esc(shortIndicatorName(h.id))}</span>`).join("")}
+      </div>
+      ${r.missingCardinal.length ? `<div class="ask">Check key signs: ${r.missingCardinal.map(id => esc(shortIndicatorName(id))).join(", ")}</div>` : ""}
+      <details class="more"><summary>Details</summary>
+        <div class="p-score-meta">Matched weight ${r.matched}/${r.total}${r.contraPen ? `, contra −${r.contraPen}` : ""}${r.negPen ? `, denied −${r.negPen}` : ""} · key signs ${r.cardHit}/${r.cardTotal}</div>
+        <div>Principle: ${esc(r.principle)}</div><div>Reference formulas: ${esc(r.formulas)}</div>
+      </details>
+    </div>`).join("");
+}
+
+function renderAll() {
+  renderSessionInfo(); renderPatients(); renderProfile(); renderFindings();
+  $("#notesInput").value = state.session.notes || "";
+  $("#diagnosisInput").value = state.session.diagnosis || "";
+  refreshAnalysis();
+}
+
+/* =====================================================================
+   SESSION ACTIONS
+   ===================================================================== */
+function addEntry(text, src) {
+  text = (text || "").replace(/\s+/g, " ").trim();
+  if (!text) return;
+  state.session.entries.push({ id: uid(), ts: new Date().toISOString(), src, text });
+  markDirty(); refreshAnalysis();
+}
+function confirmDiscard() {
+  return !(state.session.dirty && sessionHasContent(state.session)) || confirm("The current session has unsaved changes. Discard them?");
+}
+function startNewSession(patientId) {
+  if (!confirmDiscard()) return false;
+  state.session = newSession(patientId ?? state.selectedPatientId);
+  state.interim = "";
+  clearDraft();
+  renderAll();
+  return true;
+}
+function openVisit(vid) {
+  const v = state.visits.find(x => x.id === vid);
+  if (!v) return;
+  if (v.id === state.session.id) {
+    if (!state.session.dirty || !confirm("Revert this visit to its last saved version? Unsaved changes will be lost.")) return;
+  } else if (!confirmDiscard()) return;
+  state.session = { ...newSession(v.patientId), ...JSON.parse(JSON.stringify(v)), dirty: false };
+  ["entries", "tongue", "pulse"].forEach(k => state.session[k] = state.session[k] || []);
+  state.session.overrides = state.session.overrides || {};
+  state.selectedPatientId = v.patientId;
+  clearDraft();
+  renderAll();
+  toast("Opened visit from " + fmtDateTime(v.startedAt));
+}
+
+function buildVisitRecord() {
+  const s = state.session, a = analyzeSession(s);
+  return {
+    id: s.id, patientId: s.patientId, startedAt: s.startedAt, savedAt: new Date().toISOString(), lang: s.lang,
+    transcript: s.entries.map(e => e.text).join("\n"),
+    entries: s.entries.map(e => ({ id: e.id, ts: e.ts, src: e.src, text: e.text })),
+    overrides: s.overrides,
+    symptoms: a.symptoms.filter(x => x.status !== "removed").map(x => ({ id: x.id, name: SYMPTOM_BY_ID[x.id].name, category: SYMPTOM_BY_ID[x.id].cat, status: x.status, mentions: x.pos, negatedMentions: x.neg, manual: !!x.manual, phrases: x.phrases })),
+    tongue: [...s.tongue], pulse: [...s.pulse],
+    patterns: a.patterns.slice(0, SCORING.topN).map(r => ({ id: r.id, name: r.name, pct: r.pct, matched: r.hits.map(h => h.id), contra: r.contraHits.map(h => h.id) })),
+    notes: s.notes, diagnosis: s.diagnosis
+  };
+}
+async function saveSession() {
+  const s = state.session;
+  if (!s.patientId) {
+    if (state.selectedPatientId && confirm(`Save this session to ${patientById(state.selectedPatientId).name}?`)) s.patientId = state.selectedPatientId;
+    else { alert("Please select or create a patient first, then save."); return; }
+  }
+  const rec = buildVisitRecord();
+  try {
+    await DB.put("visits", rec);
+    const i = state.visits.findIndex(v => v.id === rec.id);
+    if (i >= 0) state.visits[i] = rec; else state.visits.push(rec);
+    s.savedAt = rec.savedAt; s.dirty = false;
+    state.selectedPatientId = s.patientId;
+    await clearDraft();
+    renderSessionInfo(); renderPatients(); renderProfile();
+    toast("Session saved to " + patientById(s.patientId).name);
+  } catch (e) { console.error(e); alert("Could not save: " + e.message); }
+}
+
+/* ---------- patients ---------- */
+let editingPatientId = null;
+function openPatientDialog(p) {
+  editingPatientId = p ? p.id : null;
+  $("#patientDlgTitle").textContent = p ? "Edit patient" : "New patient";
+  const f = $("#patientForm");
+  f.reset();
+  ["name", "dob", "age", "sex", "contact", "notes"].forEach(k => f.elements[k].value = p ? (p[k] ?? "") : "");
+  $("#patientDialog").showModal();
+  setTimeout(() => f.elements.name.focus(), 30);
+}
+async function savePatientFromForm() {
+  const f = $("#patientForm");
+  const data = Object.fromEntries(["name", "dob", "age", "sex", "contact", "notes"].map(k => [k, f.elements[k].value.trim()]));
+  if (!data.name) { f.elements.name.focus(); return false; }
+  data.age = data.age === "" ? "" : Number(data.age);
+  const now = new Date().toISOString();
+  let p = editingPatientId ? patientById(editingPatientId) : null;
+  p = p ? { ...p, ...data, updatedAt: now } : { id: uid(), ...data, createdAt: now, updatedAt: now };
+  await DB.put("patients", p);
+  const i = state.patients.findIndex(x => x.id === p.id);
+  if (i >= 0) state.patients[i] = p; else state.patients.push(p);
+  selectPatient(p.id);
+  toast(editingPatientId ? "Patient updated" : "Patient created");
+  return true;
+}
+function selectPatient(id) {
+  state.selectedPatientId = id;
+  if (!state.session.patientId && id) { state.session.patientId = id; if (sessionHasContent(state.session)) markDirty(); }
+  renderPatients(); renderProfile(); renderSessionInfo();
+}
+async function deletePatient(id) {
+  const p = patientById(id); if (!p) return;
+  const vs = state.visits.filter(v => v.patientId === id);
+  if (!confirm(`Delete patient “${p.name}” and ${vs.length} visit record(s)? This cannot be undone.\n\nTip: export a JSON backup first.`)) return;
+  await DB.del("patients", id);
+  for (const v of vs) await DB.del("visits", v.id);
+  state.patients = state.patients.filter(x => x.id !== id);
+  state.visits = state.visits.filter(v => v.patientId !== id);
+  if (state.session.patientId === id) { state.session = newSession(null); clearDraft(); }
+  state.selectedPatientId = null;
+  renderAll();
+  toast("Patient deleted");
+}
+async function deleteVisit(vid) {
+  const v = state.visits.find(x => x.id === vid); if (!v) return;
+  if (!confirm(`Delete the visit from ${fmtDateTime(v.startedAt)}? This cannot be undone.`)) return;
+  await DB.del("visits", vid);
+  state.visits = state.visits.filter(x => x.id !== vid);
+  if (state.session.id === vid) state.session.dirty = true;
+  renderPatients(); renderProfile(); renderSessionInfo();
+  toast("Visit deleted");
+}
+
+/* ---------- export / import / print ---------- */
+async function exportAll() {
+  const data = { app: "tcm-consult-assistant", version: 1, exportedAt: new Date().toISOString(), patients: await DB.all("patients"), visits: await DB.all("visits") };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `tcm-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast(`Exported ${data.patients.length} patients, ${data.visits.length} visits`);
+}
+async function importData(text) {
+  let data;
+  try { data = JSON.parse(text); } catch { alert("That file is not valid JSON."); return; }
+  if (!data || !Array.isArray(data.patients) || !Array.isArray(data.visits)) { alert("Unrecognised file: expected { patients: [...], visits: [...] }."); return; }
+  if (!confirm(`Import ${data.patients.length} patients and ${data.visits.length} visits?\nRecords with the same ID will be overwritten; others are kept.`)) return;
+  let np = 0, nv = 0;
+  for (const p of data.patients) if (p && p.id && p.name) { await DB.put("patients", p); np++; }
+  for (const v of data.visits) if (v && v.id && v.patientId) { await DB.put("visits", v); nv++; }
+  await loadData();
+  renderAll();
+  toast(`Imported ${np} patients, ${nv} visits`);
+}
+function printVisit() {
+  const s = state.session, a = analyzeSession(s), p = patientById(s.patientId);
+  const catOrder = Object.keys(CATEGORIES);
+  const present = a.symptoms.filter(x => x.status === "present").sort((x, y) => catOrder.indexOf(SYMPTOM_BY_ID[x.id].cat) - catOrder.indexOf(SYMPTOM_BY_ID[y.id].cat));
+  const negated = a.symptoms.filter(x => x.status === "negated");
+  const transcriptHtml = s.entries.map(e => {
+    const ms = entryDetections(e); let out = "", pos = 0;
+    for (const m of ms) { out += esc(e.text.slice(pos, m.start)); out += `<mark class="sym${m.negated ? " neg" : ""}">${esc(e.text.slice(m.start, m.end))}</mark>`; pos = m.end; }
+    return `[${fmtTime(e.ts)}] ` + out + esc(e.text.slice(pos));
+  }).join("\n");
+  $("#printArea").innerHTML = `<div class="pr">
+    <h1>Consultation summary</h1>
+    <div class="muted">${esc(fmtDateTime(s.startedAt))}${s.savedAt ? " · saved " + esc(fmtDateTime(s.savedAt)) : " · (not yet saved)"}</div>
+    <h2>Patient</h2>
+    <table><tr><th>Name</th><td>${esc(p ? p.name : "—")}</td><th>Age</th><td>${p ? esc(ageOf(p)) : ""}</td><th>Sex</th><td>${esc(p?.sex || "")}</td></tr>
+    <tr><th>Contact</th><td colspan="5">${esc(p?.contact || "")}</td></tr>${p?.notes ? `<tr><th>Notes</th><td colspan="5">${esc(p.notes)}</td></tr>` : ""}</table>
+    <h2>Symptoms reported</h2>
+    <table><tr><th>Category</th><th>Symptom</th><th>Source</th></tr>${present.map(x => `<tr><td>${esc(CATEGORIES[SYMPTOM_BY_ID[x.id].cat].label)}</td><td>${esc(SYMPTOM_BY_ID[x.id].name)}</td><td>${x.manual ? "added manually" : "“" + esc(x.phrases.join("”, “")) + "”"}</td></tr>`).join("") || `<tr><td colspan="3">None recorded</td></tr>`}</table>
+    ${negated.length ? `<p><b>Denied:</b> ${negated.map(x => esc(SYMPTOM_BY_ID[x.id].name)).join("; ")}</p>` : ""}
+    <h2>Tongue &amp; pulse</h2>
+    <p><b>Tongue:</b> ${s.tongue.map(id => esc(TONGUE_BY_ID[id].name)).join(", ") || "—"}<br><b>Pulse:</b> ${s.pulse.map(id => esc(PULSE_BY_ID[id].name)).join(", ") || "—"}</p>
+    <h2>Pattern fit (decision support only, not a diagnosis)</h2>
+    <table><tr><th>Pattern</th><th>Fit</th><th>Matched indicators</th></tr>${a.patterns.slice(0, SCORING.topN).map(r => `<tr><td>${esc(r.name)}</td><td>${r.pct}%</td><td>${r.hits.map(h => esc(shortIndicatorName(h.id)) + (h.cardinal ? "*" : "")).join(", ")}</td></tr>`).join("") || `<tr><td colspan="3">—</td></tr>`}</table>
+    <div class="muted" style="font-size:10.5px">* key sign</div>
+    <h2>Practitioner notes</h2><p style="white-space:pre-wrap">${esc(s.notes) || "—"}</p>
+    <h2>Final diagnosis / treatment</h2><p style="white-space:pre-wrap">${esc(s.diagnosis) || "—"}</p>
+    <h2>Transcript</h2><div class="transcript-print">${transcriptHtml || "—"}</div>
+    <div class="disc">Pattern fit scores are generated automatically from the recorded findings and are decision support only — not a diagnosis. Transcript produced by browser speech recognition; no audio was recorded.</div>
+  </div>`;
+  window.print();
+}
+
+/* =====================================================================
+   SPEECH RECOGNITION (Web Speech API) — text only, no audio stored
+   ===================================================================== */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognizer = null, restartTimes = [];
+function setListeningUI() {
+  const on = state.listening;
+  $("#micBtn").classList.toggle("on", on);
+  $("#micBtn .lbl").textContent = on ? "Stop listening" : "Start listening";
+  const ls = $("#listenState");
+  ls.classList.toggle("on", on);
+  ls.textContent = on ? `Listening (${$("#langSel").value})…` : "Not listening";
+}
+function startListening() {
+  if (!SR) {
+    banner("Live speech recognition is not supported in this browser. Please use <b>Google Chrome</b> or <b>Microsoft Edge</b> on desktop. You can still type or paste notes below.", "error");
+    return;
+  }
+  if (!navigator.onLine) toast("You appear to be offline — browser speech recognition usually needs internet.");
+  recognizer = new SR();
+  recognizer.continuous = true;
+  recognizer.interimResults = true;
+  recognizer.maxAlternatives = 1;
+  recognizer.lang = $("#langSel").value;
+  recognizer.onresult = ev => {
+    let interim = "";
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      const r = ev.results[i];
+      if (r.isFinal) addEntry(r[0].transcript, "speech");
+      else interim += r[0].transcript;
+    }
+    state.interim = interim.trim();
+    renderTranscript();
+  };
+  recognizer.onerror = ev => {
+    if (ev.error === "no-speech" || ev.error === "aborted") return;  // normal; onend will restart
+    if (ev.error === "not-allowed" || ev.error === "service-not-allowed") {
+      state.listening = false; setListeningUI();
+      banner("Microphone access was blocked. Allow microphone access for this page (click the camera/mic icon in the address bar), then press Start listening again. If opened from a file and it keeps failing, serve the file from <code>http://localhost</code>.", "error");
+    } else if (ev.error === "network") {
+      banner("Speech service network error — the browser's speech recognition needs an internet connection. Retrying…");
+    } else if (ev.error === "language-not-supported") {
+      state.listening = false; setListeningUI();
+      banner(`The language “${esc(recognizer.lang)}” is not supported by this browser's speech service. Choose another language.`, "error");
+    } else if (ev.error === "audio-capture") {
+      state.listening = false; setListeningUI();
+      banner("No microphone was found. Check that a microphone is connected and enabled.", "error");
+    } else console.warn("Speech error", ev.error);
+  };
+  recognizer.onend = () => {
+    if (state.interim) { addEntry(state.interim, "speech"); state.interim = ""; }  // keep any unfinalised words
+    renderTranscript();
+    if (!state.listening) return;
+    const now = Date.now();
+    restartTimes = restartTimes.filter(t => now - t < 10000); restartTimes.push(now);
+    const delay = restartTimes.length > 5 ? 3000 : 250;   // back off if it keeps ending immediately
+    setTimeout(() => {
+      if (!state.listening) return;
+      try { recognizer.lang = $("#langSel").value; recognizer.start(); } catch (e) { console.warn("restart failed", e); }
+    }, delay);
+  };
+  recognizer.onstart = () => { if (!$("#banner").classList.contains("error")) banner(); };
+  try { recognizer.start(); state.listening = true; }
+  catch (e) { console.warn(e); state.listening = false; }
+  setListeningUI();
+}
+function stopListening() {
+  state.listening = false;
+  if (recognizer) { try { recognizer.stop(); } catch {} }
+  setListeningUI();
+}
+
+/* =====================================================================
+   SYMPTOM PICKER
+   ===================================================================== */
+function renderPicker() {
+  const q = $("#pickerSearch").value.trim().toLowerCase();
+  const presentSet = new Set(state.analysis.presentSym);
+  const items = SYMPTOMS.filter(s => !q || s.name.toLowerCase().includes(q) || s.syn.some(x => x.toLowerCase().includes(q)) || CATEGORIES[s.cat].label.toLowerCase().includes(q)).slice(0, 80);
+  $("#pickerList").innerHTML = items.map((s, i) => {
+    const c = CATEGORIES[s.cat];
+    return `<li data-add="${s.id}" class="${presentSet.has(s.id) ? "added" : ""}${i === 0 && q ? " hl" : ""}"><div><div>${esc(s.name)}${presentSet.has(s.id) ? " ✓" : ""}</div><div class="syn">${esc(s.syn.slice(0, 6).join(", "))}</div></div><span class="cat" style="--c:${c.color}">${esc(c.label)}</span></li>`;
+  }).join("") || `<li class="empty">No match</li>`;
+}
+function addSymptomManually(id) {
+  state.session.overrides[id] = "present";
+  markDirty(); refreshAnalysis();
+  toast("Added: " + SYMPTOM_BY_ID[id].name);
+}
+
+/* =====================================================================
+   EVENTS & INIT
+   ===================================================================== */
+async function loadData() {
+  state.patients = await DB.all("patients");
+  state.visits = await DB.all("visits");
+}
+function bindEvents() {
+  $("#micBtn").onclick = () => state.listening ? stopListening() : startListening();
+  $("#langSel").onchange = () => {
+    state.session.lang = $("#langSel").value;
+    try { localStorage.setItem("tcm_lang", $("#langSel").value); } catch {}
+    if (state.listening && recognizer) { try { recognizer.stop(); } catch {} }  // onend restarts with the new language
+    setListeningUI();
+  };
+  $("#newSessionBtn").onclick = () => startNewSession();
+  $("#saveBtn").onclick = saveSession;
+  $("#menuBtn").onclick = e => { e.stopPropagation(); $("#menu").classList.toggle("open"); };
+  document.addEventListener("click", () => $("#menu").classList.remove("open"));
+  $("#printBtn").onclick = printVisit;
+  $("#exportBtn").onclick = exportAll;
+  $("#importBtn").onclick = () => $("#importFile").click();
+  $("#importFile").onchange = async e => { const f = e.target.files[0]; if (f) await importData(await f.text()); e.target.value = ""; };
+
+  $("#addPatientBtn").onclick = () => openPatientDialog(null);
+  $("#patientSearch").oninput = e => { state.search = e.target.value; renderPatients(); };
+  $("#patientList").onclick = e => { const li = e.target.closest("li[data-id]"); if (li) selectPatient(li.dataset.id); };
+  $("#patientProfile").onclick = e => {
+    const t = e.target;
+    if (t.id === "startForPatientBtn") startNewSession(state.selectedPatientId);
+    else if (t.id === "editPatientBtn") openPatientDialog(patientById(state.selectedPatientId));
+    else if (t.id === "deletePatientBtn") deletePatient(state.selectedPatientId);
+    else if (t.dataset.delvid) { e.stopPropagation(); deleteVisit(t.dataset.delvid); }
+    else { const li = t.closest("li[data-vid]"); if (li) openVisit(li.dataset.vid); }
+  };
+  $("#patientForm").addEventListener("submit", async e => { e.preventDefault(); if (await savePatientFromForm()) $("#patientDialog").close(); });
+  document.querySelectorAll("dialog [data-close]").forEach(b => b.onclick = () => b.closest("dialog").close());
+
+  const addManual = () => { const ta = $("#manualInput"); addEntry(ta.value, "typed"); ta.value = ""; ta.focus(); };
+  $("#addTextBtn").onclick = addManual;
+  $("#manualInput").addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); addManual(); } });
+  $("#clearTranscriptBtn").onclick = () => {
+    if (!state.session.entries.length) return;
+    if (!confirm("Clear the whole transcript of this session? (Tongue/pulse, manual symptoms and notes are kept.)")) return;
+    state.session.entries = []; state.interim = ""; markDirty(); refreshAnalysis();
+  };
+  $("#transcript").onclick = e => {
+    const id = e.target.dataset.deleid;
+    if (id) { state.session.entries = state.session.entries.filter(x => x.id !== id); markDirty(); refreshAnalysis(); }
+  };
+  $("#notesInput").oninput = e => { state.session.notes = e.target.value; markDirty(); };
+  $("#diagnosisInput").oninput = e => { state.session.diagnosis = e.target.value; markDirty(); };
+
+  $("#rightPanel").onclick = e => {
+    const t = e.target.closest("button"); if (!t) return;
+    if (t.dataset.remove) { state.session.overrides[t.dataset.remove] = "removed"; markDirty(); refreshAnalysis(); toast("Removed: " + SYMPTOM_BY_ID[t.dataset.remove].name + " (re-add via + Add symptom)"); }
+    else if (t.dataset.present) { state.session.overrides[t.dataset.present] = "present"; markDirty(); refreshAnalysis(); }
+    else if (t.dataset.tongue || t.dataset.pulse) {
+      const key = t.dataset.tongue ? "tongue" : "pulse", id = t.dataset.tongue || t.dataset.pulse;
+      const arr = state.session[key], i = arr.indexOf(id);
+      if (i >= 0) arr.splice(i, 1); else arr.push(id);
+      markDirty(); renderFindings(); refreshAnalysis();
+    }
+  };
+  $("#addSymptomBtn").onclick = () => { $("#pickerSearch").value = ""; renderPicker(); $("#pickerDialog").showModal(); setTimeout(() => $("#pickerSearch").focus(), 30); };
+  $("#pickerSearch").oninput = renderPicker;
+  $("#pickerSearch").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); const li = $("#pickerList li[data-add]"); if (li) { addSymptomManually(li.dataset.add); $("#pickerDialog").close(); } } });
+  $("#pickerList").onclick = e => { const li = e.target.closest("li[data-add]"); if (li) { addSymptomManually(li.dataset.add); renderPicker(); } };
+
+  document.addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveSession(); } });
+  window.addEventListener("beforeunload", e => { if (state.session.dirty && sessionHasContent(state.session)) { saveDraft(); e.preventDefault(); e.returnValue = ""; } });
+}
+
+async function init() {
+  try { const l = localStorage.getItem("tcm_lang"); if (l) $("#langSel").value = l; } catch {}
+  state.session = newSession(null);
+  state.analysis = analyzeSession(state.session);
+  renderLegend();
+  bindEvents();
+  const mode = await DB.init();
+  $("#storageStatus").textContent = mode === "indexeddb" ? "Records stored locally in this browser (IndexedDB) — export regularly as backup."
+    : mode === "localstorage" ? "IndexedDB unavailable — records stored in localStorage (limited size). Export regularly."
+    : "⚠ Browser storage unavailable — records will be lost when the page closes. Use Export.";
+  if (mode === "memory") banner("Browser storage is unavailable, so records are kept in memory only. Use <b>Export</b> to save a backup file.", "error");
+  await loadData();
+  try {
+    const d = await DB.get("meta", "draft");
+    if (d && d.session && sessionHasContent(d.session)) {
+      state.session = { ...newSession(null), ...d.session, dirty: true };
+      state.selectedPatientId = state.session.patientId || null;
+      toast("Restored unsaved session draft from " + fmtDateTime(d.at), 4000);
+    }
+  } catch (e) { console.warn(e); }
+  if (!SR) banner("Live speech recognition is not available in this browser — use Chrome or Edge for live transcription. Typing/pasting notes still works.");
+  renderAll();
+  setListeningUI();
+  window.__tcmReady = true;
+}
+
+// Exposed for testing / console use
+window.TCM = { detectText, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+init();
+</script>
+</body>
+</html>
