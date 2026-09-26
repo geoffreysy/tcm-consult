@@ -169,6 +169,30 @@ details.all-matches>summary{cursor:pointer;color:var(--accent);font-weight:600}
 .ref-pat h4 .fit{font-size:12px;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap}
 .ref-line{font-size:12.5px;margin:2px 0;line-height:1.45}
 .ref-line>b{color:#44615a}
+.rx-block{margin:6px 0 4px;color:var(--ink,#1f2d2a)}
+.rx-label{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#44615a;font-weight:600;margin-top:4px}
+.rx{border:1px solid #d6e6e0;border-radius:8px;padding:6px 8px;margin:3px 0 6px;background:#fbfdfc;font-size:12.5px;color:#1f2d2a}
+.rx-title{font-size:13.5px;line-height:1.35}.rx-zh{color:#555}.rx-en{color:#5b6b67;font-style:italic;font-weight:normal}
+.rx-src{font-size:11.5px;color:#5b6b67;margin:1px 0 4px}
+.rx-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;border:1px solid #e3ece9;border-radius:6px}
+.rx-table{border-collapse:collapse;width:100%;min-width:430px;font-size:12px;background:#fff}
+.rx-table th{background:#eef5f2;text-align:left;font-weight:600;padding:4px 6px;white-space:nowrap;color:#2f4b44}
+.rx-table td{padding:3px 6px;border-top:1px solid #edf2f0;vertical-align:top}
+.rx-table td.rx-latin{font-style:italic;color:#44524f}.rx-table td.rx-dose{white-space:nowrap;font-variant-numeric:tabular-nums;text-align:right}
+.rx-table td.rx-role{white-space:nowrap;color:#44524f}.rx-table td.rx-herb{white-space:nowrap}
+.rx-table tr.rx-hit td{background:#fff5c2}
+.rx-hnote{font-size:11px;color:#6b7875;white-space:normal;max-width:220px}
+.rx-flag{display:inline-block;font-size:10px;border-radius:8px;padding:0 5px;margin-left:2px;font-weight:600;white-space:nowrap;background:#eee;color:#555}
+.rx-flag.rx-toxic,.rx-flag.rx-aristolochic{background:#fde2e2;color:#a11d1d}.rx-flag.rx-restricted{background:#fdebd3;color:#8a4b00}
+.rx-flag.rx-endangered{background:#e7e1fb;color:#4b2d9a}.rx-flag.rx-animal{background:#efe7dc;color:#6b4a22}
+.rx-flag.rx-pregnancy{background:#fce4f1;color:#8d1d5b}.rx-flag.rx-interaction{background:#e0eefc;color:#1d4f8d}
+.rx-prep,.rx-caution{margin-top:4px;line-height:1.4}.rx-caution{color:#7a2e12}
+.rx-flags{margin:4px 0 0;padding-left:16px;font-size:11.5px;line-height:1.4;color:#3a3a3a}
+.rx-actions{margin-top:5px}.rx-note{font-size:12px;color:#44615a;margin:2px 0 4px}
+.rx-alt{margin:3px 0;font-size:12.5px}.rx-alt>summary{cursor:pointer;color:var(--accent);padding:2px 0}
+.rx-disc{font-size:11px;color:#8a4b00;margin-top:4px;font-style:italic}
+.ref-rx-hits{border:1px solid #e8d98a;background:#fffbe6;border-radius:8px;padding:6px 10px;margin:6px 0;font-size:12.5px}
+.ref-rx-hit{text-decoration:underline dotted;cursor:help}
 .ref-signs{display:flex;flex-wrap:wrap;gap:3px;margin:3px 0}
 .ref-signs span{font-size:11.5px;border-radius:4px;padding:0 5px;background:#f3f6f5;border:1px solid #e0e8e5}
 .ref-signs span.w3{background:#e1f0ea;border-color:#a9d2c4}
@@ -840,281 +864,285 @@ const PATTERN_GROUPS = ["Liver", "Heart & Pericardium", "Spleen", "Stomach", "Lu
              (e.g. a Bi syndrome needs a joint complaint); otherwise its fit is multiplied
              by SCORING.requireFactor
    Presentations follow standard textbook descriptions (Maciocia, "The Foundations of
-   Chinese Medicine"; Bensky/Barolet formulas). Formula names are references only. */
+   Chinese Medicine"; Bensky/Barolet formulas).
+   rx:       formula ids (primary first, then alternatives) -> FORMULAS data block
+             (ingredients, doses, roles, cautions) defined in the separate formulas script
+   rxNote (optional): how the formulas are usually combined/modified for this pattern
+   formulas: readable fallback text (formula names) used if FORMULAS is unavailable */
 const PATTERNS = [
   // ============================ LIVER ============================
-  { id: "liver_qi_stagnation", organ: "Liver", name: "Liver Qi Stagnation", principle: "Soothe the Liver, move Qi", formulas: "Xiao Yao San; Chai Hu Shu Gan San; Yue Ju Wan",
+  { id: "liver_qi_stagnation", organ: "Liver", name: "Liver Qi Stagnation", principle: "Soothe the Liver, move Qi", formulas: "Xiao Yao San; Chai Hu Shu Gan San; Yue Ju Wan", rx: ["xiao_yao_san", "chai_hu_shu_gan_san", "yue_ju_wan"],
     ind: { hypochondriac_pain: 3, irritability: 3, sighing: 3, pms_breast: 3, depression_mood: 2, mood_swings: 2, stress: 2, plum_pit: 2, chest_tightness: 2, irregular_periods: 2, alternating_stool: 1, dysmenorrhea: 1, bloating: 1, belching: 1, t_red_sides: 1, p_wiry: 3 },
     cardinal: ["irritability", "hypochondriac_pain", "sighing", "pms_breast", "p_wiry"], contra: {} },
-  { id: "liver_blood_stasis", organ: "Liver", name: "Liver Blood Stasis", principle: "Invigorate Blood, eliminate stasis, move Liver Qi", formulas: "Ge Xia Zhu Yu Tang; Xue Fu Zhu Yu Tang; Gui Zhi Fu Ling Wan (masses)",
+  { id: "liver_blood_stasis", organ: "Liver", name: "Liver Blood Stasis", principle: "Invigorate Blood, eliminate stasis, move Liver Qi", formulas: "Ge Xia Zhu Yu Tang; Xue Fu Zhu Yu Tang; Gui Zhi Fu Ling Wan", rx: ["ge_xia_zhu_yu_tang", "xue_fu_zhu_yu_tang", "gui_zhi_fu_ling_wan"],
     ind: { fixed_stabbing_pain: 3, abdominal_mass: 3, dysmenorrhea: 3, menstrual_clots: 3, hypochondriac_pain: 2, dark_complexion: 2, purple_lips: 2, irregular_periods: 1, heavy_periods: 1, hematemesis: 1, t_purple: 3, t_dark_spots: 2, t_sublingual: 2, p_wiry: 2, p_choppy: 2 },
     cardinal: ["fixed_stabbing_pain", "menstrual_clots", "abdominal_mass", "t_purple"], contra: {} },
-  { id: "blood_def", organ: "Liver", name: "Liver Blood Deficiency", principle: "Nourish Liver Blood", formulas: "Si Wu Tang; Bu Gan Tang; Ba Zhen Tang",
+  { id: "blood_def", organ: "Liver", name: "Liver Blood Deficiency", principle: "Nourish Liver Blood", formulas: "Si Wu Tang; Bu Gan Tang; Ba Zhen Tang", rx: ["si_wu_tang", "bu_gan_tang", "ba_zhen_tang"],
     ind: { blurred_vision: 3, scanty_periods: 3, dizziness: 2, dry_eyes: 2, numbness: 2, muscle_cramps: 2, pale_complexion: 2, dry_skin_hair: 2, pale_menses: 2, sallow_complexion: 1, amenorrhea: 1, poor_memory: 1, fatigue: 1, insomnia: 1, t_pale: 3, t_thin: 1, t_dry: 1, p_thin: 3, p_choppy: 1 },
     cardinal: ["blurred_vision", "scanty_periods", "t_pale", "p_thin"], contra: { t_red: 1, feeling_hot: 1 } },
-  { id: "liver_yin_def", organ: "Liver", name: "Liver Yin Deficiency", principle: "Nourish Liver Yin", formulas: "Yi Guan Jian; Qi Ju Di Huang Wan",
+  { id: "liver_yin_def", organ: "Liver", name: "Liver Yin Deficiency", principle: "Nourish Liver Yin", formulas: "Yi Guan Jian; Qi Ju Di Huang Wan", rx: ["yi_guan_jian", "qi_ju_di_huang_wan"],
     ind: { dry_eyes: 3, blurred_vision: 2, dizziness: 2, scanty_periods: 2, night_sweats: 2, five_palm_heat: 2, numbness: 1, dry_skin_hair: 1, insomnia: 1, irritability: 1, dry_throat: 1, muscle_cramps: 1, t_red: 2, t_peeled: 3, t_red_sides: 1, p_thin: 2, p_rapid: 1, p_wiry: 1 },
     cardinal: ["dry_eyes", "blurred_vision", "t_peeled"], contra: { cold_aversion: 2, t_pale: 1, p_slow: 1 } },
-  { id: "liver_yang_rising", organ: "Liver", name: "Liver Yang Rising", principle: "Pacify the Liver, subdue Yang, nourish Yin", formulas: "Tian Ma Gou Teng Yin",
+  { id: "liver_yang_rising", organ: "Liver", name: "Liver Yang Rising", principle: "Pacify the Liver, subdue Yang, nourish Yin", formulas: "Tian Ma Gou Teng Yin; Zhen Gan Xi Feng Tang", rx: ["tian_ma_gou_teng_yin", "zhen_gan_xi_feng_tang"],
     ind: { headache: 3, temporal_headache: 3, dizziness: 3, tinnitus: 2, irritability: 2, red_face: 1, dry_eyes: 1, blurred_vision: 1, insomnia: 1, dry_mouth: 1, neck_stiffness: 1, t_red: 1, t_red_sides: 1, p_wiry: 3, p_thin: 1 },
     cardinal: ["headache", "temporal_headache", "dizziness", "p_wiry"], contra: { cold_aversion: 1, t_pale: 1 } },
-  { id: "liver_fire", organ: "Liver", name: "Liver Fire Blazing", principle: "Clear Liver Fire, drain Heat", formulas: "Long Dan Xie Gan Tang; Dang Gui Long Hui Wan",
+  { id: "liver_fire", organ: "Liver", name: "Liver Fire Blazing", principle: "Clear Liver Fire, drain Heat", formulas: "Long Dan Xie Gan Tang; Dan Zhi Xiao Yao San (Jia Wei Xiao Yao San)", rx: ["long_dan_xie_gan_tang", "dan_zhi_xiao_yao_san"],
     ind: { bitter_taste: 3, red_eyes: 3, irritability: 3, headache: 2, temporal_headache: 2, red_face: 2, tinnitus: 2, thirst: 1, dark_urine: 1, constipation: 1, insomnia: 1, dream_disturbed: 1, nosebleed: 1, t_red: 2, t_red_sides: 2, t_yellow: 2, t_dry: 1, p_wiry: 2, p_rapid: 2, p_full: 1 },
     cardinal: ["bitter_taste", "red_eyes", "irritability", "t_red_sides", "p_rapid"], contra: { cold_aversion: 2, clear_urine: 1, t_pale: 2, p_slow: 2 } },
-  { id: "liver_wind_yang", organ: "Liver", name: "Liver Wind (from Liver Yang Rising)", principle: "Extinguish Wind, subdue Yang, nourish Yin", formulas: "Zhen Gan Xi Feng Tang; Tian Ma Gou Teng Yin",
+  { id: "liver_wind_yang", organ: "Liver", name: "Liver Wind (from Liver Yang Rising)", principle: "Extinguish Wind, subdue Yang, nourish Yin", formulas: "Zhen Gan Xi Feng Tang; Tian Ma Gou Teng Yin", rx: ["zhen_gan_xi_feng_tang", "tian_ma_gou_teng_yin"],
     ind: { tremor: 3, dizziness: 3, wind_stroke: 3, headache: 2, numbness: 2, convulsions: 2, tinnitus: 1, irritability: 1, t_stiff: 2, t_deviated: 2, t_trembling: 2, t_red: 1, p_wiry: 3 },
     cardinal: ["tremor", "wind_stroke", "dizziness", "p_wiry"], contra: { t_pale: 1 }, requireAny: ["tremor", "wind_stroke", "convulsions", "numbness"] },
-  { id: "liver_wind_heat", organ: "Liver", name: "Liver Wind (from Extreme Heat)", principle: "Clear Heat, cool the Liver, extinguish Wind", formulas: "Ling Jiao Gou Teng Tang",
+  { id: "liver_wind_heat", organ: "Liver", name: "Liver Wind (from Extreme Heat)", principle: "Clear Heat, cool the Liver, extinguish Wind", formulas: "Ling Jiao Gou Teng Tang", rx: ["ling_jiao_gou_teng_tang"],
     ind: { high_fever: 3, convulsions: 3, neck_stiffness: 2, mental_confusion: 2, fever: 1, thirst: 1, t_dark_red: 3, t_stiff: 2, t_dry: 1, p_wiry: 2, p_rapid: 3 },
     cardinal: ["high_fever", "convulsions", "t_dark_red"], contra: { t_pale: 2, p_slow: 2 }, requireAny: ["convulsions", "high_fever"] },
-  { id: "liver_wind_blood", organ: "Liver", name: "Liver Wind (from Liver Blood Deficiency)", principle: "Nourish Liver Blood, extinguish Wind", formulas: "E Jiao Ji Zi Huang Tang; Si Wu Tang + Tian Ma, Gou Teng",
+  { id: "liver_wind_blood", organ: "Liver", name: "Liver Wind (from Liver Blood Deficiency)", principle: "Nourish Liver Blood, extinguish Wind", formulas: "E Jiao Ji Zi Huang Tang; Si Wu Tang", rx: ["e_jiao_ji_zi_huang_tang", "si_wu_tang"], rxNote: "Alternative: Si Wu Tang plus Tian Ma 9 g and Gou Teng 12 g",
     ind: { tremor: 3, numbness: 3, dizziness: 2, blurred_vision: 2, muscle_cramps: 2, pale_complexion: 1, scanty_periods: 1, poor_memory: 1, t_pale: 3, t_trembling: 2, p_thin: 2, p_choppy: 1 },
     cardinal: ["tremor", "numbness", "t_pale"], contra: { t_red: 1, high_fever: 2 }, requireAny: ["tremor", "numbness", "muscle_cramps"] },
-  { id: "liver_gb_damp_heat", organ: "Liver", name: "Damp-Heat in Liver & Gallbladder", principle: "Clear Damp-Heat from Liver & GB", formulas: "Long Dan Xie Gan Tang; Yin Chen Hao Tang (jaundice)",
+  { id: "liver_gb_damp_heat", organ: "Liver", name: "Damp-Heat in Liver & Gallbladder", principle: "Clear Damp-Heat from Liver & GB", formulas: "Long Dan Xie Gan Tang; Yin Chen Hao Tang", rx: ["long_dan_xie_gan_tang", "yin_chen_hao_tang"],
     ind: { hypochondriac_pain: 3, jaundice: 3, bitter_taste: 3, vaginal_discharge: 2, dark_urine: 2, nausea: 2, painful_urination: 1, hernia: 1, skin_itch: 1, vomiting: 1, poor_appetite: 1, bloating: 1, fever: 1, t_yellow: 2, t_greasy: 3, t_red_sides: 1, p_slippery: 2, p_wiry: 2, p_rapid: 1 },
     cardinal: ["hypochondriac_pain", "bitter_taste", "vaginal_discharge", "t_greasy"], contra: { cold_aversion: 1, clear_urine: 1, t_pale: 1 } },
-  { id: "liver_cold_channel", organ: "Liver", name: "Cold Stagnating in the Liver Channel", principle: "Warm the Liver channel, expel Cold, move Qi", formulas: "Nuan Gan Jian; Tian Tai Wu Yao San",
+  { id: "liver_cold_channel", organ: "Liver", name: "Cold Stagnating in the Liver Channel", principle: "Warm the Liver channel, expel Cold, move Qi", formulas: "Nuan Gan Jian; Tian Tai Wu Yao San", rx: ["nuan_gan_jian", "tian_tai_wu_yao_san"],
     ind: { hernia: 3, lower_abdominal_pain: 3, pain_better_warmth: 2, worse_cold: 2, cold_limbs: 2, cold_aversion: 1, impotence: 1, t_pale: 1, t_wet: 2, t_white: 1, p_wiry: 2, p_deep: 2, p_slow: 2 },
     cardinal: ["hernia", "lower_abdominal_pain", "p_wiry"], contra: { feeling_hot: 2, t_red: 2, p_rapid: 2 }, requireAny: ["hernia", "lower_abdominal_pain"] },
-  { id: "liver_spleen_disharmony", organ: "Liver", name: "Liver–Spleen Disharmony (Liver overacting on Spleen)", principle: "Soothe the Liver, strengthen the Spleen", formulas: "Tong Xie Yao Fang; Xiao Yao San",
+  { id: "liver_spleen_disharmony", organ: "Liver", name: "Liver–Spleen Disharmony (Liver overacting on Spleen)", principle: "Soothe the Liver, strengthen the Spleen", formulas: "Tong Xie Yao Fang; Xiao Yao San", rx: ["tong_xie_yao_fang", "xiao_yao_san"],
     ind: { painful_diarrhea: 3, alternating_stool: 3, irritability: 2, stress: 2, abdominal_pain: 2, bloating: 2, hypochondriac_pain: 2, fatigue: 1, poor_appetite: 1, sighing: 1, loose_stools: 1, t_red_sides: 1, t_pale: 1, p_wiry: 2, p_weak: 1 },
     cardinal: ["painful_diarrhea", "alternating_stool", "irritability", "p_wiry"], contra: {} },
-  { id: "liver_invading_stomach", organ: "Liver", name: "Liver Qi Invading the Stomach", principle: "Soothe the Liver, harmonise the Stomach, subdue rebellious Qi", formulas: "Si Ni San; Zuo Jin Wan (with Heat); Chai Hu Shu Gan San",
+  { id: "liver_invading_stomach", organ: "Liver", name: "Liver Qi Invading the Stomach", principle: "Soothe the Liver, harmonise the Stomach, subdue rebellious Qi", formulas: "Si Ni San; Zuo Jin Wan; Chai Hu Shu Gan San", rx: ["si_ni_san", "zuo_jin_wan", "chai_hu_shu_gan_san"],
     ind: { belching: 3, acid_reflux: 3, epigastric_pain: 2, hypochondriac_pain: 2, nausea: 2, hiccup: 2, irritability: 2, stress: 1, vomiting: 1, bloating: 1, t_red_sides: 1, p_wiry: 3 },
     cardinal: ["belching", "acid_reflux", "irritability", "p_wiry"], contra: {} },
-  { id: "liver_fire_lung", organ: "Liver", name: "Liver Fire Insulting the Lungs", principle: "Clear Liver Fire, descend Lung Qi", formulas: "Dai Ge San + Xie Bai San",
+  { id: "liver_fire_lung", organ: "Liver", name: "Liver Fire Insulting the Lungs", principle: "Clear Liver Fire, descend Lung Qi", formulas: "Xie Bai San; Dai Ge San", rx: ["xie_bai_san", "dai_ge_san"], rxNote: "Usually Xie Bai San combined with Dai Ge San",
     ind: { hemoptysis: 3, cough: 2, hypochondriac_pain: 2, irritability: 2, red_face: 2, bitter_taste: 2, wheezing: 1, headache: 1, thirst: 1, phlegm_yellow: 1, t_red: 2, t_red_sides: 2, t_yellow: 1, p_wiry: 2, p_rapid: 2 },
     cardinal: ["hemoptysis", "cough", "irritability", "t_red_sides"], contra: { cold_aversion: 1, t_pale: 1 } },
 
   // ======================= HEART & PERICARDIUM =======================
-  { id: "heart_qi_def", organ: "Heart & Pericardium", name: "Heart Qi Deficiency", principle: "Tonify Heart Qi", formulas: "Yang Xin Tang; Si Jun Zi Tang + Wu Wei Zi",
+  { id: "heart_qi_def", organ: "Heart & Pericardium", name: "Heart Qi Deficiency", principle: "Tonify Heart Qi", formulas: "Yang Xin Tang; Si Jun Zi Tang; Bao Yuan Tang", rx: ["yang_xin_tang", "si_jun_zi_tang", "bao_yuan_tang"], rxNote: "Si Jun Zi Tang plus Wu Wei Zi 6 g is a simpler option",
     ind: { p_intermittent: 1, p_short: 1, palpitations: 3, sob_exertion: 3, shortness_breath: 2, spontaneous_sweating: 2, fatigue: 2, pale_complexion: 1, reluctance_speak: 1, t_pale: 2, p_weak: 2, p_empty: 1, p_irregular: 1 },
     cardinal: ["palpitations", "sob_exertion", "p_weak"], contra: { t_red: 1, feeling_hot: 1 } },
-  { id: "heart_yang_def", organ: "Heart & Pericardium", name: "Heart Yang Deficiency", principle: "Tonify and warm Heart Yang", formulas: "Gui Zhi Gan Cao Tang; Bao Yuan Tang",
+  { id: "heart_yang_def", organ: "Heart & Pericardium", name: "Heart Yang Deficiency", principle: "Tonify and warm Heart Yang", formulas: "Gui Zhi Gan Cao Tang; Bao Yuan Tang", rx: ["gui_zhi_gan_cao_tang", "bao_yuan_tang"],
     ind: { p_intermittent: 1, palpitations: 3, cold_limbs: 3, chest_tightness: 2, sob_exertion: 2, cold_aversion: 2, chest_pain: 1, spontaneous_sweating: 1, fatigue: 1, pale_complexion: 1, purple_lips: 1, edema: 1, t_pale: 2, t_swollen: 1, t_wet: 2, p_deep: 1, p_weak: 2, p_irregular: 2, p_slow: 1 },
     cardinal: ["palpitations", "cold_limbs", "chest_tightness"], contra: { feeling_hot: 2, t_red: 2, p_rapid: 1 } },
-  { id: "heart_yang_collapse", organ: "Heart & Pericardium", name: "Collapse of Heart Yang (emergency)", principle: "Rescue Yang, restore collapse — urgent medical referral", formulas: "Shen Fu Tang; Si Ni Tang",
+  { id: "heart_yang_collapse", organ: "Heart & Pericardium", name: "Collapse of Heart Yang (emergency)", principle: "Rescue Yang, restore collapse — urgent medical referral", formulas: "Shen Fu Tang; Si Ni Tang", rx: ["shen_fu_tang", "si_ni_tang"], rxNote: "EMERGENCY — call emergency services; herbs are only adjunctive",
     ind: { t_black: 1, cold_sweat: 3, cold_limbs: 3, fainting: 3, purple_lips: 2, palpitations: 2, shortness_breath: 2, mental_confusion: 1, t_pale: 1, t_purple: 1, p_minute: 3, p_hidden: 2, p_irregular: 1 },
     cardinal: ["cold_sweat", "cold_limbs", "fainting", "p_minute"], contra: { feeling_hot: 2, p_full: 2 }, requireAny: ["cold_sweat", "fainting"] },
-  { id: "heart_blood_def", organ: "Heart & Pericardium", name: "Heart Blood Deficiency", principle: "Nourish Heart Blood, calm the Shen", formulas: "Gui Pi Tang; Yang Xin Tang; Suan Zao Ren Tang",
+  { id: "heart_blood_def", organ: "Heart & Pericardium", name: "Heart Blood Deficiency", principle: "Nourish Heart Blood, calm the Shen", formulas: "Gui Pi Tang; Suan Zao Ren Tang; Yang Xin Tang", rx: ["gui_pi_tang", "suan_zao_ren_tang", "yang_xin_tang"],
     ind: { palpitations: 3, insomnia: 3, poor_memory: 2, dream_disturbed: 2, easily_startled: 2, anxiety: 2, dizziness: 2, pale_complexion: 2, t_pale: 3, t_thin: 1, p_thin: 2, p_choppy: 1 },
     cardinal: ["palpitations", "insomnia", "poor_memory", "t_pale"], contra: { t_red: 1, feeling_hot: 1 } },
-  { id: "heart_yin_def", organ: "Heart & Pericardium", name: "Heart Yin Deficiency", principle: "Nourish Heart Yin, calm the Shen", formulas: "Tian Wang Bu Xin Dan; Bai Zi Yang Xin Wan",
+  { id: "heart_yin_def", organ: "Heart & Pericardium", name: "Heart Yin Deficiency", principle: "Nourish Heart Yin, calm the Shen", formulas: "Tian Wang Bu Xin Dan; Suan Zao Ren Tang", rx: ["tian_wang_bu_xin_dan", "suan_zao_ren_tang"],
     ind: { restless_sleep: 1, palpitations: 3, insomnia: 3, anxiety: 2, restlessness: 2, dream_disturbed: 2, night_sweats: 2, five_palm_heat: 2, dry_mouth: 2, easily_startled: 1, poor_memory: 1, malar_flush: 1, afternoon_fever: 1, t_red: 2, t_red_tip: 2, t_peeled: 2, t_cracked: 1, p_thin: 2, p_rapid: 2 },
     cardinal: ["palpitations", "insomnia", "night_sweats", "t_peeled"], contra: { cold_aversion: 2, t_pale: 2 } },
-  { id: "heart_fire", organ: "Heart & Pericardium", name: "Heart Fire Blazing", principle: "Clear Heart Fire, calm the Shen", formulas: "Dao Chi San; Xie Xin Tang",
+  { id: "heart_fire", organ: "Heart & Pericardium", name: "Heart Fire Blazing", principle: "Clear Heart Fire, calm the Shen", formulas: "Dao Chi San; Xie Xin Tang (San Huang Xie Xin Tang)", rx: ["dao_chi_san", "xie_xin_tang"],
     ind: { p_hurried: 1, mouth_ulcers: 3, insomnia: 2, restlessness: 2, palpitations: 2, thirst: 2, bitter_taste: 2, red_face: 2, dark_urine: 2, painful_urination: 1, blood_in_urine: 1, dream_disturbed: 1, feeling_hot: 1, t_red_tip: 3, t_red: 2, t_yellow: 1, p_rapid: 3, p_full: 1, p_overflowing: 1 },
     cardinal: ["mouth_ulcers", "restlessness", "t_red_tip", "p_rapid"], contra: { cold_aversion: 2, t_pale: 2, p_slow: 2 } },
-  { id: "phlegm_fire_heart", organ: "Heart & Pericardium", name: "Phlegm-Fire Harassing the Heart", principle: "Clear Heart, resolve Phlegm, calm the Shen", formulas: "Wen Dan Tang + Huang Lian; Meng Shi Gun Tan Wan",
+  { id: "phlegm_fire_heart", organ: "Heart & Pericardium", name: "Phlegm-Fire Harassing the Heart", principle: "Clear Heart, resolve Phlegm, calm the Shen", formulas: "Huang Lian Wen Dan Tang", rx: ["huang_lian_wen_dan_tang"],
     ind: { p_hurried: 2, manic: 3, restlessness: 3, incoherent_speech: 3, insomnia: 2, palpitations: 2, bitter_taste: 1, red_face: 1, thirst: 1, dream_disturbed: 1, phlegm_yellow: 1, t_red: 2, t_red_tip: 1, t_yellow: 2, t_greasy: 2, p_slippery: 3, p_rapid: 2, p_full: 1 },
     cardinal: ["manic", "incoherent_speech", "t_greasy", "p_slippery"], contra: { t_pale: 1, p_slow: 1 }, requireAny: ["manic", "incoherent_speech", "restlessness", "insomnia"] },
-  { id: "phlegm_misting_mind", organ: "Heart & Pericardium", name: "Phlegm Misting the Mind (Heart)", principle: "Resolve Phlegm, open the orifices", formulas: "Di Tan Tang; Su He Xiang Wan",
+  { id: "phlegm_misting_mind", organ: "Heart & Pericardium", name: "Phlegm Misting the Mind (Heart)", principle: "Resolve Phlegm, open the orifices", formulas: "Di Tan Tang; Wen Dan Tang", rx: ["di_tan_tang", "wen_dan_tang"],
     ind: { mental_confusion: 3, incoherent_speech: 2, somnolence: 2, phlegm_white: 2, depression_mood: 1, vomiting: 1, dizziness: 1, heavy_head: 1, fainting: 1, t_swollen: 2, t_greasy: 3, t_white: 1, t_thick: 1, p_slippery: 3, p_soggy: 1 },
     cardinal: ["mental_confusion", "t_greasy", "p_slippery"], contra: { t_peeled: 1, manic: 1 }, requireAny: ["mental_confusion", "incoherent_speech", "somnolence"] },
-  { id: "heart_blood_stasis", organ: "Heart & Pericardium", name: "Heart Blood Stasis", principle: "Invigorate Blood, eliminate stasis, open the chest", formulas: "Xue Fu Zhu Yu Tang; Dan Shen Yin",
+  { id: "heart_blood_stasis", organ: "Heart & Pericardium", name: "Heart Blood Stasis", principle: "Invigorate Blood, eliminate stasis, open the chest", formulas: "Xue Fu Zhu Yu Tang; Dan Shen Yin", rx: ["xue_fu_zhu_yu_tang", "dan_shen_yin"],
     ind: { p_intermittent: 1, chest_pain: 3, left_arm_pain: 3, purple_lips: 3, fixed_stabbing_pain: 2, palpitations: 2, chest_tightness: 2, cold_limbs: 1, sob_exertion: 1, t_purple: 3, t_dark_spots: 1, t_sublingual: 1, p_choppy: 3, p_irregular: 2 },
     cardinal: ["chest_pain", "left_arm_pain", "purple_lips", "t_purple", "p_choppy"], contra: {} },
-  { id: "heart_kidney_yin", organ: "Heart & Pericardium", name: "Heart & Kidney Not Harmonised", principle: "Nourish Kidney & Heart Yin, clear Empty Heat, harmonise Heart–Kidney", formulas: "Huang Lian E Jiao Tang; Jiao Tai Wan; Tian Wang Bu Xin Dan",
+  { id: "heart_kidney_yin", organ: "Heart & Pericardium", name: "Heart & Kidney Not Harmonised", principle: "Nourish Kidney & Heart Yin, clear Empty Heat, harmonise Heart–Kidney", formulas: "Huang Lian E Jiao Tang; Jiao Tai Wan; Tian Wang Bu Xin Dan", rx: ["huang_lian_e_jiao_tang", "jiao_tai_wan", "tian_wang_bu_xin_dan"],
     ind: { restless_sleep: 1, palpitations: 3, insomnia: 3, lower_back_pain: 2, night_sweats: 2, waking_night: 2, restlessness: 2, dream_disturbed: 2, spermatorrhea: 2, tinnitus: 2, five_palm_heat: 2, knee_weakness: 1, dizziness: 1, dry_mouth: 1, poor_memory: 1, anxiety: 1, t_red: 2, t_red_tip: 2, t_peeled: 2, p_thin: 1, p_rapid: 2 },
     cardinal: ["palpitations", "insomnia", "lower_back_pain", "night_sweats"], contra: { cold_aversion: 2, t_pale: 2 } },
-  { id: "heart_spleen_def", organ: "Heart & Pericardium", name: "Heart & Spleen Deficiency (Qi & Blood)", principle: "Tonify Spleen Qi, nourish Heart Blood", formulas: "Gui Pi Tang",
+  { id: "heart_spleen_def", organ: "Heart & Pericardium", name: "Heart & Spleen Deficiency (Qi & Blood)", principle: "Tonify Spleen Qi, nourish Heart Blood", formulas: "Gui Pi Tang", rx: ["gui_pi_tang"],
     ind: { poor_concentration: 1, palpitations: 3, fatigue: 3, poor_appetite: 3, insomnia: 2, poor_memory: 2, loose_stools: 2, pale_complexion: 2, dream_disturbed: 1, anxiety: 1, bloating: 1, easy_bruising: 1, heavy_periods: 1, scanty_periods: 1, t_pale: 3, t_teeth_marks: 1, t_thin: 1, p_thin: 2, p_weak: 2 },
     cardinal: ["palpitations", "fatigue", "poor_appetite", "t_pale"], contra: { t_red: 1 } },
-  { id: "heart_gb_def", organ: "Heart & Pericardium", name: "Heart & Gallbladder Deficiency (timidity)", principle: "Tonify Heart & GB Qi, calm the Shen", formulas: "An Shen Ding Zhi Wan; Wen Dan Tang",
+  { id: "heart_gb_def", organ: "Heart & Pericardium", name: "Heart & Gallbladder Deficiency (timidity)", principle: "Tonify Heart & GB Qi, calm the Shen", formulas: "An Shen Ding Zhi Wan; Wen Dan Tang", rx: ["an_shen_ding_zhi_wan", "wen_dan_tang"],
     ind: { p_moving: 2, timidity: 3, easily_startled: 3, palpitations: 2, insomnia: 2, waking_night: 1, dream_disturbed: 1, sighing: 1, anxiety: 1, dizziness: 1, shortness_breath: 1, t_pale: 1, p_weak: 2, p_thin: 1 },
     cardinal: ["timidity", "easily_startled", "palpitations"], contra: {} },
-  { id: "pericardium_heat", organ: "Heart & Pericardium", name: "Heat in the Pericardium (Nutritive level)", principle: "Clear Nutritive-level Heat, open the orifices — urgent referral", formulas: "Qing Ying Tang; An Gong Niu Huang Wan",
+  { id: "pericardium_heat", organ: "Heart & Pericardium", name: "Heat in the Pericardium (Nutritive level)", principle: "Clear Nutritive-level Heat, open the orifices — urgent referral", formulas: "Qing Ying Tang", rx: ["qing_ying_tang"], rxNote: "An Gong Niu Huang Wan (traditional addition) contains cinnabar and realgar — restricted",
     ind: { t_black: 1, fever_night: 3, high_fever: 3, mental_confusion: 3, incoherent_speech: 2, restlessness: 2, thirst: 1, convulsions: 1, t_dark_red: 3, t_dry: 1, p_rapid: 2, p_thin: 2 },
     cardinal: ["fever_night", "mental_confusion", "t_dark_red"], contra: { cold_aversion: 1, t_pale: 2, p_slow: 2 }, requireAny: ["mental_confusion", "fever_night", "incoherent_speech", "high_fever"] },
 
   // ============================ SPLEEN ============================
-  { id: "spleen_qi_def", organ: "Spleen", name: "Spleen Qi Deficiency", principle: "Tonify Spleen Qi", formulas: "Si Jun Zi Tang; Liu Jun Zi Tang; Shen Ling Bai Zhu San",
+  { id: "spleen_qi_def", organ: "Spleen", name: "Spleen Qi Deficiency", principle: "Tonify Spleen Qi", formulas: "Si Jun Zi Tang; Liu Jun Zi Tang; Shen Ling Bai Zhu San", rx: ["si_jun_zi_tang", "liu_jun_zi_tang", "shen_ling_bai_zhu_san"],
     ind: { poor_concentration: 1, fatigue: 3, poor_appetite: 3, loose_stools: 3, bloating: 3, weakness_limbs: 2, sallow_complexion: 2, pale_complexion: 1, reluctance_speak: 1, craving_sweets: 1, somnolence: 1, no_taste: 1, t_pale: 2, t_teeth_marks: 2, t_swollen: 1, t_thin_white: 1, p_weak: 2, p_empty: 2 },
     cardinal: ["fatigue", "poor_appetite", "loose_stools", "bloating"], contra: { t_red: 1, p_rapid: 1, thirst_cold_drinks: 1 } },
-  { id: "spleen_yang_def", organ: "Spleen", name: "Spleen Yang Deficiency", principle: "Warm and tonify Spleen Yang", formulas: "Li Zhong Wan; Fu Zi Li Zhong Wan",
+  { id: "spleen_yang_def", organ: "Spleen", name: "Spleen Yang Deficiency", principle: "Warm and tonify Spleen Yang", formulas: "Li Zhong Wan; Fu Zi Li Zhong Wan", rx: ["li_zhong_wan", "fu_zi_li_zhong_wan"],
     ind: { t_flabby: 1, loose_stools: 3, cold_aversion: 3, cold_limbs: 3, fatigue: 2, poor_appetite: 2, pain_better_warmth: 2, edema: 2, undigested_food_stool: 2, bloating: 1, abdominal_pain: 1, prefer_warm_drinks: 1, no_thirst: 1, pale_complexion: 1, t_pale: 2, t_wet: 2, t_swollen: 1, p_weak: 1, p_deep: 1, p_slow: 2 },
     cardinal: ["loose_stools", "cold_aversion", "cold_limbs"], contra: { feeling_hot: 2, thirst_cold_drinks: 2, night_sweats: 1, t_red: 2, t_yellow: 1, p_rapid: 2 } },
-  { id: "spleen_qi_sinking", organ: "Spleen", name: "Spleen Qi Sinking", principle: "Tonify and raise Spleen Qi", formulas: "Bu Zhong Yi Qi Tang",
+  { id: "spleen_qi_sinking", organ: "Spleen", name: "Spleen Qi Sinking", principle: "Tonify and raise Spleen Qi", formulas: "Bu Zhong Yi Qi Tang", rx: ["bu_zhong_yi_qi_tang"],
     ind: { prolapse: 3, fatigue: 2, frequent_urination: 2, loose_stools: 2, incontinence: 1, poor_appetite: 1, bloating: 1, heavy_periods: 1, vaginal_discharge: 1, dizziness: 1, t_pale: 2, p_weak: 3 },
     cardinal: ["prolapse", "fatigue", "p_weak"], contra: { t_red: 1, p_full: 1 } },
-  { id: "spleen_not_controlling_blood", organ: "Spleen", name: "Spleen Not Controlling Blood", principle: "Tonify Spleen Qi to hold Blood", formulas: "Gui Pi Tang",
+  { id: "spleen_not_controlling_blood", organ: "Spleen", name: "Spleen Not Controlling Blood", principle: "Tonify Spleen Qi to hold Blood", formulas: "Gui Pi Tang", rx: ["gui_pi_tang"],
     ind: { p_hollow: 1, easy_bruising: 3, heavy_periods: 3, spotting: 3, blood_in_stool: 2, blood_in_urine: 2, fatigue: 2, pale_complexion: 2, nosebleed: 1, poor_appetite: 1, loose_stools: 1, t_pale: 2, p_weak: 2, p_thin: 1 },
     cardinal: ["easy_bruising", "heavy_periods", "spotting", "fatigue"], contra: { t_red: 2, p_rapid: 2, feeling_hot: 1 } },
-  { id: "damp_spleen", organ: "Spleen", name: "Cold-Damp Invading the Spleen", principle: "Dry Dampness, warm and strengthen the Spleen", formulas: "Ping Wei San; Huo Xiang Zheng Qi San",
+  { id: "damp_spleen", organ: "Spleen", name: "Cold-Damp Invading the Spleen", principle: "Dry Dampness, warm and strengthen the Spleen", formulas: "Ping Wei San; Huo Xiang Zheng Qi San", rx: ["ping_wei_san", "huo_xiang_zheng_qi_san"],
     ind: { heaviness_body: 3, heavy_head: 3, sticky_taste: 3, poor_appetite: 2, bloating: 2, loose_stools: 2, nausea: 2, no_thirst: 1, somnolence: 1, edema: 1, vaginal_discharge: 1, chest_tightness: 1, cold_aversion: 1, t_greasy: 3, t_thick: 2, t_white: 2, t_swollen: 1, p_slippery: 3, p_soggy: 2, p_slow: 1 },
     cardinal: ["heaviness_body", "sticky_taste", "t_greasy", "p_slippery"], contra: { dry_mouth: 1, thirst: 1, t_yellow: 1, t_peeled: 2, p_rapid: 1 } },
-  { id: "spleen_damp_heat", organ: "Spleen", name: "Damp-Heat in the Spleen", principle: "Clear Heat, resolve Dampness, strengthen the Spleen", formulas: "Lian Po Yin; Yin Chen Wu Ling San",
+  { id: "spleen_damp_heat", organ: "Spleen", name: "Damp-Heat in the Spleen", principle: "Clear Heat, resolve Dampness, strengthen the Spleen", formulas: "Lian Po Yin; Yin Chen Wu Ling San", rx: ["lian_po_yin", "yin_chen_wu_ling_san"],
     ind: { foul_stools: 3, bloating: 2, nausea: 2, loose_stools: 2, heaviness_body: 2, jaundice: 2, dark_urine: 2, vomiting: 1, poor_appetite: 1, thirst: 1, fever: 1, sticky_taste: 1, t_yellow: 3, t_greasy: 3, t_red: 1, p_slippery: 2, p_rapid: 2, p_soggy: 1 },
     cardinal: ["foul_stools", "heaviness_body", "t_yellow", "t_greasy"], contra: { clear_urine: 1, cold_aversion: 1, t_pale: 1 } },
-  { id: "spleen_lung_qi_def", organ: "Spleen", name: "Spleen & Lung Qi Deficiency", principle: "Tonify Spleen and Lung Qi", formulas: "Liu Jun Zi Tang + Yu Ping Feng San; Shen Ling Bai Zhu San",
+  { id: "spleen_lung_qi_def", organ: "Spleen", name: "Spleen & Lung Qi Deficiency", principle: "Tonify Spleen and Lung Qi", formulas: "Liu Jun Zi Tang; Yu Ping Feng San; Shen Ling Bai Zhu San", rx: ["liu_jun_zi_tang", "yu_ping_feng_san", "shen_ling_bai_zhu_san"],
     ind: { shortness_breath: 3, fatigue: 2, poor_appetite: 2, loose_stools: 2, reluctance_speak: 2, spontaneous_sweating: 2, catch_colds: 2, bloating: 1, cough: 1, phlegm_white: 1, pale_complexion: 1, t_pale: 2, t_teeth_marks: 1, p_weak: 2, p_empty: 1 },
     cardinal: ["shortness_breath", "poor_appetite", "loose_stools", "fatigue"], contra: { t_red: 1 } },
-  { id: "spleen_kidney_yang_def", organ: "Spleen", name: "Spleen & Kidney Yang Deficiency", principle: "Warm and tonify Spleen & Kidney Yang", formulas: "Si Shen Wan; Fu Zi Li Zhong Wan; Zhen Wu Tang (oedema)",
+  { id: "spleen_kidney_yang_def", organ: "Spleen", name: "Spleen & Kidney Yang Deficiency", principle: "Warm and tonify Spleen & Kidney Yang", formulas: "Si Shen Wan; Fu Zi Li Zhong Wan; Zhen Wu Tang", rx: ["si_shen_wan", "fu_zi_li_zhong_wan", "zhen_wu_tang"],
     ind: { early_morning_diarrhea: 3, cold_limbs: 3, loose_stools: 2, undigested_food_stool: 2, cold_aversion: 2, lower_back_pain: 2, edema: 2, knee_weakness: 1, fatigue: 1, poor_appetite: 1, abdominal_pain: 1, pain_better_warmth: 1, clear_urine: 1, nocturia: 1, t_pale: 2, t_swollen: 1, t_wet: 2, p_deep: 2, p_weak: 1, p_slow: 2 },
     cardinal: ["early_morning_diarrhea", "cold_limbs", "lower_back_pain"], contra: { feeling_hot: 2, t_red: 2, p_rapid: 2 } },
 
   // ============================ STOMACH ============================
-  { id: "stomach_qi_def", organ: "Stomach", name: "Stomach Qi Deficiency", principle: "Tonify Stomach Qi", formulas: "Si Jun Zi Tang; Xiang Sha Liu Jun Zi Tang",
+  { id: "stomach_qi_def", organ: "Stomach", name: "Stomach Qi Deficiency", principle: "Tonify Stomach Qi", formulas: "Si Jun Zi Tang; Xiang Sha Liu Jun Zi Tang", rx: ["si_jun_zi_tang", "xiang_sha_liu_jun_zi_tang"],
     ind: { t_rootless: 2, poor_appetite: 3, no_taste: 2, epigastric_pain: 2, fatigue: 2, weakness_limbs: 1, loose_stools: 1, bloating: 1, t_pale: 2, p_weak: 2, p_empty: 1 },
     cardinal: ["poor_appetite", "no_taste", "p_weak"], contra: { t_red: 1, excessive_hunger: 1 } },
-  { id: "stomach_yin_def", organ: "Stomach", name: "Stomach Yin Deficiency", principle: "Nourish Stomach Yin", formulas: "Yi Wei Tang; Mai Men Dong Tang; Sha Shen Mai Dong Tang",
+  { id: "stomach_yin_def", organ: "Stomach", name: "Stomach Yin Deficiency", principle: "Nourish Stomach Yin", formulas: "Yi Wei Tang; Mai Men Dong Tang; Sha Shen Mai Dong Tang", rx: ["yi_wei_tang", "mai_men_dong_tang", "sha_shen_mai_dong_tang"],
     ind: { t_rootless: 1, hunger_no_appetite: 3, epigastric_pain: 2, dry_mouth: 2, dry_throat: 2, constipation: 2, dry_retching: 2, thirst: 1, afternoon_fever: 1, weight_loss: 1, t_red: 1, t_peeled: 3, t_cracked: 2, p_thin: 2, p_rapid: 1, p_empty: 1 },
     cardinal: ["hunger_no_appetite", "dry_mouth", "t_peeled"], contra: { t_greasy: 2, t_thick: 1, cold_aversion: 1 } },
-  { id: "stomach_def_cold", organ: "Stomach", name: "Stomach Deficient and Cold", principle: "Warm the Stomach, tonify Qi", formulas: "Huang Qi Jian Zhong Tang; Li Zhong Wan",
+  { id: "stomach_def_cold", organ: "Stomach", name: "Stomach Deficient and Cold", principle: "Warm the Stomach, tonify Qi", formulas: "Huang Qi Jian Zhong Tang; Li Zhong Wan", rx: ["huang_qi_jian_zhong_tang", "li_zhong_wan"],
     ind: { epigastric_pain: 3, pain_better_warmth: 3, prefer_warm_drinks: 2, vomit_clear_fluid: 2, poor_appetite: 2, cold_limbs: 2, fatigue: 1, no_thirst: 1, loose_stools: 1, t_pale: 2, t_wet: 2, p_deep: 1, p_weak: 2, p_slow: 1 },
     cardinal: ["epigastric_pain", "pain_better_warmth", "prefer_warm_drinks"], contra: { feeling_hot: 2, thirst_cold_drinks: 2, t_red: 2, t_yellow: 1, p_rapid: 2 } },
-  { id: "stomach_heat", organ: "Stomach", name: "Stomach Heat / Fire", principle: "Clear Stomach Heat", formulas: "Qing Wei San; Yu Nu Jian",
+  { id: "stomach_heat", organ: "Stomach", name: "Stomach Heat / Fire", principle: "Clear Stomach Heat", formulas: "Qing Wei San; Yu Nu Jian", rx: ["qing_wei_san", "yu_nu_jian"],
     ind: { excessive_hunger: 3, thirst_cold_drinks: 3, bad_breath: 3, bleeding_gums: 3, thirst: 2, epigastric_pain: 2, acid_reflux: 2, mouth_ulcers: 2, constipation: 2, dark_urine: 1, nausea: 1, vomiting: 1, acne: 1, t_red: 2, t_yellow: 2, t_dry: 1, p_rapid: 2, p_full: 1, p_slippery: 1 },
     cardinal: ["excessive_hunger", "thirst_cold_drinks", "bleeding_gums", "bad_breath"], contra: { cold_aversion: 2, prefer_warm_drinks: 2, loose_stools: 1, t_pale: 2, p_slow: 2 } },
-  { id: "cold_invading_stomach", organ: "Stomach", name: "Cold Invading the Stomach", principle: "Warm the Stomach, expel Cold", formulas: "Liang Fu Wan; Hou Po Wen Zhong Tang",
+  { id: "cold_invading_stomach", organ: "Stomach", name: "Cold Invading the Stomach", principle: "Warm the Stomach, expel Cold", formulas: "Liang Fu Wan; Hou Po Wen Zhong Tang", rx: ["liang_fu_wan", "hou_po_wen_zhong_tang"],
     ind: { sudden_abd_pain: 3, epigastric_pain: 3, worse_cold: 2, vomit_clear_fluid: 2, cold_aversion: 2, vomiting: 1, prefer_warm_drinks: 1, pain_better_warmth: 1, t_white: 2, t_thick: 1, p_deep: 1, p_tight: 3, p_slow: 2 },
     cardinal: ["sudden_abd_pain", "epigastric_pain", "p_tight"], contra: { feeling_hot: 2, t_red: 2, p_rapid: 2 } },
-  { id: "food_retention", organ: "Stomach", name: "Retention of Food in the Stomach", principle: "Resolve food retention, harmonise the Stomach", formulas: "Bao He Wan; Zhi Shi Dao Zhi Wan",
+  { id: "food_retention", organ: "Stomach", name: "Retention of Food in the Stomach", principle: "Resolve food retention, harmonise the Stomach", formulas: "Bao He Wan; Zhi Shi Dao Zhi Wan", rx: ["bao_he_wan", "zhi_shi_dao_zhi_wan"],
     ind: { food_retention: 3, foul_belching: 3, bloating: 3, acid_reflux: 2, nausea: 2, vomiting: 2, poor_appetite: 2, epigastric_pain: 1, foul_stools: 1, loose_stools: 1, constipation: 1, insomnia: 1, bad_breath: 1, t_thick: 3, t_greasy: 2, p_full: 1, p_slippery: 3 },
     cardinal: ["food_retention", "foul_belching", "bloating", "t_thick"], contra: { t_peeled: 2 }, requireAny: ["food_retention", "foul_belching"] },
-  { id: "rebellious_stomach_qi", organ: "Stomach", name: "Stomach Qi Rebelling Upward", principle: "Subdue rebellious Stomach Qi", formulas: "Xuan Fu Dai Zhe Tang; Ban Xia Hou Po Tang; Ding Xiang Shi Di Tang (hiccup)",
+  { id: "rebellious_stomach_qi", organ: "Stomach", name: "Stomach Qi Rebelling Upward", principle: "Subdue rebellious Stomach Qi", formulas: "Xuan Fu Dai Zhe Tang; Ban Xia Hou Po Tang; Ding Xiang Shi Di Tang", rx: ["xuan_fu_dai_zhe_tang", "ban_xia_hou_po_tang", "ding_xiang_shi_di_tang"],
     ind: { nausea: 3, vomiting: 3, belching: 3, hiccup: 3, acid_reflux: 1, epigastric_pain: 1, poor_appetite: 1 },
     cardinal: ["nausea", "vomiting", "hiccup", "belching"], contra: {} },
-  { id: "stomach_blood_stasis", organ: "Stomach", name: "Blood Stasis in the Stomach", principle: "Invigorate Blood, eliminate stasis, harmonise the Stomach", formulas: "Shi Xiao San + Dan Shen Yin",
+  { id: "stomach_blood_stasis", organ: "Stomach", name: "Blood Stasis in the Stomach", principle: "Invigorate Blood, eliminate stasis, harmonise the Stomach", formulas: "Shi Xiao San; Dan Shen Yin", rx: ["shi_xiao_san", "dan_shen_yin"], rxNote: "Usually Shi Xiao San combined with Dan Shen Yin",
     ind: { fixed_stabbing_pain: 3, hematemesis: 3, black_stool: 3, epigastric_pain: 2, purple_lips: 1, t_purple: 3, t_dark_spots: 1, p_choppy: 3, p_wiry: 1 },
     cardinal: ["fixed_stabbing_pain", "hematemesis", "black_stool", "t_purple"], contra: {}, requireAny: ["hematemesis", "black_stool", "epigastric_pain"] },
-  { id: "stomach_phlegm_fire", organ: "Stomach", name: "Phlegm-Fire in the Stomach", principle: "Clear Stomach Heat, resolve Phlegm", formulas: "Wen Dan Tang + Huang Lian; Xiao Xian Xiong Tang",
+  { id: "stomach_phlegm_fire", organ: "Stomach", name: "Phlegm-Fire in the Stomach", principle: "Clear Stomach Heat, resolve Phlegm", formulas: "Huang Lian Wen Dan Tang; Xiao Xian Xiong Tang", rx: ["huang_lian_wen_dan_tang", "xiao_xian_xiong_tang"],
     ind: { epigastric_pain: 2, acid_reflux: 2, excessive_hunger: 2, nausea: 2, thirst: 1, vomiting: 1, foul_stools: 1, constipation: 1, phlegm_yellow: 1, restlessness: 1, manic: 1, bad_breath: 1, t_red: 2, t_yellow: 2, t_greasy: 3, p_slippery: 3, p_rapid: 2 },
     cardinal: ["epigastric_pain", "excessive_hunger", "t_greasy", "p_slippery"], contra: { t_pale: 1, p_slow: 1 } },
 
   // ============================== LUNG ==============================
-  { id: "lung_qi_def", organ: "Lung", name: "Lung Qi Deficiency", principle: "Tonify Lung Qi, consolidate the exterior", formulas: "Bu Fei Tang; Yu Ping Feng San",
+  { id: "lung_qi_def", organ: "Lung", name: "Lung Qi Deficiency", principle: "Tonify Lung Qi, consolidate the exterior", formulas: "Bu Fei Tang; Yu Ping Feng San", rx: ["bu_fei_tang", "yu_ping_feng_san"],
     ind: { shortness_breath: 3, spontaneous_sweating: 3, catch_colds: 3, cough: 2, reluctance_speak: 2, fatigue: 2, aversion_wind: 2, sob_exertion: 1, pale_complexion: 1, phlegm_white: 1, t_pale: 2, p_weak: 2, p_empty: 1 },
     cardinal: ["shortness_breath", "spontaneous_sweating", "catch_colds"], contra: { t_red: 1, p_rapid: 1, phlegm_yellow: 1 } },
-  { id: "lung_yin_def", organ: "Lung", name: "Lung Yin Deficiency", principle: "Nourish Lung Yin, moisten, clear Empty Heat", formulas: "Bai He Gu Jin Tang; Sha Shen Mai Dong Tang",
+  { id: "lung_yin_def", organ: "Lung", name: "Lung Yin Deficiency", principle: "Nourish Lung Yin, moisten, clear Empty Heat", formulas: "Bai He Gu Jin Tang; Sha Shen Mai Dong Tang", rx: ["bai_he_gu_jin_tang", "sha_shen_mai_dong_tang"],
     ind: { dry_cough: 3, dry_throat: 2, hoarse_voice: 2, hemoptysis: 2, night_sweats: 2, five_palm_heat: 2, malar_flush: 2, cough: 1, afternoon_fever: 1, fatigue: 1, weight_loss: 1, dry_mouth: 1, t_red: 2, t_peeled: 3, t_cracked: 1, p_thin: 2, p_rapid: 2, p_empty: 1 },
     cardinal: ["dry_cough", "dry_throat", "night_sweats", "t_peeled"], contra: { phlegm_white: 2, phlegm_yellow: 1, t_greasy: 2, cold_aversion: 1 } },
-  { id: "lung_dryness", organ: "Lung", name: "Lung Dryness", principle: "Moisten the Lungs, nourish fluids", formulas: "Qing Zao Jiu Fei Tang; Sang Xing Tang",
+  { id: "lung_dryness", organ: "Lung", name: "Lung Dryness", principle: "Moisten the Lungs, nourish fluids", formulas: "Qing Zao Jiu Fei Tang; Sang Xing Tang", rx: ["qing_zao_jiu_fei_tang", "sang_xing_tang"],
     ind: { dry_cough: 3, dry_throat: 3, dry_nose: 3, dry_mouth: 2, dry_skin_hair: 2, hoarse_voice: 1, thirst: 1, sore_throat: 1, t_dry: 3, t_thin_white: 1, p_thin: 1, p_empty: 1 },
     cardinal: ["dry_cough", "dry_nose", "dry_throat", "t_dry"], contra: { phlegm_white: 2, t_greasy: 2, t_peeled: 1 } },
-  { id: "wind_cold", organ: "Lung", name: "Wind-Cold Invading the Lungs", principle: "Release the exterior, dispel Wind-Cold", formulas: "Ma Huang Tang; Gui Zhi Tang; Jing Fang Bai Du San",
+  { id: "wind_cold", organ: "Lung", name: "Wind-Cold Invading the Lungs", principle: "Release the exterior, dispel Wind-Cold", formulas: "Ma Huang Tang; Gui Zhi Tang; Jing Fang Bai Du San", rx: ["ma_huang_tang", "gui_zhi_tang", "jing_fang_bai_du_san"],
     ind: { chills: 3, no_sweat: 3, body_aches: 3, cold_aversion: 2, headache: 2, neck_stiffness: 2, sneezing: 2, runny_nose: 2, acute_cold: 2, stuffy_nose: 1, cough: 1, phlegm_white: 1, fever: 1, aversion_wind: 1, t_thin_white: 2, p_floating: 3, p_tight: 3 },
     cardinal: ["chills", "no_sweat", "body_aches", "p_floating", "p_tight"], contra: { sore_throat: 2, thirst: 2, phlegm_yellow: 2, t_red: 1, p_rapid: 2 } },
-  { id: "wind_heat", organ: "Lung", name: "Wind-Heat Invading the Lungs", principle: "Release the exterior, dispel Wind-Heat", formulas: "Yin Qiao San; Sang Ju Yin",
+  { id: "wind_heat", organ: "Lung", name: "Wind-Heat Invading the Lungs", principle: "Release the exterior, dispel Wind-Heat", formulas: "Yin Qiao San; Sang Ju Yin", rx: ["yin_qiao_san", "sang_ju_yin"],
     ind: { fever: 3, sore_throat: 3, cough: 2, phlegm_yellow: 2, acute_cold: 2, thirst: 1, spontaneous_sweating: 1, headache: 1, runny_nose: 1, chills: 1, aversion_wind: 1, t_red_tip: 2, t_thin_white: 1, t_yellow: 1, p_floating: 3, p_rapid: 3 },
     cardinal: ["fever", "sore_throat", "p_floating", "p_rapid"], contra: { no_sweat: 1, prefer_warm_drinks: 1, p_slow: 2, p_tight: 1 } },
-  { id: "wind_water", organ: "Lung", name: "Wind-Water Invading the Lungs", principle: "Release the exterior, open Water passages, reduce oedema", formulas: "Yue Bi Jia Zhu Tang; Fang Ji Huang Qi Tang",
+  { id: "wind_water", organ: "Lung", name: "Wind-Water Invading the Lungs", principle: "Release the exterior, open Water passages, reduce oedema", formulas: "Yue Bi Jia Zhu Tang; Fang Ji Huang Qi Tang", rx: ["yue_bi_jia_zhu_tang", "fang_ji_huang_qi_tang"],
     ind: { edema_face: 3, scanty_urine: 2, chills: 2, cough: 2, fever: 1, aversion_wind: 1, wheezing: 1, sore_throat: 1, body_aches: 1, t_thin_white: 2, p_floating: 3, p_slippery: 2 },
     cardinal: ["edema_face", "scanty_urine", "p_floating"], contra: {}, requireAny: ["edema_face", "edema", "edema_legs"] },
-  { id: "lung_phlegm_heat", organ: "Lung", name: "Phlegm-Heat in the Lungs", principle: "Clear Lung Heat, resolve Phlegm, stop cough", formulas: "Qing Qi Hua Tan Tang; Wen Dan Tang; Ma Xing Shi Gan Tang",
+  { id: "lung_phlegm_heat", organ: "Lung", name: "Phlegm-Heat in the Lungs", principle: "Clear Lung Heat, resolve Phlegm, stop cough", formulas: "Qing Qi Hua Tan Wan; Ma Xing Shi Gan Tang; Wen Dan Tang", rx: ["qing_qi_hua_tan_wan", "ma_xing_shi_gan_tang", "wen_dan_tang"],
     ind: { cough: 3, phlegm_yellow: 3, wheezing: 2, fever: 2, chest_tightness: 1, chest_pain: 1, thirst: 1, shortness_breath: 1, restlessness: 1, t_red: 2, t_yellow: 2, t_greasy: 2, p_slippery: 3, p_rapid: 3 },
     cardinal: ["phlegm_yellow", "cough", "p_slippery", "p_rapid"], contra: { dry_cough: 2, t_pale: 2, p_slow: 2 } },
-  { id: "phlegm_damp", organ: "Lung", name: "Damp-Phlegm in the Lungs", principle: "Resolve Damp-Phlegm, descend Lung Qi", formulas: "Er Chen Tang; San Zi Yang Qin Tang",
+  { id: "phlegm_damp", organ: "Lung", name: "Damp-Phlegm in the Lungs", principle: "Resolve Damp-Phlegm, descend Lung Qi", formulas: "Er Chen Tang; San Zi Yang Qin Tang", rx: ["er_chen_tang", "san_zi_yang_qin_tang"],
     ind: { phlegm_white: 3, cough: 2, chest_tightness: 2, nausea: 2, heavy_head: 2, heaviness_body: 2, wheezing: 1, dizziness: 1, weight_gain: 1, sticky_taste: 1, plum_pit: 1, poor_appetite: 1, somnolence: 1, t_greasy: 3, t_swollen: 2, t_thick: 2, t_white: 1, p_slippery: 3 },
     cardinal: ["phlegm_white", "cough", "t_greasy", "p_slippery"], contra: { dry_cough: 2, dry_mouth: 1, t_peeled: 2, phlegm_yellow: 1 } },
-  { id: "phlegm_fluids", organ: "Lung", name: "Phlegm-Fluids (Tan Yin) in Lungs / Stomach", principle: "Warm and resolve Phlegm-Fluids", formulas: "Ling Gui Zhu Gan Tang; Xiao Qing Long Tang",
+  { id: "phlegm_fluids", organ: "Lung", name: "Phlegm-Fluids (Tan Yin) in Lungs / Stomach", principle: "Warm and resolve Phlegm-Fluids", formulas: "Ling Gui Zhu Gan Tang; Xiao Qing Long Tang", rx: ["ling_gui_zhu_gan_tang", "xiao_qing_long_tang"],
     ind: { frothy_sputum: 3, borborygmi: 3, wheezing: 2, cough: 2, vomit_clear_fluid: 2, shortness_breath: 1, dizziness: 1, chest_tightness: 1, cold_aversion: 1, t_swollen: 1, t_wet: 3, t_white: 1, t_greasy: 1, p_slippery: 2, p_wiry: 2, p_deep: 1 },
     cardinal: ["frothy_sputum", "borborygmi", "t_wet"], contra: { dry_cough: 2, t_dry: 2, t_peeled: 2 } },
-  { id: "lung_kidney_yin_def", organ: "Lung", name: "Lung & Kidney Yin Deficiency", principle: "Nourish Lung & Kidney Yin", formulas: "Mai Wei Di Huang Wan; Bai He Gu Jin Tang",
+  { id: "lung_kidney_yin_def", organ: "Lung", name: "Lung & Kidney Yin Deficiency", principle: "Nourish Lung & Kidney Yin", formulas: "Mai Wei Di Huang Wan; Bai He Gu Jin Tang", rx: ["mai_wei_di_huang_wan", "bai_he_gu_jin_tang"],
     ind: { dry_cough: 3, lower_back_pain: 3, night_sweats: 3, dry_throat: 2, sob_exertion: 2, five_palm_heat: 2, hemoptysis: 1, hoarse_voice: 1, knee_weakness: 1, malar_flush: 1, afternoon_fever: 1, spermatorrhea: 1, weight_loss: 1, t_red: 2, t_peeled: 3, p_thin: 2, p_rapid: 2 },
     cardinal: ["dry_cough", "lower_back_pain", "night_sweats", "t_peeled"], contra: { cold_aversion: 2, phlegm_white: 1, t_pale: 1 } },
-  { id: "kidney_not_grasping_qi", organ: "Lung", name: "Kidney Failing to Grasp Qi", principle: "Tonify Kidney, help it grasp Qi, stop wheezing", formulas: "Ren Shen Ge Jie San; Du Qi Wan; Shen Ge San",
+  { id: "kidney_not_grasping_qi", organ: "Lung", name: "Kidney Failing to Grasp Qi", principle: "Tonify Kidney, help it grasp Qi, stop wheezing", formulas: "Ren Shen Hu Tao Tang; Du Qi Wan; Jin Gui Shen Qi Wan; Shen Ge San", rx: ["ren_shen_hu_tao_tang", "du_qi_wan", "jin_gui_shen_qi_wan", "shen_ge_san"],
     ind: { sob_exertion: 3, wheezing: 3, lower_back_pain: 3, shortness_breath: 2, cold_limbs: 2, knee_weakness: 1, cold_aversion: 1, spontaneous_sweating: 1, clear_urine: 1, frequent_urination: 1, edema: 1, reluctance_speak: 1, cough: 1, t_pale: 2, t_swollen: 1, p_deep: 2, p_weak: 2 },
     cardinal: ["sob_exertion", "wheezing", "lower_back_pain"], contra: { t_red: 1, phlegm_yellow: 1, fever: 1 } },
 
   // ============================= KIDNEY =============================
-  { id: "kidney_yin_def", organ: "Kidney", name: "Kidney Yin Deficiency", principle: "Nourish Kidney Yin", formulas: "Liu Wei Di Huang Wan; Zuo Gui Wan",
+  { id: "kidney_yin_def", organ: "Kidney", name: "Kidney Yin Deficiency", principle: "Nourish Kidney Yin", formulas: "Liu Wei Di Huang Wan; Zuo Gui Wan", rx: ["liu_wei_di_huang_wan", "zuo_gui_wan"],
     ind: { night_sweats: 3, five_palm_heat: 3, lower_back_pain: 2, knee_weakness: 2, tinnitus: 2, dry_mouth: 2, dry_throat: 1, malar_flush: 2, afternoon_fever: 2, hot_flashes: 2, dizziness: 1, thirst: 1, poor_memory: 1, insomnia: 1, constipation: 1, dark_urine: 1, scanty_periods: 1, hearing_loss: 1, loose_teeth: 1, spermatorrhea: 1, t_red: 2, t_peeled: 3, t_cracked: 1, p_thin: 2, p_rapid: 2 },
     cardinal: ["night_sweats", "five_palm_heat", "lower_back_pain", "t_peeled"], contra: { cold_aversion: 2, clear_urine: 1, t_pale: 1, t_wet: 1, t_greasy: 1, p_slow: 1 } },
-  { id: "kidney_yang_def", organ: "Kidney", name: "Kidney Yang Deficiency", principle: "Warm and tonify Kidney Yang", formulas: "Jin Gui Shen Qi Wan; You Gui Wan",
+  { id: "kidney_yang_def", organ: "Kidney", name: "Kidney Yang Deficiency", principle: "Warm and tonify Kidney Yang", formulas: "Jin Gui Shen Qi Wan; You Gui Wan", rx: ["jin_gui_shen_qi_wan", "you_gui_wan"],
     ind: { t_flabby: 1, lower_back_pain: 3, knee_weakness: 3, cold_limbs: 3, nocturia: 2, clear_urine: 3, cold_aversion: 3, frequent_urination: 2, edema: 2, low_libido: 2, impotence: 2, early_morning_diarrhea: 2, infertility: 1, fatigue: 1, pale_complexion: 1, tinnitus: 1, incontinence: 1, t_pale: 2, t_wet: 2, t_swollen: 1, p_deep: 2, p_weak: 2, p_slow: 2 },
     cardinal: ["lower_back_pain", "cold_limbs", "cold_aversion", "clear_urine"], contra: { feeling_hot: 2, night_sweats: 1, dark_urine: 2, t_red: 2, p_rapid: 2 } },
-  { id: "kidney_empty_heat", organ: "Kidney", name: "Kidney Yin Deficiency with Empty Heat", principle: "Nourish Kidney Yin, clear Empty Heat", formulas: "Zhi Bai Di Huang Wan; Da Bu Yin Wan",
+  { id: "kidney_empty_heat", organ: "Kidney", name: "Kidney Yin Deficiency with Empty Heat", principle: "Nourish Kidney Yin, clear Empty Heat", formulas: "Zhi Bai Di Huang Wan; Da Bu Yin Wan", rx: ["zhi_bai_di_huang_wan", "da_bu_yin_wan"],
     ind: { afternoon_fever: 3, malar_flush: 3, night_sweats: 3, five_palm_heat: 3, restlessness: 2, dry_throat: 2, dark_urine: 2, insomnia: 1, scanty_urine: 1, lower_back_pain: 1, spermatorrhea: 1, blood_in_urine: 1, t_red: 3, t_peeled: 2, t_cracked: 1, p_thin: 2, p_rapid: 3 },
     cardinal: ["afternoon_fever", "malar_flush", "t_red", "p_rapid"], contra: { cold_aversion: 2, clear_urine: 2, t_pale: 2, p_slow: 2 } },
-  { id: "kidney_qi_not_firm", organ: "Kidney", name: "Kidney Qi Not Firm", principle: "Tonify and consolidate Kidney Qi", formulas: "Jin Suo Gu Jing Wan; Suo Quan Wan; Sang Piao Xiao San",
+  { id: "kidney_qi_not_firm", organ: "Kidney", name: "Kidney Qi Not Firm", principle: "Tonify and consolidate Kidney Qi", formulas: "Jin Suo Gu Jing Wan; Suo Quan Wan; Sang Piao Xiao San", rx: ["jin_suo_gu_jing_wan", "suo_quan_wan", "sang_piao_xiao_san"],
     ind: { incontinence: 3, spermatorrhea: 3, frequent_urination: 3, clear_urine: 2, nocturia: 2, lower_back_pain: 2, knee_weakness: 2, vaginal_discharge: 1, cold_aversion: 1, fatigue: 1, t_pale: 2, p_deep: 1, p_weak: 3 },
     cardinal: ["incontinence", "spermatorrhea", "frequent_urination", "lower_back_pain"], contra: { painful_urination: 2, dark_urine: 2, t_red: 1, p_rapid: 1 } },
-  { id: "kidney_jing_def", organ: "Kidney", name: "Kidney Essence (Jing) Deficiency", principle: "Nourish Kidney Essence", formulas: "He Che Da Zao Wan; Zuo Gui Wan / You Gui Wan; Liu Wei Di Huang Wan (children)",
+  { id: "kidney_jing_def", organ: "Kidney", name: "Kidney Essence (Jing) Deficiency", principle: "Nourish Kidney Essence", formulas: "Zuo Gui Wan; You Gui Wan; Liu Wei Di Huang Wan; Qi Bao Mei Ran Dan", rx: ["zuo_gui_wan", "you_gui_wan", "liu_wei_di_huang_wan", "qi_bao_mei_ran_dan"], rxNote: "Zuo Gui Wan for Yin-type, You Gui Wan for Yang-type Jing deficiency",
     ind: { poor_concentration: 1, developmental_delay: 3, loose_teeth: 3, hair_loss: 3, premature_aging: 3, poor_memory: 2, infertility: 2, knee_weakness: 2, lower_back_pain: 1, tinnitus: 1, hearing_loss: 1, dizziness: 1, low_libido: 1, impotence: 1, amenorrhea: 1, p_weak: 1, p_leather: 2, p_deep: 1 },
     cardinal: ["developmental_delay", "loose_teeth", "hair_loss", "premature_aging"], contra: {}, requireAny: ["developmental_delay", "loose_teeth", "hair_loss", "premature_aging", "infertility"] },
-  { id: "kidney_yang_water", organ: "Kidney", name: "Kidney Yang Deficiency, Water Overflowing", principle: "Warm Kidney Yang, transform Water, reduce oedema", formulas: "Zhen Wu Tang; Ji Sheng Shen Qi Wan",
+  { id: "kidney_yang_water", organ: "Kidney", name: "Kidney Yang Deficiency, Water Overflowing", principle: "Warm Kidney Yang, transform Water, reduce oedema", formulas: "Zhen Wu Tang; Ji Sheng Shen Qi Wan", rx: ["zhen_wu_tang", "ji_sheng_shen_qi_wan"],
     ind: { edema_legs: 3, scanty_urine: 3, cold_limbs: 2, cold_aversion: 2, lower_back_pain: 2, shortness_breath: 2, bloating: 1, palpitations: 1, wheezing: 1, frothy_sputum: 1, t_pale: 2, t_swollen: 2, t_wet: 3, p_deep: 2, p_weak: 1, p_slow: 1 },
     cardinal: ["edema_legs", "scanty_urine", "cold_limbs", "t_wet"], contra: { feeling_hot: 2, t_red: 2 } },
-  { id: "liver_kidney_yin_def", organ: "Kidney", name: "Liver & Kidney Yin Deficiency", principle: "Nourish Liver & Kidney Yin", formulas: "Qi Ju Di Huang Wan; Yi Guan Jian",
+  { id: "liver_kidney_yin_def", organ: "Kidney", name: "Liver & Kidney Yin Deficiency", principle: "Nourish Liver & Kidney Yin", formulas: "Qi Ju Di Huang Wan; Yi Guan Jian", rx: ["qi_ju_di_huang_wan", "yi_guan_jian"],
     ind: { dry_eyes: 2, tinnitus: 2, lower_back_pain: 2, dizziness: 2, blurred_vision: 2, night_sweats: 2, five_palm_heat: 2, knee_weakness: 1, dry_throat: 1, insomnia: 1, poor_memory: 1, scanty_periods: 1, hypochondriac_pain: 1, numbness: 1, t_red: 2, t_peeled: 3, p_thin: 2, p_rapid: 1, p_wiry: 1 },
     cardinal: ["dry_eyes", "tinnitus", "lower_back_pain", "t_peeled"], contra: { cold_aversion: 2, t_pale: 1 } },
 
   // =========================== GALLBLADDER ===========================
-  { id: "gb_damp_heat", organ: "Gallbladder", name: "Gallbladder Damp-Heat", principle: "Clear GB Damp-Heat, promote bile flow", formulas: "Yin Chen Hao Tang; Da Chai Hu Tang; Long Dan Xie Gan Tang",
+  { id: "gb_damp_heat", organ: "Gallbladder", name: "Gallbladder Damp-Heat", principle: "Clear GB Damp-Heat, promote bile flow", formulas: "Yin Chen Hao Tang; Da Chai Hu Tang; Long Dan Xie Gan Tang", rx: ["yin_chen_hao_tang", "da_chai_hu_tang", "long_dan_xie_gan_tang"],
     ind: { hypochondriac_pain: 3, jaundice: 3, bitter_taste: 3, nausea: 2, vomiting: 2, dark_urine: 2, fever: 1, chills: 1, poor_appetite: 1, bloating: 1, t_yellow: 3, t_greasy: 3, t_red_sides: 1, p_wiry: 3, p_slippery: 2, p_rapid: 1 },
     cardinal: ["hypochondriac_pain", "jaundice", "bitter_taste", "t_greasy"], contra: { vaginal_discharge: 1, cold_aversion: 1, clear_urine: 1, t_pale: 1 } },
-  { id: "gb_def", organ: "Gallbladder", name: "Gallbladder Deficiency", principle: "Tonify Gallbladder Qi", formulas: "An Shen Ding Zhi Wan; Wen Dan Tang",
+  { id: "gb_def", organ: "Gallbladder", name: "Gallbladder Deficiency", principle: "Tonify Gallbladder Qi", formulas: "An Shen Ding Zhi Wan; Wen Dan Tang", rx: ["an_shen_ding_zhi_wan", "wen_dan_tang"],
     ind: { timidity: 3, easily_startled: 2, dizziness: 2, blurred_vision: 1, sighing: 1, waking_night: 1, anxiety: 1, t_pale: 1, p_weak: 2 },
     cardinal: ["timidity", "easily_startled"], contra: { palpitations: 1 } },
 
   // ========================= SMALL INTESTINE =========================
-  { id: "si_full_heat", organ: "Small Intestine", name: "Small Intestine Full Heat", principle: "Clear Heart & Small Intestine Fire, promote urination", formulas: "Dao Chi San",
+  { id: "si_full_heat", organ: "Small Intestine", name: "Small Intestine Full Heat", principle: "Clear Heart & Small Intestine Fire, promote urination", formulas: "Dao Chi San", rx: ["dao_chi_san"],
     ind: { painful_urination: 3, mouth_ulcers: 2, dark_urine: 2, blood_in_urine: 2, restlessness: 2, thirst: 1, sore_throat: 1, insomnia: 1, feeling_hot: 1, t_red_tip: 3, t_red: 1, t_yellow: 2, p_rapid: 3, p_overflowing: 1 },
     cardinal: ["painful_urination", "t_red_tip", "p_rapid"], contra: { cold_aversion: 1, clear_urine: 2, t_pale: 2 } },
-  { id: "si_qi_pain", organ: "Small Intestine", name: "Small Intestine Qi Pain", principle: "Move Qi, soothe the Liver, stop pain", formulas: "Tian Tai Wu Yao San; Ju He Wan (hernia)",
+  { id: "si_qi_pain", organ: "Small Intestine", name: "Small Intestine Qi Pain", principle: "Move Qi, soothe the Liver, stop pain", formulas: "Tian Tai Wu Yao San", rx: ["tian_tai_wu_yao_san"],
     ind: { lower_abdominal_pain: 3, borborygmi: 3, bloating: 2, hernia: 2, abdominal_pain: 1, painful_diarrhea: 1, t_white: 1, p_deep: 1, p_wiry: 3 },
     cardinal: ["lower_abdominal_pain", "borborygmi", "p_wiry"], contra: {}, requireAny: ["lower_abdominal_pain", "borborygmi", "hernia"] },
 
   // ========================= LARGE INTESTINE =========================
-  { id: "li_damp_heat", organ: "Large Intestine", name: "Damp-Heat in the Large Intestine", principle: "Clear Damp-Heat from the Intestines, stop diarrhoea", formulas: "Ge Gen Qin Lian Tang; Bai Tou Weng Tang; Shao Yao Tang",
+  { id: "li_damp_heat", organ: "Large Intestine", name: "Damp-Heat in the Large Intestine", principle: "Clear Damp-Heat from the Intestines, stop diarrhoea", formulas: "Ge Gen Huang Qin Huang Lian Tang; Bai Tou Weng Tang; Shao Yao Tang", rx: ["ge_gen_qin_lian_tang", "bai_tou_weng_tang", "shao_yao_tang"],
     ind: { tenesmus: 3, foul_stools: 3, blood_in_stool: 3, loose_stools: 2, abdominal_pain: 2, fever: 1, thirst: 1, dark_urine: 1, heaviness_body: 1, t_yellow: 2, t_greasy: 3, t_red: 1, p_slippery: 2, p_rapid: 2 },
     cardinal: ["tenesmus", "foul_stools", "blood_in_stool", "t_greasy"], contra: { cold_aversion: 1, t_pale: 1 }, requireAny: ["tenesmus", "foul_stools", "blood_in_stool", "loose_stools"] },
-  { id: "li_heat", organ: "Large Intestine", name: "Heat in the Large Intestine", principle: "Clear Heat, moisten and move the stool", formulas: "Tiao Wei Cheng Qi Tang; Ma Zi Ren Wan",
+  { id: "li_heat", organ: "Large Intestine", name: "Heat in the Large Intestine", principle: "Clear Heat, moisten and move the stool", formulas: "Tiao Wei Cheng Qi Tang; Ma Zi Ren Wan", rx: ["tiao_wei_cheng_qi_tang", "ma_zi_ren_wan"],
     ind: { constipation: 3, abdominal_pain: 2, dry_mouth: 2, thirst: 2, foul_stools: 1, feeling_hot: 1, dark_urine: 1, bad_breath: 1, t_red: 2, t_yellow: 2, t_dry: 2, p_full: 2, p_rapid: 2 },
     cardinal: ["constipation", "t_yellow", "t_dry"], contra: { loose_stools: 2, cold_aversion: 1, t_pale: 2, p_slow: 1 } },
-  { id: "li_dryness", organ: "Large Intestine", name: "Large Intestine Dryness", principle: "Moisten the Intestines, nourish fluids / Blood", formulas: "Run Chang Wan; Ma Zi Ren Wan",
+  { id: "li_dryness", organ: "Large Intestine", name: "Large Intestine Dryness", principle: "Moisten the Intestines, nourish fluids / Blood", formulas: "Run Chang Wan; Ma Zi Ren Wan", rx: ["run_chang_wan", "ma_zi_ren_wan"],
     ind: { constipation: 3, dry_mouth: 2, dry_throat: 2, weight_loss: 2, dry_skin_hair: 1, bad_breath: 1, dizziness: 1, t_dry: 3, t_pale: 1, t_peeled: 1, p_thin: 3, p_choppy: 1 },
     cardinal: ["constipation", "t_dry", "p_thin"], contra: { loose_stools: 2, t_greasy: 2 } },
-  { id: "cold_invading_li", organ: "Large Intestine", name: "Cold Invading the Large Intestine", principle: "Warm the Intestines, expel Cold, stop pain", formulas: "Liang Fu Wan + Zheng Qi Tian Xiang San",
+  { id: "cold_invading_li", organ: "Large Intestine", name: "Cold Invading the Large Intestine", principle: "Warm the Intestines, expel Cold, stop pain", formulas: "Liang Fu Wan; Zheng Qi Tian Xiang San", rx: ["liang_fu_wan", "zheng_qi_tian_xiang_san"], rxNote: "Usually Liang Fu Wan combined with Zheng Qi Tian Xiang San",
     ind: { sudden_abd_pain: 3, loose_stools: 3, abdominal_pain: 2, painful_diarrhea: 2, worse_cold: 2, cold_aversion: 2, borborygmi: 1, pain_better_warmth: 1, t_white: 2, t_thick: 1, p_deep: 1, p_tight: 3, p_slow: 1 },
     cardinal: ["sudden_abd_pain", "loose_stools", "p_tight"], contra: { feeling_hot: 2, foul_stools: 1, t_yellow: 1, p_rapid: 2 }, requireAny: ["loose_stools", "painful_diarrhea", "abdominal_pain", "sudden_abd_pain"] },
 
   // ============================= BLADDER =============================
-  { id: "bladder_damp_heat", organ: "Bladder", name: "Bladder Damp-Heat", principle: "Clear Damp-Heat from the Bladder, promote urination", formulas: "Ba Zheng San; Xiao Ji Yin Zi (blood in urine)",
+  { id: "bladder_damp_heat", organ: "Bladder", name: "Bladder Damp-Heat", principle: "Clear Damp-Heat from the Bladder, promote urination", formulas: "Ba Zheng San; Xiao Ji Yin Zi", rx: ["ba_zheng_san", "xiao_ji_yin_zi"],
     ind: { painful_urination: 3, urinary_urgency: 3, frequent_urination: 2, dark_urine: 2, turbid_urine: 2, blood_in_urine: 2, scanty_urine: 1, lower_abdominal_pain: 1, fever: 1, thirst: 1, t_yellow: 2, t_greasy: 2, t_red: 1, p_slippery: 2, p_rapid: 2 },
     cardinal: ["painful_urination", "urinary_urgency", "dark_urine"], contra: { clear_urine: 2, t_pale: 1, p_slow: 1 }, requireAny: ["painful_urination", "urinary_urgency", "frequent_urination", "dark_urine", "turbid_urine", "blood_in_urine", "scanty_urine"] },
-  { id: "bladder_damp_cold", organ: "Bladder", name: "Bladder Damp-Cold", principle: "Warm and resolve Damp-Cold from the Bladder", formulas: "Bi Xie Fen Qing Yin; Wu Ling San",
+  { id: "bladder_damp_cold", organ: "Bladder", name: "Bladder Damp-Cold", principle: "Warm and resolve Damp-Cold from the Bladder", formulas: "Bi Xie Fen Qing Yin; Wu Ling San", rx: ["bi_xie_fen_qing_yin", "wu_ling_san"],
     ind: { difficult_urination: 3, turbid_urine: 2, frequent_urination: 2, urinary_urgency: 2, lower_abdominal_pain: 2, clear_urine: 1, cold_aversion: 1, t_white: 2, t_greasy: 2, p_slippery: 2, p_slow: 2 },
     cardinal: ["difficult_urination", "turbid_urine", "t_white"], contra: { dark_urine: 2, painful_urination: 1, feeling_hot: 1, t_yellow: 2, p_rapid: 2 }, requireAny: ["difficult_urination", "turbid_urine", "frequent_urination", "urinary_urgency"] },
 
   // ===================== QI, BLOOD & BODY FLUIDS =====================
-  { id: "qi_blood_def", organ: "Qi, Blood & Body Fluids", name: "Qi & Blood Deficiency", principle: "Tonify Qi and nourish Blood", formulas: "Ba Zhen Tang; Shi Quan Da Bu Tang",
+  { id: "qi_blood_def", organ: "Qi, Blood & Body Fluids", name: "Qi & Blood Deficiency", principle: "Tonify Qi and nourish Blood", formulas: "Ba Zhen Tang; Shi Quan Da Bu Tang", rx: ["ba_zhen_tang", "shi_quan_da_bu_tang"],
     ind: { t_flabby: 1, fatigue: 3, pale_complexion: 3, dizziness: 2, palpitations: 2, shortness_breath: 2, poor_memory: 1, numbness: 1, scanty_periods: 1, pale_menses: 1, spontaneous_sweating: 1, poor_appetite: 1, reluctance_speak: 1, insomnia: 1, t_pale: 3, t_thin: 1, p_weak: 2, p_thin: 2 },
     cardinal: ["fatigue", "pale_complexion", "dizziness", "t_pale"], contra: { t_red: 1, p_full: 1 } },
-  { id: "qi_stagnation", organ: "Qi, Blood & Body Fluids", name: "Qi Stagnation (general)", principle: "Move Qi, relieve distension", formulas: "Yue Ju Wan; Ban Xia Hou Po Tang (plum-pit)",
+  { id: "qi_stagnation", organ: "Qi, Blood & Body Fluids", name: "Qi Stagnation (general)", principle: "Move Qi, relieve distension", formulas: "Yue Ju Wan; Ban Xia Hou Po Tang", rx: ["yue_ju_wan", "ban_xia_hou_po_tang"],
     ind: { bloating: 3, sighing: 2, chest_tightness: 2, mood_swings: 2, depression_mood: 2, stress: 2, belching: 2, plum_pit: 1, hypochondriac_pain: 1, pms_breast: 1, abdominal_pain: 1, irritability: 1, p_wiry: 2 },
     cardinal: ["bloating", "sighing", "chest_tightness"], contra: {} },
-  { id: "blood_stasis", organ: "Qi, Blood & Body Fluids", name: "Blood Stasis (general)", principle: "Invigorate Blood, dispel stasis", formulas: "Xue Fu Zhu Yu Tang; Tao Hong Si Wu Tang; Shao Fu Zhu Yu Tang (lower abdomen)",
+  { id: "blood_stasis", organ: "Qi, Blood & Body Fluids", name: "Blood Stasis (general)", principle: "Invigorate Blood, dispel stasis", formulas: "Xue Fu Zhu Yu Tang; Tao Hong Si Wu Tang; Shao Fu Zhu Yu Tang", rx: ["xue_fu_zhu_yu_tang", "tao_hong_si_wu_tang", "shao_fu_zhu_yu_tang"],
     ind: { fixed_stabbing_pain: 3, dysmenorrhea: 3, menstrual_clots: 3, chest_pain: 2, dark_complexion: 2, purple_lips: 2, abdominal_mass: 2, easy_bruising: 1, numbness: 1, hypochondriac_pain: 1, dry_skin_hair: 1, irregular_periods: 1, infertility: 1, t_purple: 3, t_dark_spots: 2, t_sublingual: 2, p_choppy: 3, p_wiry: 1 },
     cardinal: ["fixed_stabbing_pain", "menstrual_clots", "t_purple", "p_choppy"], contra: {} },
-  { id: "blood_heat", organ: "Qi, Blood & Body Fluids", name: "Blood Heat", principle: "Cool Blood, clear Heat, stop bleeding", formulas: "Xi Jiao Di Huang Tang (substitute rhinoceros horn); Qing Jing San (early periods)",
+  { id: "blood_heat", organ: "Qi, Blood & Body Fluids", name: "Blood Heat", principle: "Cool Blood, clear Heat, stop bleeding", formulas: "Xi Jiao Di Huang Tang (with Shui Niu Jiao); Qing Jing San", rx: ["xi_jiao_di_huang_tang", "qing_jing_san"],
     ind: { nosebleed: 3, heavy_periods: 2, early_periods: 2, skin_itch: 2, restlessness: 2, feeling_hot: 2, spotting: 1, blood_in_urine: 1, blood_in_stool: 1, hemoptysis: 1, thirst: 1, acne: 1, t_red: 2, t_dark_red: 3, p_rapid: 3, p_overflowing: 1 },
     cardinal: ["nosebleed", "early_periods", "t_dark_red", "p_rapid"], contra: { cold_aversion: 2, pale_complexion: 1, t_pale: 2, p_slow: 2 } },
-  { id: "phlegm_nodules", organ: "Qi, Blood & Body Fluids", name: "Phlegm Nodules / Masses", principle: "Resolve Phlegm, soften hardness, dissipate nodules", formulas: "Hai Zao Yu Hu Tang; Xiao Luo Wan; Er Chen Tang",
+  { id: "phlegm_nodules", organ: "Qi, Blood & Body Fluids", name: "Phlegm Nodules / Masses", principle: "Resolve Phlegm, soften hardness, dissipate nodules", formulas: "Hai Zao Yu Hu Tang; Xiao Luo Wan; Er Chen Tang", rx: ["hai_zao_yu_hu_tang", "xiao_luo_wan", "er_chen_tang"],
     ind: { lumps: 3, plum_pit: 2, abdominal_mass: 1, weight_gain: 1, heaviness_body: 1, phlegm_white: 1, t_swollen: 2, t_greasy: 2, p_slippery: 3, p_wiry: 1 },
     cardinal: ["lumps", "t_greasy", "p_slippery"], contra: {}, requireAny: ["lumps", "plum_pit", "abdominal_mass"] },
-  { id: "dampness", organ: "Qi, Blood & Body Fluids", name: "Dampness (general)", principle: "Resolve Dampness, strengthen the Spleen", formulas: "Ping Wei San; Wu Ling San; San Ren Tang",
+  { id: "dampness", organ: "Qi, Blood & Body Fluids", name: "Dampness (general)", principle: "Resolve Dampness, strengthen the Spleen", formulas: "Ping Wei San; Wu Ling San; San Ren Tang", rx: ["ping_wei_san", "wu_ling_san", "san_ren_tang"],
     ind: { heaviness_body: 3, heavy_head: 2, sticky_taste: 2, edema: 2, vaginal_discharge: 2, poor_appetite: 1, bloating: 1, loose_stools: 1, turbid_urine: 1, joint_pain: 1, skin_itch: 1, somnolence: 1, t_greasy: 3, t_thick: 1, p_slippery: 2, p_soggy: 2 },
     cardinal: ["heaviness_body", "sticky_taste", "t_greasy"], contra: { dry_mouth: 1, t_peeled: 2, t_dry: 1 } },
-  { id: "damp_heat", organ: "Qi, Blood & Body Fluids", name: "Damp-Heat (general / Lower Jiao)", principle: "Clear Heat, resolve Dampness", formulas: "San Ren Tang; Si Miao San; Long Dan Xie Gan Tang",
+  { id: "damp_heat", organ: "Qi, Blood & Body Fluids", name: "Damp-Heat (general / Lower Jiao)", principle: "Clear Heat, resolve Dampness", formulas: "San Ren Tang; Si Miao Wan; Long Dan Xie Gan Tang", rx: ["san_ren_tang", "si_miao_wan", "long_dan_xie_gan_tang"],
     ind: { painful_urination: 3, foul_stools: 3, dark_urine: 2, vaginal_discharge: 2, skin_itch: 2, loose_stools: 1, heaviness_body: 1, feeling_hot: 1, fever: 1, thirst: 1, bitter_taste: 1, acne: 1, bloating: 1, nausea: 1, t_greasy: 3, t_yellow: 2, t_red: 1, p_slippery: 2, p_rapid: 2 },
     cardinal: ["painful_urination", "foul_stools", "t_greasy", "t_yellow"], contra: { cold_aversion: 1, clear_urine: 2, t_pale: 1, p_slow: 1 } },
 
   // ===================== EXTERIOR & BI SYNDROMES =====================
-  { id: "summer_heat", organ: "Exterior & Bi syndromes", name: "Summer-Heat", principle: "Clear Summer-Heat, generate fluids, tonify Qi", formulas: "Qing Shu Yi Qi Tang; Liu Yi San; Xiang Ru San (with Damp)",
+  { id: "summer_heat", organ: "Exterior & Bi syndromes", name: "Summer-Heat", principle: "Clear Summer-Heat, generate fluids, tonify Qi", formulas: "Qing Shu Yi Qi Tang (Wang Shixiong); Liu Yi San; Xiang Ru San", rx: ["qing_shu_yi_qi_tang", "liu_yi_san", "xiang_ru_san"],
     ind: { heatstroke: 3, spontaneous_sweating: 3, thirst: 3, fever: 2, feeling_hot: 2, dark_urine: 2, scanty_urine: 1, irritability: 1, headache: 1, fatigue: 1, heaviness_body: 1, nausea: 1, t_red: 2, t_yellow: 1, p_overflowing: 2, p_rapid: 2, p_soggy: 1 },
     cardinal: ["heatstroke", "spontaneous_sweating", "thirst"], contra: { cold_aversion: 2, chills: 1, t_pale: 1 }, requireAny: ["heatstroke"] },
-  { id: "bi_wandering", organ: "Exterior & Bi syndromes", name: "Wind Bi (Wandering Painful Obstruction)", principle: "Expel Wind, scatter Cold & Damp, open the channels", formulas: "Fang Feng Tang; Juan Bi Tang",
+  { id: "bi_wandering", organ: "Exterior & Bi syndromes", name: "Wind Bi (Wandering Painful Obstruction)", principle: "Expel Wind, scatter Cold & Damp, open the channels", formulas: "Fang Feng Tang; Juan Bi Tang (Cheng Guopeng)", rx: ["fang_feng_tang", "juan_bi_tang"],
     ind: { bi_wandering: 3, joint_pain: 2, aversion_wind: 2, body_aches: 1, numbness: 1, fever: 1, t_thin_white: 1, p_floating: 2, p_wiry: 1 },
     cardinal: ["bi_wandering"], contra: { bi_heat: 2 }, requireAny: ["joint_pain", "bi_wandering", "bi_cold", "bi_damp", "bi_heat", "body_aches"] },
-  { id: "bi_cold", organ: "Exterior & Bi syndromes", name: "Cold Bi (Painful Obstruction)", principle: "Expel Cold, scatter Wind & Damp, warm the channels", formulas: "Wu Tou Tang; Juan Bi Tang",
+  { id: "bi_cold", organ: "Exterior & Bi syndromes", name: "Cold Bi (Painful Obstruction)", principle: "Expel Cold, scatter Wind & Damp, warm the channels", formulas: "Wu Tou Tang; Juan Bi Tang (Cheng Guopeng)", rx: ["wu_tou_tang", "juan_bi_tang"],
     ind: { bi_cold: 3, worse_cold: 3, joint_pain: 2, pain_better_warmth: 2, fixed_stabbing_pain: 1, cold_limbs: 1, t_white: 1, p_tight: 3, p_wiry: 1, p_slow: 1 },
     cardinal: ["bi_cold", "worse_cold", "p_tight"], contra: { bi_heat: 3, feeling_hot: 1, t_yellow: 1 }, requireAny: ["joint_pain", "bi_wandering", "bi_cold", "bi_damp", "bi_heat", "body_aches"] },
-  { id: "bi_damp", organ: "Exterior & Bi syndromes", name: "Damp Bi (Fixed Painful Obstruction)", principle: "Resolve Damp, expel Wind & Cold, open the channels", formulas: "Yi Yi Ren Tang; Qiang Huo Sheng Shi Tang",
+  { id: "bi_damp", organ: "Exterior & Bi syndromes", name: "Damp Bi (Fixed Painful Obstruction)", principle: "Resolve Damp, expel Wind & Cold, open the channels", formulas: "Yi Yi Ren Tang; Qiang Huo Sheng Shi Tang", rx: ["yi_yi_ren_tang", "qiang_huo_sheng_shi_tang"],
     ind: { bi_damp: 3, heaviness_body: 2, joint_pain: 2, numbness: 2, edema: 1, weakness_limbs: 1, t_greasy: 2, t_white: 1, p_slippery: 2, p_soggy: 2 },
     cardinal: ["bi_damp", "heaviness_body", "t_greasy"], contra: { bi_heat: 2 }, requireAny: ["joint_pain", "bi_wandering", "bi_cold", "bi_damp", "bi_heat"] },
-  { id: "bi_heat", organ: "Exterior & Bi syndromes", name: "Heat Bi (Painful Obstruction)", principle: "Clear Heat, resolve Damp, expel Wind, open the channels", formulas: "Bai Hu Jia Gui Zhi Tang; Xuan Bi Tang; Si Miao San",
+  { id: "bi_heat", organ: "Exterior & Bi syndromes", name: "Heat Bi (Painful Obstruction)", principle: "Clear Heat, resolve Damp, expel Wind, open the channels", formulas: "Bai Hu Jia Gui Zhi Tang; Xuan Bi Tang; Si Miao Wan", rx: ["bai_hu_jia_gui_zhi_tang", "xuan_bi_tang", "si_miao_wan"],
     ind: { bi_heat: 3, joint_pain: 2, fever: 2, thirst: 2, feeling_hot: 1, restlessness: 1, t_red: 2, t_yellow: 2, t_greasy: 1, p_rapid: 3, p_slippery: 2 },
     cardinal: ["bi_heat", "p_rapid", "t_yellow"], contra: { worse_cold: 2, pain_better_warmth: 2, t_pale: 1 }, requireAny: ["joint_pain", "bi_wandering", "bi_cold", "bi_damp", "bi_heat"] }
 ];
@@ -1132,6 +1160,694 @@ const SCORING = {
   topN: 5
 };
 /* =================== END OF KNOWLEDGE BASE =================== */
+</script>
+<script>
+/* =====================================================================
+   FORMULA KNOWLEDGE BASE (separate data block)
+   ---------------------------------------------------------------------
+   HERBS:      pinyin -> [pharmaceutical (Latin) name, short note]
+   HERB_FLAGS: safety flags per herb (toxic / restricted / endangered or animal
+               product / aristolochic-acid risk / pregnancy / interaction) with the
+               standard substitute. Shown automatically under every formula containing the herb.
+   FORMULAS:   id -> { name (pinyin), en, zh, src (source text), form,
+                       herbs: ["Pinyin|dose g|role|note"], prep, caution }
+               role: C = chief (jun), D = deputy (chen), A = assistant (zuo), E = envoy (shi)
+               dose: standard ADULT daily decoction dose in grams (single value or range),
+                     following Bensky/Barolet "Formulas & Strategies", the PRC Pharmacopoeia and
+                     standard Fangjixue textbooks. For pill/powder formulas a decoction-
+                     equivalent dose is given and the traditional form is noted.
+   Standard textbook doses for adults — adjust to the patient; verify before prescribing.
+   ===================================================================== */
+const HERBS = {
+  "Ba Dou": ["Crotonis Fructus", "used only to dry-fry Chuan Lian Zi, then discarded"],
+  "Bai Bian Dou": ["Lablab Semen album", ""],
+  "Bai He": ["Lilii Bulbus", ""],
+  "Bai Jie Zi": ["Sinapis Semen", ""],
+  "Bai Kou Ren": ["Amomi Fructus rotundus", "add near end"],
+  "Bai Shao": ["Paeoniae Radix alba", ""],
+  "Bai Tou Weng": ["Pulsatillae Radix", ""],
+  "Bai Zhi": ["Angelicae dahuricae Radix", ""],
+  "Bai Zhu": ["Atractylodis macrocephalae Rhizoma", ""],
+  "Bai Zi Ren": ["Platycladi Semen", ""],
+  "Ban Xia Qu": ["Pinelliae Massa fermentata", ""],
+  "Bei Sha Shen": ["Glehniae Radix", ""],
+  "Bian Xu": ["Polygoni avicularis Herba", ""],
+  "Bing Lang": ["Arecae Semen", ""],
+  "Bing Tang": ["Saccharum crystallinum (rock sugar)", "dissolve in strained decoction"],
+  "Bo He": ["Menthae haplocalycis Herba", "add in last 5 min"],
+  "Bu Gu Zhi": ["Psoraleae Fructus", ""],
+  "Can Sha": ["Bombycis Faeces", "wrap"],
+  "Cang Zhu": ["Atractylodis Rhizoma", ""],
+  "Cao Dou Kou": ["Alpiniae katsumadai Semen", "add near end"],
+  "Chai Hu": ["Bupleuri Radix", ""],
+  "Che Qian Zi": ["Plantaginis Semen", "wrap in cloth"],
+  "Chen Pi": ["Citri reticulatae Pericarpium", ""],
+  "Chen Xiang": ["Aquilariae Lignum resinatum", "add near end or take as powder"],
+  "Chi Fu Ling": ["Poria rubra", ""],
+  "Chi Shao": ["Paeoniae Radix rubra", ""],
+  "Chi Xiao Dou Pi": ["Vignae Semen (seed coat)", ""],
+  "Chuan Bei Mu": ["Fritillariae cirrhosae Bulbus", "often taken as powder"],
+  "Chuan Bi Xie": ["Dioscoreae hypoglaucae Rhizoma", ""],
+  "Chuan Lian Zi": ["Toosendan Fructus", ""],
+  "Chuan Niu Xi": ["Cyathulae Radix", ""],
+  "Chuan Xiong": ["Chuanxiong Rhizoma", ""],
+  "Da Fu Pi": ["Arecae Pericarpium", ""],
+  "Da Huang": ["Rhei Radix et Rhizoma", "add in last 5–10 min for purging"],
+  "Da Zao": ["Jujubae Fructus", "about 3–4 dates per 12 g"],
+  "Dai Zhe Shi": ["Haematitum", "crush, pre-cook 30 min"],
+  "Dan Dou Chi": ["Sojae Semen praeparatum", ""],
+  "Dan Nan Xing": ["Arisaema cum Bile", ""],
+  "Dan Shen": ["Salviae miltiorrhizae Radix", ""],
+  "Dan Zhu Ye": ["Lophatheri Herba", ""],
+  "Dang Gui": ["Angelicae sinensis Radix", ""],
+  "Dang Shen": ["Codonopsis Radix", "common substitute for Ren Shen at 2–3× the dose"],
+  "Deng Xin Cao": ["Junci Medulla", ""],
+  "Di Gu Pi": ["Lycii Cortex", ""],
+  "Ding Xiang": ["Caryophylli Flos", ""],
+  "Du Huo": ["Angelicae pubescentis Radix", ""],
+  "Du Zhong": ["Eucommiae Cortex", ""],
+  "E Jiao": ["Asini Corii Colla", "melt separately and stir into strained decoction"],
+  "Fang Feng": ["Saposhnikoviae Radix", ""],
+  "Feng Mi": ["Mel (honey)", ""],
+  "Fu Ling": ["Poria", ""],
+  "Fu Shen": ["Poria cum Radice Pini", ""],
+  "Gan Cao": ["Glycyrrhizae Radix et Rhizoma", ""],
+  "Gan Cao Shao": ["Glycyrrhizae Radix (fine root tips)", ""],
+  "Gan Jiang": ["Zingiberis Rhizoma", ""],
+  "Gao Ben": ["Ligustici Rhizoma", ""],
+  "Gao Liang Jiang": ["Alpiniae officinarum Rhizoma", ""],
+  "Ge Gen": ["Puerariae lobatae Radix", ""],
+  "Ge Jie": ["Gecko", "powder, taken with the decoction"],
+  "Ge Ke": ["Meretricis / Cyclinae Concha (clam shell)", "powdered"],
+  "Gou Qi Zi": ["Lycii Fructus", ""],
+  "Gou Teng": ["Uncariae Ramulus cum Uncis", "add in last 10 min"],
+  "Gua Lou": ["Trichosanthis Fructus", ""],
+  "Gua Lou Ren": ["Trichosanthis Semen", ""],
+  "Gui Ban": ["Testudinis Plastrum", "pre-cook 30+ min"],
+  "Gui Ban Jiao": ["Testudinis Plastri Colla", "melt separately"],
+  "Gui Zhi": ["Cinnamomi Ramulus", ""],
+  "Hai Feng Teng": ["Piperis kadsurae Caulis", ""],
+  "Hai Zao": ["Sargassum", ""],
+  "Han Fang Ji": ["Stephaniae tetrandrae Radix", "must be Stephania"],
+  "He Geng": ["Nelumbinis Petiolus (lotus stalk)", ""],
+  "Hong Hua": ["Carthami Flos", ""],
+  "Hou Po": ["Magnoliae officinalis Cortex", ""],
+  "Hu Ma Ren": ["Sesami Semen nigrum", ""],
+  "Hu Tao Ren": ["Juglandis Semen (walnut)", ""],
+  "Hua Shi": ["Talcum", "wrap in cloth"],
+  "Huai Niu Xi": ["Achyranthis bidentatae Radix", ""],
+  "Huang Bai": ["Phellodendri chinensis Cortex", ""],
+  "Huang Lian": ["Coptidis Rhizoma", ""],
+  "Huang Qi": ["Astragali Radix", ""],
+  "Huang Qin": ["Scutellariae Radix", ""],
+  "Huo Ma Ren": ["Cannabis Fructus (hemp seed)", ""],
+  "Huo Xiang": ["Pogostemonis Herba", "add near end"],
+  "Ji Zi Huang": ["Galli Vitellus (raw egg yolk)", "stir yolks into the warm strained decoction"],
+  "Jie Geng": ["Platycodonis Radix", ""],
+  "Jin Yin Hua": ["Lonicerae japonicae Flos", ""],
+  "Jing Jie": ["Schizonepetae Herba", ""],
+  "Jing Mi": ["Oryzae Semen (non-glutinous rice)", ""],
+  "Ju Hua": ["Chrysanthemi Flos", ""],
+  "Kun Bu": ["Laminariae / Eckloniae Thallus", ""],
+  "Lai Fu Zi": ["Raphani Semen", "crush"],
+  "Li Pi": ["Pyri Exocarpium (pear peel)", ""],
+  "Lian Qiao": ["Forsythiae Fructus", ""],
+  "Lian Xu": ["Nelumbinis Stamen", ""],
+  "Lian Zi": ["Nelumbinis Semen", ""],
+  "Long Chi": ["Fossilia Dentis Mastodi", "pre-cook"],
+  "Long Dan Cao": ["Gentianae Radix", ""],
+  "Long Gu": ["Fossilia Ossis Mastodi", "pre-cook 30 min"],
+  "Long Yan Rou": ["Longan Arillus", ""],
+  "Lu Gen": ["Phragmitis Rhizoma", ""],
+  "Lu Jiao Jiao": ["Cervi Cornus Colla", "melt separately"],
+  "Luo Shi Teng": ["Trachelospermi Caulis et Folium", ""],
+  "Ma Huang": ["Ephedrae Herba", ""],
+  "Mai Men Dong": ["Ophiopogonis Radix", ""],
+  "Mai Ya": ["Hordei Fructus germinatus", ""],
+  "Man Jing Zi": ["Viticis Fructus", ""],
+  "Mang Xiao": ["Natrii Sulfas", "dissolve in the strained decoction"],
+  "Mo Yao": ["Myrrha", ""],
+  "Mu Dan Pi": ["Moutan Cortex", ""],
+  "Mu Gua": ["Chaenomelis Fructus", ""],
+  "Mu Li": ["Ostreae Concha", "pre-cook 30 min"],
+  "Mu Tong": ["Akebiae Caulis", "Akebia only — see flag"],
+  "Mu Xiang": ["Aucklandiae Radix", "add near end"],
+  "Niu Bang Zi": ["Arctii Fructus", ""],
+  "Ou Jie": ["Nelumbinis Rhizomatis Nodus", ""],
+  "Pi Pa Ye": ["Eriobotryae Folium", "wrap (hairs)"],
+  "Pu Huang": ["Typhae Pollen", "wrap in cloth"],
+  "Qian Hu": ["Peucedani Radix", ""],
+  "Qian Shi": ["Euryales Semen", ""],
+  "Qiang Huo": ["Notopterygii Rhizoma et Radix", ""],
+  "Qin Jiao": ["Gentianae macrophyllae Radix", ""],
+  "Qin Pi": ["Fraxini Cortex", ""],
+  "Qing Dai": ["Indigo naturalis", "wrap or take as powder"],
+  "Qing Hao": ["Artemisiae annuae Herba", "add near end"],
+  "Qing Pi": ["Citri reticulatae viride Pericarpium", ""],
+  "Qu Mai": ["Dianthi Herba", ""],
+  "Ren Shen": ["Ginseng Radix et Rhizoma", "decoct separately; Dang Shen at 2–3× dose is the usual substitute"],
+  "Rou Dou Kou": ["Myristicae Semen", ""],
+  "Rou Gui": ["Cinnamomi Cortex", "add near end or take as powder"],
+  "Ru Xiang": ["Olibanum", ""],
+  "Sang Bai Pi": ["Mori Cortex", ""],
+  "Sang Ji Sheng": ["Taxilli Herba", ""],
+  "Sang Piao Xiao": ["Mantidis Ootheca", ""],
+  "Sang Ye": ["Mori Folium", ""],
+  "Sang Zhi": ["Mori Ramulus", ""],
+  "Sha Ren": ["Amomi Fructus", "add in last 5 min"],
+  "Sha Shen": ["Glehniae / Adenophorae Radix", ""],
+  "Sha Yuan Zi": ["Astragali complanati Semen", ""],
+  "Shan Yang Jiao": ["Caprae hircus Cornu (goat horn)", "substitute for Ling Yang Jiao; pre-cook 1 h"],
+  "Shan Yao": ["Dioscoreae Rhizoma", ""],
+  "Shan Zha": ["Crataegi Fructus", ""],
+  "Shan Zhu Yu": ["Corni Fructus", ""],
+  "Shen Qu": ["Massa medicata fermentata", ""],
+  "Sheng Di Huang": ["Rehmanniae Radix", ""],
+  "Sheng Jiang": ["Zingiberis Rhizoma recens", "about 3 slices per 6–9 g"],
+  "Sheng Ma": ["Cimicifugae Rhizoma", ""],
+  "Shi Chang Pu": ["Acori tatarinowii Rhizoma", ""],
+  "Shi Di": ["Kaki Calyx", ""],
+  "Shi Gao": ["Gypsum fibrosum", "crush, pre-cook 20–30 min"],
+  "Shi Hu": ["Dendrobii Caulis", "pre-cook"],
+  "Shi Jue Ming": ["Haliotidis Concha", "crush, pre-cook 30 min"],
+  "Shu Di Huang": ["Rehmanniae Radix praeparata", ""],
+  "Shui Niu Jiao": ["Bubali Cornu (water-buffalo horn)", "substitute for Xi Jiao; shave, pre-cook 1–3 h"],
+  "Suan Zao Ren": ["Ziziphi spinosae Semen", "crush"],
+  "Tan Xiang": ["Santali albi Lignum", "add near end"],
+  "Tao Ren": ["Persicae Semen", "crush"],
+  "Tian Hua Fen": ["Trichosanthis Radix", ""],
+  "Tian Ma": ["Gastrodiae Rhizoma", ""],
+  "Tian Men Dong": ["Asparagi Radix", ""],
+  "Tong Cao": ["Tetrapanacis Medulla", ""],
+  "Tu Si Zi": ["Cuscutae Semen", ""],
+  "Wu Ling Zhi": ["Trogopteri Faeces", "wrap in cloth"],
+  "Wu Mei": ["Mume Fructus", ""],
+  "Wu Wei Zi": ["Schisandrae chinensis Fructus", ""],
+  "Wu Yao": ["Linderae Radix", ""],
+  "Wu Zhu Yu": ["Evodiae Fructus", ""],
+  "Xi Gua Cui Yi": ["Citrulli Exocarpium (watermelon rind)", ""],
+  "Xi Xin": ["Asari Radix et Rhizoma", ""],
+  "Xi Yang Shen": ["Panacis quinquefolii Radix", "decoct separately"],
+  "Xiang Fu": ["Cyperi Rhizoma", ""],
+  "Xiang Ru": ["Moslae Herba", ""],
+  "Xiao Hui Xiang": ["Foeniculi Fructus", ""],
+  "Xiao Ji": ["Cirsii Herba", ""],
+  "Xing Ren": ["Armeniacae Semen amarum", "crush"],
+  "Xuan Fu Hua": ["Inulae Flos", "wrap in cloth (hairs)"],
+  "Xuan Shen": ["Scrophulariae Radix", ""],
+  "Yan Hu Suo": ["Corydalis Rhizoma", ""],
+  "Ye Jiao Teng": ["Polygoni multiflori Caulis", ""],
+  "Yi Mu Cao": ["Leonuri Herba", ""],
+  "Yi Tang": ["Maltosum (malt sugar)", "dissolve in strained decoction"],
+  "Yi Yi Ren": ["Coicis Semen", ""],
+  "Yi Zhi Ren": ["Alpiniae oxyphyllae Fructus", ""],
+  "Yin Chen": ["Artemisiae scopariae Herba", ""],
+  "Yu Zhu": ["Polygonati odorati Rhizoma", ""],
+  "Yuan Zhi": ["Polygalae Radix", ""],
+  "Ze Xie": ["Alismatis Rhizoma", ""],
+  "Zhe Bei Mu": ["Fritillariae thunbergii Bulbus", ""],
+  "Zhi Ban Xia": ["Pinelliae Rhizoma praeparatum", "prepared only"],
+  "Zhi Chuan Wu": ["Aconiti Radix praeparata", "pre-cook 1–2 h (with honey)"],
+  "Zhi Fu Zi": ["Aconiti Radix lateralis praeparata", "pre-cook 30–60 min until no tingling"],
+  "Zhi Gan Cao": ["Glycyrrhizae Radix et Rhizoma praeparata cum melle", ""],
+  "Zhi He Shou Wu": ["Polygoni multiflori Radix praeparata", ""],
+  "Zhi Ke": ["Aurantii Fructus", ""],
+  "Zhi Mu": ["Anemarrhenae Rhizoma", ""],
+  "Zhi Shi": ["Aurantii Fructus immaturus", ""],
+  "Zhi Zi": ["Gardeniae Fructus", ""],
+  "Zhi Zi Pi": ["Gardeniae Fructus (husk)", ""],
+  "Zhu Ling": ["Polyporus", ""],
+  "Zhu Ru": ["Bambusae Caulis in taenia", ""],
+  "Zhu Ye": ["Phyllostachys nigrae Folium (bamboo leaf)", ""],
+  "Zi Su Ye": ["Perillae Folium", "add near end"],
+  "Zi Su Zi": ["Perillae Fructus", ""],
+  "Zi Wan": ["Asteris Radix", ""]
+};
+/* Safety flags. type: toxic | restricted | endangered | aristolochic | animal | pregnancy | interaction */
+const HERB_FLAGS = {
+  "Zhi Fu Zi": { type: "toxic", text: "Aconite (toxic alkaloids). Prepared root only; pre-cook 30–60 min (longer above 15 g) until a taste test gives no numbness. Contraindicated in pregnancy; incompatible with Ban Xia, Gua Lou, Bei Mu (18 antagonisms)." },
+  "Zhi Chuan Wu": { type: "toxic", text: "Aconite main root — highly toxic. Prepared form only, pre-cook 1–2 h (traditionally in honey); start low. Contraindicated in pregnancy and heart disease/arrhythmia; never combine with Ban Xia, Gua Lou, Bei Mu." },
+  "Xi Xin": { type: "toxic", text: "Asarum: root/rhizome only (aerial parts contain aristolochic acid); keep to 1–3 g in decoction. Contraindicated in pregnancy." },
+  "Ma Huang": { type: "restricted", text: "Ephedra — ephedrine alkaloids; regulated or prohibited in many countries and on sport doping lists. Avoid in hypertension, heart disease, hyperthyroidism, insomnia, glaucoma, pregnancy, and with MAOIs/stimulants; check local regulations." },
+  "Mu Tong": { type: "aristolochic", text: "Never use Guan Mu Tong (Aristolochia manshuriensis — aristolochic acid, nephrotoxic and carcinogenic, banned). Use Akebia (Mu Tong) or Chuan Mu Tong (Clematis), or substitute Tong Cao 3–6 g." },
+  "Han Fang Ji": { type: "aristolochic", text: "Must be Stephania tetrandra (Han Fang Ji). Guang Fang Ji / Mu Fang Ji (Aristolochia) contain aristolochic acid and are banned." },
+  "Shui Niu Jiao": { type: "endangered", text: "Water-buffalo horn is the standard legal substitute for Xi Jiao (rhinoceros horn — CITES Appendix I, banned). Use 15–30 g, pre-cooked 1–3 h." },
+  "Shan Yang Jiao": { type: "endangered", text: "Goat horn replaces Ling Yang Jiao (saiga antelope horn — CITES Appendix II, restricted). Use 15–30 g pre-cooked; genuine Ling Yang Jiao powder (0.3–0.6 g) only from legal certified stock." },
+  "Gui Ban": { type: "endangered", text: "Tortoise plastron — many species CITES-listed; use certified farmed stock only (Bie Jia or Nu Zhen Zi + Han Lian Cao are sometimes substituted). Caution in pregnancy." },
+  "Gui Ban Jiao": { type: "endangered", text: "Tortoise-plastron glue — certified farmed stock only." },
+  "Ge Jie": { type: "endangered", text: "Tokay gecko — CITES Appendix II (since 2019). Use legal certified stock or substitute cultivated Cordyceps mycelium (Cs-4) / extra Hu Tao Ren and Bu Gu Zhi." },
+  "Chen Xiang": { type: "endangered", text: "Agarwood (Aquilaria) — CITES Appendix II; use certified cultivated material." },
+  "Shi Hu": { type: "endangered", text: "Wild Dendrobium is CITES Appendix II; use cultivated stock." },
+  "E Jiao": { type: "animal", text: "Donkey-hide gelatin (animal product; not vegetarian; supply-ethics concerns). Cloying — caution with poor digestion." },
+  "Lu Jiao Jiao": { type: "animal", text: "Deer-antler glue (animal product; farmed)." },
+  "Wu Ling Zhi": { type: "animal", text: "Flying-squirrel faeces (animal product). Classically 'Ren Shen fears Wu Ling Zhi' (19 incompatibilities). Contraindicated in pregnancy." },
+  "Sang Piao Xiao": { type: "animal", text: "Mantis egg case (animal product)." },
+  "Can Sha": { type: "animal", text: "Silkworm droppings (animal product)." },
+  "Ba Dou": { type: "toxic", text: "Croton seed — highly toxic purgative. Only used to dry-fry Chuan Lian Zi and then discarded (never decocted or ingested); many practitioners omit it." },
+  "Chuan Lian Zi": { type: "toxic", text: "Toosendan — mildly toxic (hepatotoxic with overdose or long use); keep to 4.5–9 g, short courses; caution in liver disease." },
+  "Zhi He Shou Wu": { type: "toxic", text: "Polygonum multiflorum — idiosyncratic hepatotoxicity reported even with the prepared root; monitor liver function; avoid in liver disease." },
+  "Bu Gu Zhi": { type: "toxic", text: "Psoralea — photosensitising; rare hepatotoxicity reports. Avoid in Yin deficiency with heat." },
+  "Xing Ren": { type: "toxic", text: "Bitter apricot kernel — amygdalin (cyanogenic); do not exceed about 10 g; caution in infants." },
+  "Wu Zhu Yu": { type: "toxic", text: "Evodia — mildly toxic; usually 1.5–4.5 g." },
+  "Zhi Ban Xia": { type: "toxic", text: "Pinellia — prepared form only (raw is toxic). Caution in pregnancy; incompatible with Fu Zi / Chuan Wu (18 antagonisms)." },
+  "Dan Nan Xing": { type: "toxic", text: "Arisaema prepared with bile — prepared form only; caution in pregnancy." },
+  "Bing Lang": { type: "toxic", text: "Areca seed — arecoline; carcinogenicity concerns with chronic use; caution in pregnancy and weak patients." },
+  "Dai Zhe Shi": { type: "toxic", text: "Haematite — may contain trace arsenic; short-term use only; caution in pregnancy." },
+  "Huo Ma Ren": { type: "restricted", text: "Hemp seed — use sterilised/dehulled seed; cannabis seed is regulated in some countries (check Philippine FDA/PDEA rules)." },
+  "Hai Zao": { type: "interaction", text: "Sargassum is classically incompatible with Gan Cao (18 antagonisms); Hai Zao Yu Hu Tang is a deliberate classical exception and many practitioners omit Gan Cao. Iodine-rich: caution in hyperthyroidism or autoimmune thyroiditis." },
+  "Kun Bu": { type: "interaction", text: "Kelp — iodine-rich; caution in thyroid disease." },
+  "Huang Lian": { type: "interaction", text: "Berberine — avoid in neonates, G6PD deficiency (common in the Philippines) and pregnancy; very bitter-cold, protect the Stomach." },
+  "Da Huang": { type: "pregnancy", text: "Rhubarb — contraindicated in pregnancy and breastfeeding, caution during menstruation; not for long-term use." },
+  "Mang Xiao": { type: "pregnancy", text: "Mirabilite — contraindicated in pregnancy." },
+  "Tao Ren": { type: "pregnancy", text: "Peach kernel — contraindicated in pregnancy; mildly toxic in overdose." },
+  "Hong Hua": { type: "pregnancy", text: "Safflower — contraindicated in pregnancy; caution with anticoagulants." },
+  "Yi Mu Cao": { type: "pregnancy", text: "Motherwort — contraindicated in pregnancy." },
+  "Huai Niu Xi": { type: "pregnancy", text: "Achyranthes — contraindicated in pregnancy and heavy menstrual bleeding." },
+  "Chuan Niu Xi": { type: "pregnancy", text: "Cyathula — contraindicated in pregnancy and heavy menstrual bleeding." },
+  "Qu Mai": { type: "pregnancy", text: "Dianthus — contraindicated in pregnancy." },
+  "Pu Huang": { type: "pregnancy", text: "Typha pollen — contraindicated/caution in pregnancy." },
+  "Mo Yao": { type: "pregnancy", text: "Myrrh — contraindicated in pregnancy." },
+  "Ru Xiang": { type: "pregnancy", text: "Frankincense — contraindicated in pregnancy." },
+  "Tian Hua Fen": { type: "pregnancy", text: "Trichosanthes root — contraindicated in pregnancy." },
+  "Rou Gui": { type: "pregnancy", text: "Cinnamon bark — caution in pregnancy and bleeding." },
+  "Dan Shen": { type: "interaction", text: "Salvia — potentiates warfarin/antiplatelet drugs; caution in pregnancy and bleeding." },
+  "Ren Shen": { type: "interaction", text: "Ginseng — possible interactions with warfarin, hypoglycaemics, MAOIs; avoid in excess heat or uncontrolled hypertension. Classically 'fears' Wu Ling Zhi." }
+};
+const FORMULAS = {
+  // ------------------------------------------------ LIVER / QI & BLOOD MOVERS
+  xiao_yao_san: { name: "Xiao Yao San", en: "Rambling Powder", zh: "逍遙散", src: "Tai Ping Hui Min He Ji Ju Fang (Song, 1107)", form: "Powder or pill (decoction doses shown)",
+    herbs: ["Chai Hu|9|C", "Dang Gui|9|D", "Bai Shao|9|D", "Bai Zhu|9|A", "Fu Ling|9|A", "Zhi Gan Cao|4.5|A/E", "Bo He|3|A|add last", "Sheng Jiang|6|A|traditionally roasted (Wei Jiang), about 3 slices"],
+    prep: "Decoction; add Bo He in the last 5 min. Pill: 6–9 g twice daily.", caution: "Chai Hu — use cautiously in Liver Yang rising or Yin deficiency with heat." },
+  dan_zhi_xiao_yao_san: { name: "Dan Zhi Xiao Yao San (Jia Wei Xiao Yao San)", en: "Augmented Rambling Powder", zh: "丹梔逍遙散", src: "Nei Ke Zhai Yao (Xue Ji, 1529)", form: "Decoction / pill",
+    herbs: ["Chai Hu|9|C", "Dang Gui|9|D", "Bai Shao|9|D", "Bai Zhu|9|A", "Fu Ling|9|A", "Mu Dan Pi|6|A", "Zhi Zi|6|A", "Zhi Gan Cao|4.5|E", "Bo He|3|A|add last", "Sheng Jiang|3|A"],
+    prep: "Decoction. For Liver Qi stagnation that has generated heat.", caution: "Cold additions — not for Spleen Yang deficiency with loose stools." },
+  chai_hu_shu_gan_san: { name: "Chai Hu Shu Gan San", en: "Bupleurum Powder to Spread the Liver", zh: "柴胡疏肝散", src: "Jing Yue Quan Shu (Zhang Jingyue, 1624)", form: "Powder, usually decocted",
+    herbs: ["Chai Hu|6|C", "Xiang Fu|5|D", "Chuan Xiong|5|D", "Chen Pi|6|A|vinegar-fried", "Zhi Ke|5|A", "Bai Shao|5|A", "Zhi Gan Cao|3|E"],
+    prep: "Decoction.", caution: "Acrid and drying — not for Yin/Blood deficiency without Qi stagnation; caution in pregnancy." },
+  yue_ju_wan: { name: "Yue Ju Wan", en: "Escape Restraint Pill", zh: "越鞠丸", src: "Dan Xi Xin Fa (Zhu Danxi, 1481)", form: "Pill (decoction-equivalent doses shown)",
+    herbs: ["Xiang Fu|9|C", "Chuan Xiong|6|D", "Cang Zhu|6|D", "Zhi Zi|6|D", "Shen Qu|6|D"],
+    prep: "Equal parts in the original pill; decoction 6–10 g each. Pill 6–9 g twice daily.", caution: "Excess-type stagnation only; not for deficiency." },
+  ge_xia_zhu_yu_tang: { name: "Ge Xia Zhu Yu Tang", en: "Drive Out Stasis Below the Diaphragm Decoction", zh: "膈下逐瘀湯", src: "Yi Lin Gai Cuo (Wang Qingren, 1830)", form: "Decoction",
+    herbs: ["Wu Ling Zhi|6|C|wrap", "Tao Ren|9|C", "Hong Hua|9|C", "Dang Gui|9|D", "Chuan Xiong|6|D", "Chi Shao|6|D", "Mu Dan Pi|6|A", "Wu Yao|6|A", "Yan Hu Suo|3|A", "Xiang Fu|4.5|A", "Zhi Ke|4.5|A", "Gan Cao|9|E"],
+    prep: "Decoction.", caution: "Strongly Blood-moving: contraindicated in pregnancy and bleeding disorders; caution with anticoagulants." },
+  xue_fu_zhu_yu_tang: { name: "Xue Fu Zhu Yu Tang", en: "Drive Out Stasis in the Mansion of Blood Decoction", zh: "血府逐瘀湯", src: "Yi Lin Gai Cuo (Wang Qingren, 1830)", form: "Decoction",
+    herbs: ["Tao Ren|12|C", "Hong Hua|9|C", "Dang Gui|9|D", "Chuan Xiong|4.5|D", "Chi Shao|6|D", "Chuan Niu Xi|9|D", "Sheng Di Huang|9|A", "Chai Hu|3|A", "Zhi Ke|6|A", "Jie Geng|4.5|A", "Gan Cao|6|E"],
+    prep: "Decoction.", caution: "Contraindicated in pregnancy; caution with anticoagulants/antiplatelets and heavy menstruation." },
+  gui_zhi_fu_ling_wan: { name: "Gui Zhi Fu Ling Wan", en: "Cinnamon Twig and Poria Pill", zh: "桂枝茯苓丸", src: "Jin Gui Yao Lue (Zhang Zhongjing, c. 210)", form: "Honey pill (decoction-equivalent doses shown)",
+    herbs: ["Gui Zhi|9|C", "Fu Ling|9|D", "Mu Dan Pi|9|A", "Tao Ren|9|A", "Chi Shao|9|A|or Bai Shao"],
+    prep: "Equal parts; pill 3–6 g 1–3× daily, or decoction.", caution: "Avoid in pregnancy unless under expert supervision; stop if bleeding increases." },
+  si_wu_tang: { name: "Si Wu Tang", en: "Four-Substance Decoction", zh: "四物湯", src: "Tai Ping Hui Min He Ji Ju Fang (1107)", form: "Decoction",
+    herbs: ["Shu Di Huang|12|C", "Dang Gui|9|D", "Bai Shao|9|A", "Chuan Xiong|6|E"],
+    prep: "Decoction.", caution: "Cloying — caution with Spleen deficiency/dampness (poor appetite, loose stools)." },
+  bu_gan_tang: { name: "Bu Gan Tang", en: "Tonify the Liver Decoction", zh: "補肝湯", src: "Yi Zong Jin Jian (1742)", form: "Decoction",
+    herbs: ["Shu Di Huang|12|C", "Dang Gui|9|D", "Bai Shao|9|D", "Chuan Xiong|6|A", "Suan Zao Ren|9|A", "Mu Gua|9|A", "Zhi Gan Cao|3|E"],
+    prep: "Decoction.", caution: "Cloying with Spleen dampness." },
+  ba_zhen_tang: { name: "Ba Zhen Tang", en: "Eight-Treasure Decoction", zh: "八珍湯", src: "Zheng Ti Lei Yao (Xue Ji, 1529)", form: "Decoction",
+    herbs: ["Ren Shen|6|C|or Dang Shen 12–15 g", "Shu Di Huang|12|C", "Bai Zhu|9|D", "Fu Ling|9|D", "Dang Gui|9|D", "Bai Shao|9|D", "Chuan Xiong|6|A", "Zhi Gan Cao|3|E", "Sheng Jiang|6|E|3 slices", "Da Zao|6|E|2 dates"],
+    prep: "Decoction.", caution: "Not during acute exterior invasion or with heat signs." },
+  shi_quan_da_bu_tang: { name: "Shi Quan Da Bu Tang", en: "All-Inclusive Great Tonifying Decoction", zh: "十全大補湯", src: "Tai Ping Hui Min He Ji Ju Fang (1107)", form: "Decoction / pill",
+    herbs: ["Ren Shen|6|C|or Dang Shen 12–15 g", "Huang Qi|12|C", "Shu Di Huang|12|D", "Bai Zhu|9|D", "Fu Ling|9|D", "Dang Gui|9|D", "Bai Shao|9|D", "Chuan Xiong|6|A", "Rou Gui|3|A|add late", "Zhi Gan Cao|3|E", "Sheng Jiang|6|E", "Da Zao|6|E"],
+    prep: "Decoction.", caution: "Warm — not with heat signs, Yin deficiency with heat or acute infection." },
+  tao_hong_si_wu_tang: { name: "Tao Hong Si Wu Tang", en: "Four-Substance Decoction with Safflower and Peach Pit", zh: "桃紅四物湯", src: "Yi Zong Jin Jian (1742)", form: "Decoction",
+    herbs: ["Shu Di Huang|12|C", "Dang Gui|9|C", "Tao Ren|9|D", "Hong Hua|6|D", "Bai Shao|9|A|often Chi Shao", "Chuan Xiong|6|A"],
+    prep: "Decoction.", caution: "Contraindicated in pregnancy; caution with anticoagulants and heavy bleeding." },
+  shao_fu_zhu_yu_tang: { name: "Shao Fu Zhu Yu Tang", en: "Drive Out Blood Stasis in the Lower Abdomen Decoction", zh: "少腹逐瘀湯", src: "Yi Lin Gai Cuo (Wang Qingren, 1830)", form: "Decoction",
+    herbs: ["Dang Gui|9|C", "Pu Huang|9|C|wrap", "Wu Ling Zhi|6|C|wrap", "Chuan Xiong|6|D", "Chi Shao|6|D", "Yan Hu Suo|3|D", "Mo Yao|6|D", "Xiao Hui Xiang|1.5|A", "Gan Jiang|3|A", "Rou Gui|3|A"],
+    prep: "Decoction.", caution: "Contraindicated in pregnancy; cold-type stasis only." },
+  dan_shen_yin: { name: "Dan Shen Yin", en: "Salvia Drink", zh: "丹參飲", src: "Shi Fang Ge Kuo (Chen Xiuyuan, 1801)", form: "Decoction",
+    herbs: ["Dan Shen|30|C", "Tan Xiang|4.5|D|add late", "Sha Ren|4.5|A|add late"],
+    prep: "Decoction.", caution: "Caution with anticoagulants (Dan Shen); chest pain needs biomedical assessment." },
+  shi_xiao_san: { name: "Shi Xiao San", en: "Sudden Smile Powder", zh: "失笑散", src: "Tai Ping Hui Min He Ji Ju Fang (1107)", form: "Powder (decoction doses shown)",
+    herbs: ["Wu Ling Zhi|6|C|wrap", "Pu Huang|6|C|wrap"],
+    prep: "Equal parts; 6 g powder with vinegar or yellow wine, or decoct 6–9 g each wrapped. Often combined with Dan Shen Yin for epigastric Blood stasis.", caution: "Contraindicated in pregnancy; Wu Ling Zhi classically incompatible with Ren Shen." },
+  // ------------------------------------------------ LIVER YIN / YANG / WIND / FIRE
+  yi_guan_jian: { name: "Yi Guan Jian", en: "Linking Decoction", zh: "一貫煎", src: "Xu Ming Yi Lei An (Wei Zhixiu, 1770)", form: "Decoction",
+    herbs: ["Sheng Di Huang|18–30|C", "Gou Qi Zi|9–18|D", "Bei Sha Shen|9|D", "Mai Men Dong|9|D", "Dang Gui|9|D", "Chuan Lian Zi|4.5|A"],
+    prep: "Decoction.", caution: "Cloying — not for phlegm-damp; Chuan Lian Zi is mildly hepatotoxic." },
+  qi_ju_di_huang_wan: { name: "Qi Ju Di Huang Wan", en: "Lycium Fruit, Chrysanthemum and Rehmannia Pill", zh: "杞菊地黃丸", src: "Yi Ji (Dong Xiyuan, 1777)", form: "Pill (decoction-equivalent doses shown)",
+    herbs: ["Shu Di Huang|24|C", "Shan Zhu Yu|12|D", "Shan Yao|12|D", "Ze Xie|9|A", "Mu Dan Pi|9|A", "Fu Ling|9|A", "Gou Qi Zi|9|A", "Ju Hua|9|A"],
+    prep: "Pill 6–9 g twice daily, or decoction.", caution: "Cloying — caution with Spleen deficiency/dampness." },
+  liu_wei_di_huang_wan: { name: "Liu Wei Di Huang Wan", en: "Six-Ingredient Pill with Rehmannia", zh: "六味地黃丸", src: "Xiao Er Yao Zheng Zhi Jue (Qian Yi, 1119)", form: "Honey pill (decoction-equivalent doses shown)",
+    herbs: ["Shu Di Huang|24|C", "Shan Zhu Yu|12|D", "Shan Yao|12|D", "Ze Xie|9|A", "Mu Dan Pi|9|A", "Fu Ling|9|A"],
+    prep: "Ratio 8:4:4:3:3:3. Pill 6–9 g 2–3× daily, or decoction. Children: reduce by age.", caution: "Cloying — caution with Spleen deficiency, loose stools, poor appetite." },
+  tian_ma_gou_teng_yin: { name: "Tian Ma Gou Teng Yin", en: "Gastrodia and Uncaria Drink", zh: "天麻鉤藤飲", src: "Za Bing Zheng Zhi Xin Yi (Hu Guangci, 1958)", form: "Decoction",
+    herbs: ["Tian Ma|9|C", "Gou Teng|12|C|add last", "Shi Jue Ming|18|D|pre-cook", "Chuan Niu Xi|12|D", "Zhi Zi|9|A", "Huang Qin|9|A", "Du Zhong|9|A", "Sang Ji Sheng|9|A", "Yi Mu Cao|9|A", "Ye Jiao Teng|9|A", "Fu Shen|9|A"],
+    prep: "Pre-cook Shi Jue Ming 30 min; add Gou Teng in the last 10 min.", caution: "Contraindicated in pregnancy (Chuan Niu Xi, Yi Mu Cao). Hypertensive crisis or stroke signs need urgent referral." },
+  zhen_gan_xi_feng_tang: { name: "Zhen Gan Xi Feng Tang", en: "Sedate the Liver and Extinguish Wind Decoction", zh: "鎮肝熄風湯", src: "Yi Xue Zhong Zhong Can Xi Lu (Zhang Xichun, 1918)", form: "Decoction",
+    herbs: ["Huai Niu Xi|30|C", "Dai Zhe Shi|30|C|pre-cook", "Long Gu|15|D|pre-cook", "Mu Li|15|D|pre-cook", "Gui Ban|15|D|pre-cook", "Bai Shao|15|D", "Xuan Shen|15|A", "Tian Men Dong|15|A", "Chuan Lian Zi|6|A", "Mai Ya|6|A", "Yin Chen|6|A", "Gan Cao|4.5|E"],
+    prep: "Pre-cook the minerals and Gui Ban 30 min.", caution: "Heavy minerals — not for Spleen deficiency; contraindicated in pregnancy. Wind-stroke signs are an emergency." },
+  ling_jiao_gou_teng_tang: { name: "Ling Jiao Gou Teng Tang", en: "Antelope Horn and Uncaria Decoction", zh: "羚角鉤藤湯", src: "Tong Su Shang Han Lun (Yu Genchu, 1776)", form: "Decoction",
+    herbs: ["Shan Yang Jiao|15–30|C|replaces Ling Yang Jiao 4.5 g; pre-cook", "Gou Teng|9|C|add last", "Sang Ye|6|D", "Ju Hua|9|D", "Sheng Di Huang|15|A", "Bai Shao|9|A", "Chuan Bei Mu|12|A", "Zhu Ru|15|A", "Fu Shen|9|A", "Gan Cao|2.4|E"],
+    prep: "Pre-cook the horn at least 1 h; add Gou Teng late.", caution: "High fever with convulsions is an emergency — refer. Ling Yang Jiao (saiga) is CITES-restricted." },
+  e_jiao_ji_zi_huang_tang: { name: "E Jiao Ji Zi Huang Tang", en: "Ass-Hide Gelatin and Egg Yolk Decoction", zh: "阿膠雞子黃湯", src: "Tong Su Shang Han Lun (Yu Genchu, 1776)", form: "Decoction",
+    herbs: ["E Jiao|6|C|melt", "Ji Zi Huang|2 yolks|C|raw, stirred in", "Sheng Di Huang|12|D", "Bai Shao|9|D", "Gou Teng|6|A|add last", "Shi Jue Ming|15|A|pre-cook", "Mu Li|12|A|pre-cook", "Luo Shi Teng|9|A", "Fu Shen|12|A", "Zhi Gan Cao|1.8|E"],
+    prep: "Pre-cook shells; melt E Jiao; stir yolks into the warm strained decoction. A simpler alternative for Blood-deficiency Wind: Si Wu Tang + Tian Ma 9 g and Gou Teng 12 g.", caution: "Cloying — caution with Spleen dampness. Egg allergy." },
+  long_dan_xie_gan_tang: { name: "Long Dan Xie Gan Tang", en: "Gentian Decoction to Drain the Liver", zh: "龍膽瀉肝湯", src: "Yi Fang Ji Jie (Wang Ang, 1682)", form: "Decoction / pill",
+    herbs: ["Long Dan Cao|6|C|wine-fried", "Huang Qin|9|D", "Zhi Zi|9|D", "Ze Xie|12|A", "Mu Tong|6|A|Akebia only, or Tong Cao 3–6 g", "Che Qian Zi|9|A|wrap", "Dang Gui|3|A", "Sheng Di Huang|9|A", "Chai Hu|6|A/E", "Gan Cao|6|E"],
+    prep: "Decoction. Pill 3–6 g twice daily.", caution: "Very bitter-cold: short courses only; not for Spleen/Stomach deficiency or pregnancy. Aristolochic-acid kidney injury has been linked to products made with Guan Mu Tong." },
+  yin_chen_hao_tang: { name: "Yin Chen Hao Tang", en: "Virgate Wormwood Decoction", zh: "茵陳蒿湯", src: "Shang Han Lun (c. 210)", form: "Decoction",
+    herbs: ["Yin Chen|18–30|C|decoct first", "Zhi Zi|9–12|D", "Da Huang|6|A"],
+    prep: "Decoct Yin Chen first, then add the others.", caution: "Jaundice needs biomedical assessment. Contraindicated in pregnancy (Da Huang); not for Yin-type (cold-damp) jaundice." },
+  nuan_gan_jian: { name: "Nuan Gan Jian", en: "Warm the Liver Decoction", zh: "暖肝煎", src: "Jing Yue Quan Shu (Zhang Jingyue, 1624)", form: "Decoction",
+    herbs: ["Rou Gui|3–6|C|add late", "Xiao Hui Xiang|6|C", "Dang Gui|6–9|D", "Gou Qi Zi|9|D", "Wu Yao|6|D", "Chen Xiang|3|A|or Mu Xiang 6 g", "Fu Ling|6|A", "Sheng Jiang|6|E|3–5 slices"],
+    prep: "Decoction.", caution: "Not for damp-heat hernia. Acute testicular pain needs urgent exclusion of torsion." },
+  tian_tai_wu_yao_san: { name: "Tian Tai Wu Yao San", en: "Top-Quality Lindera Powder", zh: "天台烏藥散", src: "Sheng Ji Zong Lu (1117) / Yi Xue Fa Ming", form: "Powder (decoction doses shown)",
+    herbs: ["Wu Yao|12|C", "Mu Xiang|6|D", "Xiao Hui Xiang|6|D", "Qing Pi|6|D", "Gao Liang Jiang|9|D", "Bing Lang|9|A", "Chuan Lian Zi|12|A|dry-fried with Ba Dou", "Ba Dou|12|A|frying only; discarded, not ingested"],
+    prep: "Chuan Lian Zi is dry-fried with Ba Dou (and bran) until dark; the Ba Dou is then DISCARDED. Powder 3 g with warm wine, or decoct.", caution: "Cold-type Qi stagnation only. Ba Dou must never be ingested." },
+  tong_xie_yao_fang: { name: "Tong Xie Yao Fang", en: "Important Formula for Painful Diarrhea", zh: "痛瀉要方", src: "Dan Xi Xin Fa (attrib. Liu Caochuang; 1481)", form: "Powder/pill (decoction doses shown)",
+    herbs: ["Bai Zhu|9|C|dry-fried", "Bai Shao|6|D|dry-fried", "Chen Pi|4.5|A|dry-fried", "Fang Feng|3|E"],
+    prep: "Decoction.", caution: "Not for damp-heat or food-retention diarrhoea." },
+  si_ni_san: { name: "Si Ni San", en: "Frigid Extremities Powder", zh: "四逆散", src: "Shang Han Lun (c. 210)", form: "Powder, usually decocted",
+    herbs: ["Chai Hu|6|C", "Zhi Shi|6|D", "Bai Shao|6|A", "Zhi Gan Cao|6|E"],
+    prep: "Equal parts; decoction.", caution: "Cold hands here come from Qi constraint — not for Yang-deficient cold limbs." },
+  zuo_jin_wan: { name: "Zuo Jin Wan", en: "Left Metal Pill", zh: "左金丸", src: "Dan Xi Xin Fa (1481)", form: "Pill (decoction-equivalent doses shown)",
+    herbs: ["Huang Lian|6|C", "Wu Zhu Yu|1|A/E"],
+    prep: "Ratio 6:1. Pill 2–3 g twice daily, or decoct Huang Lian 6 g + Wu Zhu Yu 1 g.", caution: "Bitter-cold; not for deficient-cold Stomach." },
+  dai_ge_san: { name: "Dai Ge San", en: "Indigo and Clamshell Powder", zh: "黛蛤散", src: "Wei Sheng Hong Bao (Qing)", form: "Powder",
+    herbs: ["Qing Dai|3|C|wrap or powder", "Ge Ke|30|D|powdered clam shell"],
+    prep: "Ratio about 1:10; 6–9 g of powder daily, wrapped in the decoction. Usually combined with Xie Bai San for Liver fire insulting the Lung.", caution: "Cold — not for deficient cold; coughing blood needs biomedical assessment." },
+  xie_bai_san: { name: "Xie Bai San", en: "Drain the White Powder", zh: "瀉白散", src: "Xiao Er Yao Zheng Zhi Jue (Qian Yi, 1119)", form: "Powder, usually decocted",
+    herbs: ["Sang Bai Pi|30|C", "Di Gu Pi|30|D", "Zhi Gan Cao|3|A/E", "Jing Mi|9|A|a handful of rice"],
+    prep: "Decoction; adult practice often uses 15 g each of the first two.", caution: "Smouldering Lung heat only; not for wind-cold cough." },
+  // ------------------------------------------------ HEART
+  yang_xin_tang: { name: "Yang Xin Tang", en: "Nourish the Heart Decoction", zh: "養心湯", src: "Ren Zhai Zhi Zhi Fang (Yang Shiying, 1264)", form: "Decoction",
+    herbs: ["Huang Qi|15|C", "Ren Shen|6|C|or Dang Shen 15 g", "Dang Gui|9|D", "Chuan Xiong|6|D", "Fu Ling|9|D", "Fu Shen|9|D", "Suan Zao Ren|9|A", "Bai Zi Ren|9|A", "Yuan Zhi|6|A", "Wu Wei Zi|6|A", "Ban Xia Qu|9|A", "Rou Gui|3|A|add late", "Zhi Gan Cao|6|E", "Sheng Jiang|6|E", "Da Zao|6|E"],
+    prep: "Decoction.", caution: "Warm — not with Heart fire or Yin deficiency with heat." },
+  gui_zhi_gan_cao_tang: { name: "Gui Zhi Gan Cao Tang", en: "Cinnamon Twig and Licorice Decoction", zh: "桂枝甘草湯", src: "Shang Han Lun (c. 210)", form: "Decoction",
+    herbs: ["Gui Zhi|12|C", "Zhi Gan Cao|6|D"],
+    prep: "Decoction, taken in one dose.", caution: "Long-term licorice: hypertension, oedema, low potassium." },
+  bao_yuan_tang: { name: "Bao Yuan Tang", en: "Preserve the Basal Decoction", zh: "保元湯", src: "Bo Ai Xin Jian (Wei Gui, 1525)", form: "Decoction",
+    herbs: ["Huang Qi|9|C", "Ren Shen|3|D|or Dang Shen 9 g", "Rou Gui|1.5|A|add late", "Zhi Gan Cao|3|E", "Sheng Jiang|3|E|1 slice"],
+    prep: "Decoction. Modern practice often raises Huang Qi to 15–30 g.", caution: "Warm — not with heat signs." },
+  shen_fu_tang: { name: "Shen Fu Tang", en: "Ginseng and Prepared Aconite Decoction", zh: "參附湯", src: "Zheng Ti Lei Yao (Xue Ji, 1529)", form: "Decoction",
+    herbs: ["Ren Shen|12|C|decoct separately", "Zhi Fu Zi|9|D|pre-cook 30–60 min"],
+    prep: "Emergency formula for collapse of Yang — only alongside urgent biomedical care.", caution: "COLLAPSE IS AN EMERGENCY — call emergency services. Aconite toxicity; contraindicated in pregnancy." },
+  si_ni_tang: { name: "Si Ni Tang", en: "Frigid Extremities Decoction", zh: "四逆湯", src: "Shang Han Lun (c. 210)", form: "Decoction",
+    herbs: ["Zhi Fu Zi|9–15|C|pre-cook 30–60 min (original used raw Fu Zi)", "Gan Jiang|6–9|D", "Zhi Gan Cao|6|A/E"],
+    prep: "Pre-cook Fu Zi, then add the others.", caution: "Never raw Fu Zi; contraindicated in pregnancy and true heat with false cold. Collapse = emergency referral." },
+  gui_pi_tang: { name: "Gui Pi Tang", en: "Restore the Spleen Decoction", zh: "歸脾湯", src: "Ji Sheng Fang (Yan Yonghe, 1253); Dang Gui and Yuan Zhi added in Jiao Zhu Fu Ren Liang Fang (1529)", form: "Decoction / pill",
+    herbs: ["Huang Qi|12|C", "Long Yan Rou|12|C", "Ren Shen|6|D|or Dang Shen 12–15 g", "Bai Zhu|9|D", "Dang Gui|9|D", "Fu Shen|9|A", "Suan Zao Ren|12|A", "Yuan Zhi|6|A", "Mu Xiang|6|A|add late", "Zhi Gan Cao|3|E", "Sheng Jiang|6|E", "Da Zao|9|E|3 dates"],
+    prep: "Decoction. Pill 6–9 g 2–3× daily.", caution: "Warm-sweet — not with Yin-deficiency heat or damp-heat; bleeding needs biomedical assessment." },
+  suan_zao_ren_tang: { name: "Suan Zao Ren Tang", en: "Sour Jujube Decoction", zh: "酸棗仁湯", src: "Jin Gui Yao Lue (c. 210)", form: "Decoction",
+    herbs: ["Suan Zao Ren|15–18|C|crush", "Fu Ling|6|D", "Zhi Mu|6|D", "Chuan Xiong|6|A", "Gan Cao|3|E"],
+    prep: "Decoct Suan Zao Ren first.", caution: "Additive with sedatives; caution with loose stools." },
+  tian_wang_bu_xin_dan: { name: "Tian Wang Bu Xin Dan", en: "Emperor of Heaven's Special Pill to Tonify the Heart", zh: "天王補心丹", src: "She Sheng Mi Pou (Hong Ji, 1638)", form: "Honey pill (decoction-equivalent doses shown)",
+    herbs: ["Sheng Di Huang|12|C", "Tian Men Dong|9|D", "Mai Men Dong|9|D", "Suan Zao Ren|9|D", "Bai Zi Ren|9|D", "Dang Gui|9|D", "Xuan Shen|6|A", "Dan Shen|6|A", "Ren Shen|6|A|or Dang Shen 12 g", "Fu Ling|6|A", "Wu Wei Zi|6|A", "Yuan Zhi|6|A", "Jie Geng|3|E"],
+    prep: "Pill 9 g 2–3× daily or decoction. The traditional Zhu Sha (cinnabar) coating is omitted.", caution: "Cloying — caution with Spleen deficiency. Avoid cinnabar-coated products." },
+  dao_chi_san: { name: "Dao Chi San", en: "Guide Out the Red Powder", zh: "導赤散", src: "Xiao Er Yao Zheng Zhi Jue (Qian Yi, 1119)", form: "Powder, usually decocted",
+    herbs: ["Sheng Di Huang|9–15|C", "Mu Tong|6|D|Akebia only, or Tong Cao 3–6 g", "Dan Zhu Ye|6|A", "Gan Cao Shao|6|E"],
+    prep: "Decoction.", caution: "Cold — not for Spleen deficiency. Blood in urine needs biomedical assessment." },
+  xie_xin_tang: { name: "Xie Xin Tang (San Huang Xie Xin Tang)", en: "Drain the Epigastrium Decoction", zh: "瀉心湯", src: "Jin Gui Yao Lue (c. 210)", form: "Decoction / infusion",
+    herbs: ["Da Huang|6|C", "Huang Lian|3|D", "Huang Qin|3|D"],
+    prep: "Original ratio 2:1:1; decoct briefly or steep in boiling water.", caution: "Very bitter-cold purgative — contraindicated in pregnancy and deficiency; short-term only." },
+  wen_dan_tang: { name: "Wen Dan Tang", en: "Warm the Gallbladder Decoction", zh: "溫膽湯", src: "San Yin Ji Yi Bing Zheng Fang Lun (Chen Yan, 1174)", form: "Decoction",
+    herbs: ["Zhi Ban Xia|6|C", "Zhu Ru|6|D", "Zhi Shi|6|D", "Chen Pi|9|A", "Fu Ling|4.5|A", "Zhi Gan Cao|3|E", "Sheng Jiang|6|E|5 slices", "Da Zao|3|E|1 date"],
+    prep: "Decoction; modern doses are often 9–12 g for the main herbs.", caution: "Drying — not for Yin deficiency without phlegm." },
+  huang_lian_wen_dan_tang: { name: "Huang Lian Wen Dan Tang", en: "Coptis Decoction to Warm the Gallbladder", zh: "黃連溫膽湯", src: "Liu Yin Tiao Bian (Lu Tingzhen, 1868)", form: "Decoction",
+    herbs: ["Huang Lian|6|C", "Zhi Ban Xia|9|C", "Zhu Ru|9|D", "Zhi Shi|6|D", "Chen Pi|9|A", "Fu Ling|9|A", "Zhi Gan Cao|3|E", "Sheng Jiang|6|E", "Da Zao|3|E"],
+    prep: "Decoction (Wen Dan Tang + Huang Lian).", caution: "Bitter-cold. Psychosis/mania requires psychiatric assessment." },
+  di_tan_tang: { name: "Di Tan Tang", en: "Scour Phlegm Decoction", zh: "滌痰湯", src: "Qi Xiao Liang Fang (Dong Su, 1470)", form: "Decoction",
+    herbs: ["Dan Nan Xing|6|C", "Zhi Ban Xia|9|C", "Chen Pi|6|D|or Ju Hong", "Zhi Shi|6|D", "Fu Ling|9|D", "Shi Chang Pu|6|A", "Zhu Ru|6|A", "Ren Shen|6|A|or Dang Shen 9–12 g", "Gan Cao|3|E", "Sheng Jiang|6|E", "Da Zao|3|E"],
+    prep: "Decoction.", caution: "Acute confusion or aphasia requires emergency assessment (stroke). Drying — not for Yin deficiency." },
+  huang_lian_e_jiao_tang: { name: "Huang Lian E Jiao Tang", en: "Coptis and Ass-Hide Gelatin Decoction", zh: "黃連阿膠湯", src: "Shang Han Lun (c. 210)", form: "Decoction",
+    herbs: ["Huang Lian|6–12|C", "E Jiao|9|C|melt", "Huang Qin|6|D", "Bai Shao|6|D", "Ji Zi Huang|2 yolks|A|raw, stirred in"],
+    prep: "Decoct Huang Lian, Huang Qin and Bai Shao; strain; melt E Jiao; cool slightly and stir in the yolks.", caution: "Bitter-cold; not with Spleen deficiency. Egg allergy." },
+  jiao_tai_wan: { name: "Jiao Tai Wan", en: "Grand Communication Pill", zh: "交泰丸", src: "Han Shi Yi Tong (Han Mao, 1522)", form: "Pill (decoction-equivalent doses shown)",
+    herbs: ["Huang Lian|6|C", "Rou Gui|1|D|powder"],
+    prep: "Original ratio about 10:1. Pill 1.5–2.5 g twice daily, or Huang Lian 3–6 g + Rou Gui 0.5–1.5 g.", caution: "Bitter — protect the Stomach." },
+  an_shen_ding_zhi_wan: { name: "An Shen Ding Zhi Wan", en: "Calm the Spirit and Settle the Emotions Pill", zh: "安神定志丸", src: "Yi Xue Xin Wu (Cheng Guopeng, 1732)", form: "Pill (decoction-equivalent doses shown)",
+    herbs: ["Long Chi|15|C|pre-cook", "Ren Shen|6|D|or Dang Shen 12 g", "Fu Ling|9|D", "Fu Shen|9|D", "Yuan Zhi|6|A", "Shi Chang Pu|6|A"],
+    prep: "Pill 6 g twice daily (traditional Zhu Sha coating omitted), or decoction.", caution: "Avoid cinnabar-coated products." },
+  qing_ying_tang: { name: "Qing Ying Tang", en: "Clear the Nutritive Level Decoction", zh: "清營湯", src: "Wen Bing Tiao Bian (Wu Jutong, 1798)", form: "Decoction",
+    herbs: ["Shui Niu Jiao|30|C|replaces Xi Jiao; pre-cook", "Sheng Di Huang|15|D", "Xuan Shen|9|D", "Mai Men Dong|9|D", "Jin Yin Hua|9|A", "Lian Qiao|6|A", "Huang Lian|4.5|A", "Zhu Ye|3|A|bamboo leaf tips", "Dan Shen|6|A"],
+    prep: "Pre-cook buffalo horn 1–3 h.", caution: "High fever with confusion is an EMERGENCY — refer immediately. (An Gong Niu Huang Wan is traditionally added but contains cinnabar and realgar — restricted.)" },
+  // ------------------------------------------------ SPLEEN / STOMACH
+  si_jun_zi_tang: { name: "Si Jun Zi Tang", en: "Four-Gentlemen Decoction", zh: "四君子湯", src: "Tai Ping Hui Min He Ji Ju Fang (1107)", form: "Decoction",
+    herbs: ["Ren Shen|9|C|or Dang Shen 15–30 g", "Bai Zhu|9|D", "Fu Ling|9|A", "Zhi Gan Cao|6|E"],
+    prep: "Decoction. For Heart Qi deficiency add Wu Wei Zi 6 g.", caution: "Not with high fever or excess heat." },
+  liu_jun_zi_tang: { name: "Liu Jun Zi Tang", en: "Six-Gentlemen Decoction", zh: "六君子湯", src: "Fu Ren Liang Fang (Chen Ziming, 1237) / Yi Xue Zheng Chuan", form: "Decoction",
+    herbs: ["Ren Shen|9|C|or Dang Shen 15 g", "Bai Zhu|9|D", "Fu Ling|9|A", "Chen Pi|3|A", "Zhi Ban Xia|4.5|A", "Zhi Gan Cao|6|E"],
+    prep: "Decoction. With Lung Qi deficiency combine with Yu Ping Feng San.", caution: "Drying — caution with Yin deficiency." },
+  xiang_sha_liu_jun_zi_tang: { name: "Xiang Sha Liu Jun Zi Tang", en: "Six-Gentlemen Decoction with Aucklandia and Amomum", zh: "香砂六君子湯", src: "Gu Jin Ming Yi Fang Lun (Luo Mei, 1675)", form: "Decoction / pill",
+    herbs: ["Ren Shen|6|C|or Dang Shen 12 g", "Bai Zhu|9|D", "Fu Ling|9|A", "Chen Pi|6|A", "Zhi Ban Xia|6|A", "Mu Xiang|6|A|add late", "Sha Ren|3|A|add late", "Zhi Gan Cao|3|E"],
+    prep: "Decoction. Pill 6–9 g twice daily.", caution: "Warm-drying — not for Stomach Yin deficiency." },
+  shen_ling_bai_zhu_san: { name: "Shen Ling Bai Zhu San", en: "Ginseng, Poria and White Atractylodes Powder", zh: "參苓白朮散", src: "Tai Ping Hui Min He Ji Ju Fang (1107)", form: "Powder (decoction doses shown)",
+    herbs: ["Ren Shen|9|C|or Dang Shen 15 g", "Bai Zhu|9|C", "Fu Ling|9|C", "Shan Yao|12|D", "Lian Zi|9|D", "Bai Bian Dou|12|D", "Yi Yi Ren|12|D", "Sha Ren|4.5|A|add late", "Jie Geng|6|E", "Zhi Gan Cao|6|E"],
+    prep: "Powder 6 g with jujube tea 2–3× daily, or decoction.", caution: "Not for damp-heat diarrhoea." },
+  li_zhong_wan: { name: "Li Zhong Wan", en: "Regulate the Middle Pill", zh: "理中丸", src: "Shang Han Lun (c. 210)", form: "Honey pill or decoction (Li Zhong Tang)",
+    herbs: ["Gan Jiang|9|C", "Ren Shen|9|D|or Dang Shen 15 g", "Bai Zhu|9|A", "Zhi Gan Cao|9|E"],
+    prep: "Equal parts. Pill 9 g 2–3× daily, or decoction.", caution: "Warm-drying — not with heat or Yin deficiency." },
+  fu_zi_li_zhong_wan: { name: "Fu Zi Li Zhong Wan", en: "Prepared Aconite Pill to Regulate the Middle", zh: "附子理中丸", src: "Tai Ping Hui Min He Ji Ju Fang (1107)", form: "Pill (decoction-equivalent doses shown)",
+    herbs: ["Zhi Fu Zi|6–9|C|pre-cook", "Gan Jiang|9|C", "Ren Shen|9|D|or Dang Shen 15 g", "Bai Zhu|9|A", "Zhi Gan Cao|9|E"],
+    prep: "Pill 6–9 g twice daily, or decoction with Fu Zi pre-cooked 30–60 min.", caution: "Aconite — contraindicated in pregnancy; not with heat signs." },
+  bu_zhong_yi_qi_tang: { name: "Bu Zhong Yi Qi Tang", en: "Tonify the Middle and Augment the Qi Decoction", zh: "補中益氣湯", src: "Pi Wei Lun (Li Dongyuan, 1249)", form: "Decoction / pill",
+    herbs: ["Huang Qi|18|C", "Ren Shen|6|D|or Dang Shen 12–15 g", "Bai Zhu|9|D", "Zhi Gan Cao|9|D", "Dang Gui|3|A", "Chen Pi|6|A", "Sheng Ma|6|A/E", "Chai Hu|6|A/E"],
+    prep: "Decoction. Pill 6–9 g 2–3× daily.", caution: "Ascending — not for Liver Yang rising, hypertension with heat, or Yin deficiency with heat." },
+  ping_wei_san: { name: "Ping Wei San", en: "Calm the Stomach Powder", zh: "平胃散", src: "Tai Ping Hui Min He Ji Ju Fang (1107)", form: "Powder, usually decocted",
+    herbs: ["Cang Zhu|12|C", "Hou Po|9|D", "Chen Pi|9|A", "Zhi Gan Cao|4.5|E", "Sheng Jiang|6|E|2 slices", "Da Zao|6|E|2 dates"],
+    prep: "Decoction.", caution: "Warm-drying — not for Yin/Blood deficiency; caution in pregnancy." },
+  huo_xiang_zheng_qi_san: { name: "Huo Xiang Zheng Qi San", en: "Agastache/Patchouli Powder to Rectify the Qi", zh: "藿香正氣散", src: "Tai Ping Hui Min He Ji Ju Fang (1107)", form: "Powder / liquid / pill (typical decoction doses shown)",
+    herbs: ["Huo Xiang|9–12|C|add late", "Zi Su Ye|6|D", "Bai Zhi|6|D", "Da Fu Pi|9|A", "Fu Ling|9|A", "Bai Zhu|9|A", "Chen Pi|6|A", "Zhi Ban Xia|9|A", "Hou Po|6|A", "Jie Geng|6|A", "Zhi Gan Cao|3|E", "Sheng Jiang|6|E", "Da Zao|3|E"],
+    prep: "Original ratio Huo Xiang 3 : Ban Xia Qu, Bai Zhu, Chen Pi, Hou Po, Jie Geng 2 : Da Fu Pi, Bai Zhi, Zi Su, Fu Ling 1 : Gan Cao 2.5. Decoct briefly (aromatic).", caution: "Many liquid forms contain alcohol. Not for damp-heat or Yin deficiency. Watch for dehydration." },
+  lian_po_yin: { name: "Lian Po Yin", en: "Coptis and Magnolia Bark Drink", zh: "連朴飲", src: "Huo Luan Lun (Wang Shixiong, 1862)", form: "Decoction",
+    herbs: ["Huang Lian|3|C|ginger-fried", "Hou Po|6|C", "Zhi Zi|9|D", "Dan Dou Chi|9|D", "Shi Chang Pu|3|A", "Zhi Ban Xia|3|A", "Lu Gen|60|A"],
+    prep: "Decoction.", caution: "Not for cold-damp. Severe vomiting/diarrhoea — rehydrate and refer." },
+  wu_ling_san: { name: "Wu Ling San", en: "Five-Ingredient Powder with Poria", zh: "五苓散", src: "Shang Han Lun (c. 210)", form: "Powder (decoction doses shown)",
+    herbs: ["Ze Xie|15|C", "Fu Ling|9|D", "Zhu Ling|9|D", "Bai Zhu|9|A", "Gui Zhi|6|A"],
+    prep: "Powder 6 g with warm water, or decoction.", caution: "Diuretic — caution with Yin/fluid deficiency; not long-term." },
+  yin_chen_wu_ling_san: { name: "Yin Chen Wu Ling San", en: "Virgate Wormwood and Five-Ingredient Powder with Poria", zh: "茵陳五苓散", src: "Jin Gui Yao Lue (c. 210)", form: "Powder (decoction doses shown)",
+    herbs: ["Yin Chen|15–30|C", "Ze Xie|15|D", "Fu Ling|9|D", "Zhu Ling|9|D", "Bai Zhu|9|A", "Gui Zhi|6|A"],
+    prep: "Original: Yin Chen powder 2 parts : Wu Ling San 1 part. Decoction.", caution: "Jaundice needs biomedical assessment." },
+  yu_ping_feng_san: { name: "Yu Ping Feng San", en: "Jade Windscreen Powder", zh: "玉屏風散", src: "Jiu Yuan Fang (c. 1213) / Dan Xi Xin Fa", form: "Powder (decoction doses shown)",
+    herbs: ["Huang Qi|12–18|C", "Bai Zhu|9–12|D", "Fang Feng|6|A"],
+    prep: "Ratio 2:2:1; powder 6–9 g twice daily, or decoction.", caution: "Not during acute exterior invasion with fever, or for night sweats from Yin deficiency." },
+  si_shen_wan: { name: "Si Shen Wan", en: "Four-Miracle Pill", zh: "四神丸", src: "Nei Ke Zhai Yao (Xue Ji, 1529)", form: "Pill (decoction-equivalent doses shown)",
+    herbs: ["Bu Gu Zhi|12|C", "Rou Dou Kou|6|D", "Wu Zhu Yu|3|A", "Wu Wei Zi|6|A", "Sheng Jiang|6|E", "Da Zao|9|E|3 dates"],
+    prep: "Pill 6–9 g twice daily (before bed), or decoction.", caution: "Warm-astringent — not for damp-heat or food-retention diarrhoea." },
+  zhen_wu_tang: { name: "Zhen Wu Tang", en: "True Warrior Decoction", zh: "真武湯", src: "Shang Han Lun (c. 210)", form: "Decoction",
+    herbs: ["Zhi Fu Zi|9|C|pre-cook 30–60 min", "Fu Ling|9|D", "Bai Zhu|6|D", "Sheng Jiang|9|A", "Bai Shao|9|A"],
+    prep: "Pre-cook Fu Zi.", caution: "Aconite — contraindicated in pregnancy. Oedema with breathlessness needs cardiac/renal assessment." },
+  yi_wei_tang: { name: "Yi Wei Tang", en: "Benefit the Stomach Decoction", zh: "益胃湯", src: "Wen Bing Tiao Bian (Wu Jutong, 1798)", form: "Decoction",
+    herbs: ["Sheng Di Huang|15|C", "Mai Men Dong|15|C", "Sha Shen|9|D", "Yu Zhu|4.5|D", "Bing Tang|3|A|dissolve in"],
+    prep: "Decoction.", caution: "Cloying — not for Spleen dampness." },
+  mai_men_dong_tang: { name: "Mai Men Dong Tang", en: "Ophiopogonis Decoction", zh: "麥門冬湯", src: "Jin Gui Yao Lue (c. 210)", form: "Decoction",
+    herbs: ["Mai Men Dong|42|C", "Ren Shen|9|D|or Dang Shen 15 g", "Zhi Ban Xia|6|A", "Gan Cao|6|A/E", "Jing Mi|3|A", "Da Zao|12|A|4 dates"],
+    prep: "Mai Men Dong : Ban Xia is 7 : 1.", caution: "Not for wet cough with copious phlegm." },
+  sha_shen_mai_dong_tang: { name: "Sha Shen Mai Dong Tang", en: "Glehnia and Ophiopogonis Decoction", zh: "沙參麥冬湯", src: "Wen Bing Tiao Bian (Wu Jutong, 1798)", form: "Decoction",
+    herbs: ["Sha Shen|9|C", "Mai Men Dong|9|C", "Yu Zhu|6|D", "Tian Hua Fen|4.5|D", "Sang Ye|4.5|A", "Bai Bian Dou|4.5|A", "Gan Cao|3|E"],
+    prep: "Decoction.", caution: "Contraindicated in pregnancy (Tian Hua Fen); not for damp-phlegm." },
+  huang_qi_jian_zhong_tang: { name: "Huang Qi Jian Zhong Tang", en: "Astragalus Decoction to Construct the Middle", zh: "黃芪建中湯", src: "Jin Gui Yao Lue (c. 210)", form: "Decoction",
+    herbs: ["Yi Tang|30|C|dissolve in", "Huang Qi|9|C", "Gui Zhi|9|D", "Bai Shao|18|D", "Zhi Gan Cao|6|A", "Sheng Jiang|9|A", "Da Zao|12|A|4 dates"],
+    prep: "Decoct the herbs, strain, dissolve the malt sugar.", caution: "Sweet — not with vomiting, damp-heat or diabetes (malt sugar)." },
+  qing_wei_san: { name: "Qing Wei San", en: "Clear the Stomach Powder", zh: "清胃散", src: "Lan Shi Mi Cang (Li Dongyuan, 1276)", form: "Powder, usually decocted",
+    herbs: ["Huang Lian|6|C", "Sheng Ma|9|D", "Sheng Di Huang|6|A", "Mu Dan Pi|9|A", "Dang Gui|6|A"],
+    prep: "Decoction.", caution: "Bitter-cold — not for deficient-fire or wind-cold toothache." },
+  yu_nu_jian: { name: "Yu Nu Jian", en: "Jade Woman Decoction", zh: "玉女煎", src: "Jing Yue Quan Shu (Zhang Jingyue, 1624)", form: "Decoction",
+    herbs: ["Shi Gao|15–30|C|pre-cook", "Shu Di Huang|9–30|D", "Zhi Mu|5|A", "Mai Men Dong|6|A", "Huai Niu Xi|5|A/E"],
+    prep: "Pre-cook Shi Gao.", caution: "Not for loose stools; contraindicated in pregnancy (Niu Xi)." },
+  liang_fu_wan: { name: "Liang Fu Wan", en: "Galangal and Cyperus Pill", zh: "良附丸", src: "Liang Fang Ji Ye (Xie Yuanqing, 1842)", form: "Pill (decoction-equivalent doses shown)",
+    herbs: ["Gao Liang Jiang|6–9|C", "Xiang Fu|6–9|C"],
+    prep: "Equal parts; pill 6 g twice daily, or decoction. For Cold in the Intestines often combined with Zheng Qi Tian Xiang San.", caution: "Warm-acrid — not with Stomach heat or Yin deficiency." },
+  hou_po_wen_zhong_tang: { name: "Hou Po Wen Zhong Tang", en: "Magnolia Bark Decoction for Warming the Middle", zh: "厚朴溫中湯", src: "Nei Wai Shang Bian Huo Lun (Li Dongyuan, 1247)", form: "Powder, usually decocted (typical doses shown)",
+    herbs: ["Hou Po|9|C", "Cao Dou Kou|6|D|add late", "Chen Pi|9|A", "Mu Xiang|6|A|add late", "Fu Ling|6|A", "Gan Jiang|3|A", "Zhi Gan Cao|3|E", "Sheng Jiang|6|E|3 slices"],
+    prep: "Original ratio Hou Po and Chen Pi 2 : Cao Dou Kou, Mu Xiang, Fu Ling, Gan Cao 1 : Gan Jiang 0.2.", caution: "Warm-drying — not for Stomach heat or Yin deficiency." },
+  bao_he_wan: { name: "Bao He Wan", en: "Preserve Harmony Pill", zh: "保和丸", src: "Dan Xi Xin Fa (1481)", form: "Pill (decoction-equivalent doses shown)",
+    herbs: ["Shan Zha|18|C", "Shen Qu|6|D", "Lai Fu Zi|6|D", "Zhi Ban Xia|9|A", "Chen Pi|6|A", "Fu Ling|9|A", "Lian Qiao|6|A"],
+    prep: "Pill 6–9 g 2–3× daily, or decoction.", caution: "Reducing — short-term; not for Spleen deficiency without food stagnation." },
+  zhi_shi_dao_zhi_wan: { name: "Zhi Shi Dao Zhi Wan", en: "Unripe Bitter Orange Pill to Guide Out Stagnation", zh: "枳實導滯丸", src: "Nei Wai Shang Bian Huo Lun (Li Dongyuan, 1247)", form: "Pill (approximate decoction-equivalent doses shown)",
+    herbs: ["Da Huang|9|C", "Zhi Shi|9|D", "Shen Qu|9|D", "Huang Qin|6|A", "Huang Lian|3|A", "Fu Ling|6|A", "Ze Xie|6|A", "Bai Zhu|6|A"],
+    prep: "Original pill ratio Da Huang 30 : Zhi Shi, Shen Qu 15 : Fu Ling, Huang Qin, Huang Lian, Bai Zhu 9 : Ze Xie 6. Pill 6–9 g twice daily.", caution: "Purgative — contraindicated in pregnancy; short-term only." },
+  xuan_fu_dai_zhe_tang: { name: "Xuan Fu Dai Zhe Tang", en: "Inula and Haematite Decoction", zh: "旋覆代赭湯", src: "Shang Han Lun (c. 210)", form: "Decoction",
+    herbs: ["Xuan Fu Hua|9|C|wrap", "Dai Zhe Shi|6–9|D|pre-cook", "Zhi Ban Xia|9|A", "Sheng Jiang|15|A", "Ren Shen|6|A|or Dang Shen 12 g", "Zhi Gan Cao|9|E", "Da Zao|12|E|4 dates"],
+    prep: "Wrap Xuan Fu Hua; pre-cook Dai Zhe Shi.", caution: "Caution in pregnancy (Dai Zhe Shi). Persistent vomiting or hiccup needs biomedical assessment." },
+  ban_xia_hou_po_tang: { name: "Ban Xia Hou Po Tang", en: "Pinellia and Magnolia Bark Decoction", zh: "半夏厚朴湯", src: "Jin Gui Yao Lue (c. 210)", form: "Decoction",
+    herbs: ["Zhi Ban Xia|12|C", "Hou Po|9|D", "Fu Ling|12|A", "Sheng Jiang|15|A", "Zi Su Ye|6|A/E|add late"],
+    prep: "Decoction.", caution: "Warm-drying — not for Yin deficiency with dry throat and red tongue. A persistent throat lump needs ENT assessment." },
+  ding_xiang_shi_di_tang: { name: "Ding Xiang Shi Di Tang", en: "Clove and Persimmon Calyx Decoction", zh: "丁香柿蒂湯", src: "Zheng Yin Mai Zhi (Qin Jingming, 1706)", form: "Decoction",
+    herbs: ["Ding Xiang|6|C", "Shi Di|9|C", "Ren Shen|3|A|or Dang Shen 9 g", "Sheng Jiang|6|A"],
+    prep: "Decoction.", caution: "Warm — not for hiccup from heat. Ding Xiang is classically incompatible with Yu Jin." },
+  xiao_xian_xiong_tang: { name: "Xiao Xian Xiong Tang", en: "Minor Sinking into the Chest Decoction", zh: "小陷胸湯", src: "Shang Han Lun (c. 210)", form: "Decoction",
+    herbs: ["Gua Lou|20|C|whole fruit", "Huang Lian|6|D", "Zhi Ban Xia|12|A"],
+    prep: "Decoct Gua Lou first.", caution: "Not for Spleen deficiency with loose stools. Gua Lou is incompatible with aconite." },
+  // ------------------------------------------------ LUNG
+  bu_fei_tang: { name: "Bu Fei Tang", en: "Tonify the Lungs Decoction", zh: "補肺湯", src: "Yong Lei Qian Fang (Li Zhongnan, 1331)", form: "Decoction",
+    herbs: ["Huang Qi|24|C", "Ren Shen|9|C|or Dang Shen 15–20 g", "Shu Di Huang|24|D", "Wu Wei Zi|6|D", "Zi Wan|9|A", "Sang Bai Pi|12|A"],
+    prep: "Decoction.", caution: "Not during acute exterior invasion." },
+  bai_he_gu_jin_tang: { name: "Bai He Gu Jin Tang", en: "Lily Bulb Decoction to Preserve the Metal", zh: "百合固金湯", src: "Shen Zhai Yi Shu (Zhou Zhigan, 1573)", form: "Decoction / pill (typical clinical doses shown)",
+    herbs: ["Bai He|12|C", "Sheng Di Huang|9|C", "Shu Di Huang|9|C", "Mai Men Dong|9|D", "Xuan Shen|9|D", "Chuan Bei Mu|6|A", "Dang Gui|9|A", "Bai Shao|9|A", "Jie Geng|6|E", "Gan Cao|3|E"],
+    prep: "Decoction. Original doses were smaller (Bai He, Mai Dong, Bei Mu 4.5 g; Sheng Di 6 g; Shu Di, Dang Gui 9 g; Bai Shao, Gan Cao 3 g; Jie Geng, Xuan Shen 2.4 g).", caution: "Cloying — caution with Spleen deficiency. Coughing blood needs biomedical assessment (TB is common in the Philippines)." },
+  qing_zao_jiu_fei_tang: { name: "Qing Zao Jiu Fei Tang", en: "Eliminate Dryness and Rescue the Lungs Decoction", zh: "清燥救肺湯", src: "Yi Men Fa Lu (Yu Chang, 1658)", form: "Decoction",
+    herbs: ["Sang Ye|9|C", "Shi Gao|8|D|pre-cook", "Mai Men Dong|4|D", "E Jiao|3|A|melt", "Hu Ma Ren|3|A", "Xing Ren|2|A", "Pi Pa Ye|3|A|wrap", "Ren Shen|2|A|or Dang Shen 6 g", "Gan Cao|3|E"],
+    prep: "Decoction; melt E Jiao separately.", caution: "Not for damp-phlegm cough." },
+  sang_xing_tang: { name: "Sang Xing Tang", en: "Mulberry Leaf and Apricot Kernel Decoction", zh: "桑杏湯", src: "Wen Bing Tiao Bian (Wu Jutong, 1798)", form: "Decoction",
+    herbs: ["Sang Ye|3|C", "Xing Ren|4.5|C", "Sha Shen|6|D", "Zhe Bei Mu|3|D", "Dan Dou Chi|3|A", "Zhi Zi Pi|3|A", "Li Pi|3|A"],
+    prep: "Light doses, brief decoction (original instruction).", caution: "For warm-dryness; not for cool-dryness." },
+  ma_huang_tang: { name: "Ma Huang Tang", en: "Ephedra Decoction", zh: "麻黃湯", src: "Shang Han Lun (c. 210)", form: "Decoction",
+    herbs: ["Ma Huang|9|C", "Gui Zhi|6|D", "Xing Ren|6|A", "Zhi Gan Cao|3|E"],
+    prep: "Decoct Ma Huang first and skim the froth; stop once sweating occurs.", caution: "Ephedra — restricted in many countries; contraindicated with sweating, hypertension, heart disease, insomnia, pregnancy, weakness, and with stimulants/MAOIs." },
+  gui_zhi_tang: { name: "Gui Zhi Tang", en: "Cinnamon Twig Decoction", zh: "桂枝湯", src: "Shang Han Lun (c. 210)", form: "Decoction",
+    herbs: ["Gui Zhi|9|C", "Bai Shao|9|D", "Sheng Jiang|9|A", "Da Zao|12|A|4 dates", "Zhi Gan Cao|6|E"],
+    prep: "Take warm, followed by hot rice porridge and light covering for a mild sweat.", caution: "Not for wind-heat, exterior excess without sweating, or internal heat." },
+  jing_fang_bai_du_san: { name: "Jing Fang Bai Du San", en: "Schizonepeta and Saposhnikovia Powder to Overcome Pathogenic Influences", zh: "荊防敗毒散", src: "She Sheng Zhong Miao Fang (Zhang Shiche, 1550)", form: "Powder, usually decocted",
+    herbs: ["Jing Jie|4.5–6|C", "Fang Feng|4.5–6|C", "Qiang Huo|4.5|D", "Du Huo|4.5|D", "Chuan Xiong|4.5|A", "Chai Hu|4.5|A", "Qian Hu|4.5|A", "Zhi Ke|4.5|A", "Jie Geng|4.5|A", "Fu Ling|4.5|A", "Gan Cao|1.5|E"],
+    prep: "Decoction; take warm.", caution: "Acrid-dispersing — not for wind-heat or Yin deficiency." },
+  yin_qiao_san: { name: "Yin Qiao San", en: "Honeysuckle and Forsythia Powder", zh: "銀翹散", src: "Wen Bing Tiao Bian (Wu Jutong, 1798)", form: "Powder / tablets (decoction doses shown)",
+    herbs: ["Jin Yin Hua|15|C", "Lian Qiao|15|C", "Niu Bang Zi|9|D", "Bo He|6|D|add last", "Jing Jie|5|D|spikes (Jing Jie Sui)", "Dan Dou Chi|5|D", "Jie Geng|6|A", "Dan Zhu Ye|4|A", "Lu Gen|15–30|A", "Gan Cao|5|E"],
+    prep: "Brief decoction (aromatic) — original: until the aroma rises.", caution: "Not for wind-cold. Some commercial tablets contain added paracetamol/chlorphenamine — check labels." },
+  sang_ju_yin: { name: "Sang Ju Yin", en: "Mulberry Leaf and Chrysanthemum Drink", zh: "桑菊飲", src: "Wen Bing Tiao Bian (Wu Jutong, 1798)", form: "Decoction",
+    herbs: ["Sang Ye|7.5|C", "Ju Hua|3|C", "Xing Ren|6|D", "Jie Geng|6|D", "Lian Qiao|5|A", "Bo He|2.5|A|add last", "Lu Gen|6|A", "Gan Cao|2.5|E"],
+    prep: "Brief decoction.", caution: "Not for wind-cold cough." },
+  yue_bi_jia_zhu_tang: { name: "Yue Bi Jia Zhu Tang", en: "Maidservant from Yue Decoction plus Atractylodes", zh: "越婢加朮湯", src: "Jin Gui Yao Lue (c. 210)", form: "Decoction",
+    herbs: ["Ma Huang|6–9|C", "Shi Gao|18–24|D|pre-cook", "Bai Zhu|12|D", "Sheng Jiang|9|A", "Da Zao|12|A|4–5 dates", "Gan Cao|6|E"],
+    prep: "Decoct Ma Huang first and skim.", caution: "Ephedra restrictions; acute facial oedema needs renal assessment (e.g. post-streptococcal nephritis)." },
+  fang_ji_huang_qi_tang: { name: "Fang Ji Huang Qi Tang", en: "Stephania and Astragalus Decoction", zh: "防己黃芪湯", src: "Jin Gui Yao Lue (c. 210)", form: "Decoction",
+    herbs: ["Han Fang Ji|12|C|Stephania only", "Huang Qi|15|C", "Bai Zhu|9|D", "Gan Cao|6|A", "Sheng Jiang|6|E|4 slices", "Da Zao|3|E|1 date"],
+    prep: "Decoction.", caution: "Use only Han Fang Ji (Stephania tetrandra) — never Guang/Mu Fang Ji (Aristolochia)." },
+  qing_qi_hua_tan_wan: { name: "Qing Qi Hua Tan Wan", en: "Clear the Qi and Transform Phlegm Pill", zh: "清氣化痰丸", src: "Yi Fang Kao (Wu Kun, 1584)", form: "Pill (decoction-equivalent doses shown)",
+    herbs: ["Dan Nan Xing|9|C", "Gua Lou Ren|6|D", "Huang Qin|6|D", "Zhi Ban Xia|9|D", "Chen Pi|6|A", "Xing Ren|6|A", "Zhi Shi|6|A", "Fu Ling|6|A"],
+    prep: "Pill 6–9 g twice daily with ginger juice, or decoction.", caution: "Cold — not for cold-phlegm; caution in pregnancy." },
+  ma_xing_shi_gan_tang: { name: "Ma Xing Shi Gan Tang", en: "Ephedra, Apricot Kernel, Gypsum and Licorice Decoction", zh: "麻杏石甘湯", src: "Shang Han Lun (c. 210)", form: "Decoction",
+    herbs: ["Ma Huang|9|C", "Shi Gao|18|C|pre-cook", "Xing Ren|9|D", "Zhi Gan Cao|6|E"],
+    prep: "Decoct Ma Huang and Shi Gao first.", caution: "Ephedra restrictions. High fever with breathlessness (pneumonia) needs medical assessment." },
+  er_chen_tang: { name: "Er Chen Tang", en: "Two-Aged (Herb) Decoction", zh: "二陳湯", src: "Tai Ping Hui Min He Ji Ju Fang (1107)", form: "Decoction",
+    herbs: ["Zhi Ban Xia|15|C", "Chen Pi|15|D|or Ju Hong", "Fu Ling|9|A", "Zhi Gan Cao|4.5|E", "Sheng Jiang|3|E|7 thin slices", "Wu Mei|3|E|1 plum"],
+    prep: "Decoction; modern doses are often 9 g each for Ban Xia and Chen Pi.", caution: "Drying — not for Yin deficiency or blood-streaked sputum." },
+  san_zi_yang_qin_tang: { name: "San Zi Yang Qin Tang", en: "Three-Seed Decoction to Nourish One's Parents", zh: "三子養親湯", src: "Han Shi Yi Tong (Han Mao, 1522)", form: "Decoction",
+    herbs: ["Zi Su Zi|9|C", "Bai Jie Zi|6–9|C", "Lai Fu Zi|9|C"],
+    prep: "Lightly fry and crush; wrap and decoct briefly.", caution: "Reducing — short-term; not for Qi-deficiency cough." },
+  ling_gui_zhu_gan_tang: { name: "Ling Gui Zhu Gan Tang", en: "Poria, Cinnamon Twig, White Atractylodes and Licorice Decoction", zh: "苓桂朮甘湯", src: "Shang Han Lun / Jin Gui Yao Lue (c. 210)", form: "Decoction",
+    herbs: ["Fu Ling|12|C", "Gui Zhi|9|D", "Bai Zhu|6|A", "Zhi Gan Cao|6|E"],
+    prep: "Decoction.", caution: "Warm — not for Yin deficiency or phlegm-heat." },
+  xiao_qing_long_tang: { name: "Xiao Qing Long Tang", en: "Minor Bluegreen Dragon Decoction", zh: "小青龍湯", src: "Shang Han Lun (c. 210)", form: "Decoction",
+    herbs: ["Ma Huang|9|C", "Gui Zhi|9|C", "Gan Jiang|6|D", "Xi Xin|3|D|root only", "Zhi Ban Xia|9|A", "Wu Wei Zi|6|A", "Bai Shao|9|A", "Zhi Gan Cao|6|E"],
+    prep: "Decoct Ma Huang first and skim.", caution: "Ephedra and Xi Xin restrictions; warm-drying — not for dry cough, Yin deficiency or phlegm-heat; not long-term." },
+  mai_wei_di_huang_wan: { name: "Mai Wei Di Huang Wan", en: "Ophiopogonis, Schisandra and Rehmannia Pill", zh: "麥味地黃丸", src: "Yi Ji / Shou Shi Bao Yuan (Ming)", form: "Pill (decoction-equivalent doses shown)",
+    herbs: ["Shu Di Huang|24|C", "Shan Zhu Yu|12|D", "Shan Yao|12|D", "Ze Xie|9|A", "Mu Dan Pi|9|A", "Fu Ling|9|A", "Mai Men Dong|9|A", "Wu Wei Zi|6|A"],
+    prep: "Pill 6–9 g twice daily, or decoction.", caution: "Cloying — caution with Spleen deficiency." },
+  du_qi_wan: { name: "Du Qi Wan", en: "Capital Qi Pill", zh: "都氣丸", src: "Zheng Yin Mai Zhi (Qin Jingming, 1706)", form: "Pill (decoction-equivalent doses shown)",
+    herbs: ["Shu Di Huang|24|C", "Shan Zhu Yu|12|D", "Shan Yao|12|D", "Ze Xie|9|A", "Mu Dan Pi|9|A", "Fu Ling|9|A", "Wu Wei Zi|6|A"],
+    prep: "Pill 6–9 g twice daily, or decoction.", caution: "Not during acute exterior invasion or with copious phlegm." },
+  ren_shen_hu_tao_tang: { name: "Ren Shen Hu Tao Tang", en: "Ginseng and Walnut Decoction", zh: "人參胡桃湯", src: "Ji Sheng Fang (Yan Yonghe, 1253)", form: "Decoction",
+    herbs: ["Ren Shen|6|C|or Dang Shen 15 g", "Hu Tao Ren|15|C|keep the skin", "Sheng Jiang|6|A|5 slices"],
+    prep: "Decoction.", caution: "Not with phlegm-heat or acute exterior invasion." },
+  shen_ge_san: { name: "Shen Ge San", en: "Ginseng and Gecko Powder", zh: "參蛤散", src: "Ji Sheng Fang (Yan Yonghe, 1253)", form: "Powder",
+    herbs: ["Ren Shen|9|C|or Dang Shen 15 g", "Ge Jie|3–6|C|powder, 1–2 g per dose"],
+    prep: "Powder 1–2 g 2–3× daily; Ge Jie is not usually decocted.", caution: "Ge Jie (gecko) is a wildlife product — check legality; substitute Dong Chong Xia Cao (cultivated Cordyceps/Cs-4) 3–9 g or Hu Tao Ren 15 g." },
+  jin_gui_shen_qi_wan: { name: "Jin Gui Shen Qi Wan", en: "Kidney Qi Pill from the Golden Cabinet", zh: "金匱腎氣丸", src: "Jin Gui Yao Lue (c. 210)", form: "Honey pill (decoction-equivalent doses shown)",
+    herbs: ["Shu Di Huang|24|C|original Gan Di Huang", "Shan Zhu Yu|12|D", "Shan Yao|12|D", "Ze Xie|9|A", "Fu Ling|9|A", "Mu Dan Pi|9|A", "Gui Zhi|3|C|later often Rou Gui", "Zhi Fu Zi|3|C|pre-cook when decocted"],
+    prep: "Original ratio 8:4:4:3:3:3:1:1. Pill 6–9 g twice daily, or decoction with Fu Zi pre-cooked.", caution: "Aconite — contraindicated in pregnancy; not with Yin-deficiency heat." },
+  you_gui_wan: { name: "You Gui Wan", en: "Restore the Right (Kidney) Pill", zh: "右歸丸", src: "Jing Yue Quan Shu (Zhang Jingyue, 1624)", form: "Honey pill (decoction-equivalent doses shown)",
+    herbs: ["Zhi Fu Zi|6|C|pre-cook", "Rou Gui|6|C|add late", "Lu Jiao Jiao|12|C|melt", "Shu Di Huang|24|D", "Shan Yao|12|D", "Shan Zhu Yu|9|D", "Gou Qi Zi|12|D", "Tu Si Zi|12|A", "Du Zhong|12|A", "Dang Gui|9|A"],
+    prep: "Pill 9 g 2–3× daily, or decoction.", caution: "Aconite — contraindicated in pregnancy; very warm and cloying — not with heat or dampness." },
+  zuo_gui_wan: { name: "Zuo Gui Wan", en: "Restore the Left (Kidney) Pill", zh: "左歸丸", src: "Jing Yue Quan Shu (Zhang Jingyue, 1624)", form: "Honey pill (decoction-equivalent doses shown)",
+    herbs: ["Shu Di Huang|24|C", "Shan Yao|12|D", "Shan Zhu Yu|12|D", "Gou Qi Zi|12|D", "Gui Ban Jiao|12|D|melt", "Lu Jiao Jiao|12|D|melt", "Tu Si Zi|12|A", "Chuan Niu Xi|9|A"],
+    prep: "Pill 9 g 2–3× daily, or decoction.", caution: "Very cloying — not with Spleen deficiency; contraindicated in pregnancy (Niu Xi)." },
+  zhi_bai_di_huang_wan: { name: "Zhi Bai Di Huang Wan", en: "Anemarrhena, Phellodendron and Rehmannia Pill", zh: "知柏地黃丸", src: "Yi Zong Jin Jian (1742)", form: "Pill (decoction-equivalent doses shown)",
+    herbs: ["Shu Di Huang|24|C", "Shan Zhu Yu|12|D", "Shan Yao|12|D", "Ze Xie|9|A", "Mu Dan Pi|9|A", "Fu Ling|9|A", "Zhi Mu|6|A", "Huang Bai|6|A"],
+    prep: "Pill 6–9 g twice daily, or decoction.", caution: "Cold — not for Spleen deficiency with loose stools." },
+  da_bu_yin_wan: { name: "Da Bu Yin Wan", en: "Great Tonify the Yin Pill", zh: "大補陰丸", src: "Dan Xi Xin Fa (1481)", form: "Pill (decoction-equivalent doses shown)",
+    herbs: ["Shu Di Huang|18|C", "Gui Ban|18|C|pre-cook", "Huang Bai|12|D|salt-fried", "Zhi Mu|12|D|salt-fried"],
+    prep: "Original pill also uses steamed pork spinal cord and honey. Pill 6–9 g twice daily, or decoction.", caution: "Cold — not for Spleen deficiency with loose stools." },
+  jin_suo_gu_jing_wan: { name: "Jin Suo Gu Jing Wan", en: "Metal Lock Pill to Stabilize the Essence", zh: "金鎖固精丸", src: "Yi Fang Ji Jie (Wang Ang, 1682)", form: "Pill (decoction-equivalent doses shown)",
+    herbs: ["Sha Yuan Zi|12|C", "Qian Shi|12|D", "Lian Xu|12|D", "Long Gu|15|A|pre-cook", "Mu Li|15|A|pre-cook", "Lian Zi|9|A"],
+    prep: "Pill 9 g 1–2× daily with salted water, or decoction.", caution: "Astringent — not for damp-heat or Liver-fire emissions." },
+  suo_quan_wan: { name: "Suo Quan Wan", en: "Shut the Sluice Pill", zh: "縮泉丸", src: "Fu Ren Liang Fang (Chen Ziming, 1237)", form: "Pill (decoction-equivalent doses shown)",
+    herbs: ["Yi Zhi Ren|9|C", "Wu Yao|9|D", "Shan Yao|9|A|as the pill paste"],
+    prep: "Pill 6–9 g twice daily, or decoction.", caution: "Not for damp-heat urinary frequency. Persistent nocturia needs assessment (diabetes, prostate)." },
+  sang_piao_xiao_san: { name: "Sang Piao Xiao San", en: "Mantis Egg-Case Powder", zh: "桑螵蛸散", src: "Ben Cao Yan Yi (Kou Zongshi, 1116)", form: "Powder (decoction doses shown)",
+    herbs: ["Sang Piao Xiao|9|C", "Long Gu|15|D|pre-cook", "Gui Ban|15|D|pre-cook", "Ren Shen|9|A|or Dang Shen 15 g", "Fu Shen|9|A", "Yuan Zhi|6|A", "Shi Chang Pu|6|A", "Dang Gui|9|A"],
+    prep: "Powder 6 g before bed, or decoction.", caution: "Astringent — not for damp-heat or frequency from fire." },
+  qi_bao_mei_ran_dan: { name: "Qi Bao Mei Ran Dan", en: "Seven-Treasure Special Pill for Beautiful Whiskers", zh: "七寶美髯丹", src: "Ben Cao Gang Mu (Li Shizhen, 1578) citing Ji Shan Tang Jing Yan Fang", form: "Pill (decoction-equivalent doses shown)",
+    herbs: ["Zhi He Shou Wu|15|C|prepared only", "Gou Qi Zi|12|D", "Tu Si Zi|12|D", "Dang Gui|9|D", "Huai Niu Xi|9|A", "Bu Gu Zhi|9|A", "Fu Ling|12|A"],
+    prep: "Pill 9 g twice daily, or decoction.", caution: "He Shou Wu is linked to idiosyncratic liver injury — check liver function with long use; avoid in liver disease. Contraindicated in pregnancy." },
+  ji_sheng_shen_qi_wan: { name: "Ji Sheng Shen Qi Wan", en: "Kidney Qi Pill from Formulas to Aid the Living", zh: "濟生腎氣丸", src: "Ji Sheng Fang (Yan Yonghe, 1253)", form: "Pill (decoction-equivalent doses shown)",
+    herbs: ["Zhi Fu Zi|9|C|pre-cook", "Rou Gui|4.5|C|add late", "Fu Ling|9|D", "Ze Xie|9|D", "Che Qian Zi|9|D|wrap", "Shan Zhu Yu|9|A", "Shan Yao|9|A", "Mu Dan Pi|9|A", "Chuan Niu Xi|4.5|A", "Shu Di Huang|4.5|A"],
+    prep: "Pill 6–9 g twice daily, or decoction.", caution: "Aconite — contraindicated in pregnancy. Oedema needs cardiac/renal assessment." },
+  // ------------------------------------------------ GALLBLADDER / INTESTINES / BLADDER
+  da_chai_hu_tang: { name: "Da Chai Hu Tang", en: "Major Bupleurum Decoction", zh: "大柴胡湯", src: "Jin Gui Yao Lue / Shang Han Lun (c. 210)", form: "Decoction",
+    herbs: ["Chai Hu|15|C", "Huang Qin|9|D", "Da Huang|6|D", "Zhi Shi|9|D", "Bai Shao|9|A", "Zhi Ban Xia|9|A", "Sheng Jiang|15|A", "Da Zao|12|E|4 dates"],
+    prep: "Decoction.", caution: "Contraindicated in pregnancy (Da Huang). Severe RUQ pain with fever (cholecystitis) needs medical assessment." },
+  ge_gen_qin_lian_tang: { name: "Ge Gen Huang Qin Huang Lian Tang", en: "Kudzu, Scutellaria and Coptis Decoction", zh: "葛根黃芩黃連湯", src: "Shang Han Lun (c. 210)", form: "Decoction",
+    herbs: ["Ge Gen|15|C|decoct first", "Huang Qin|9|D", "Huang Lian|9|D", "Zhi Gan Cao|6|E"],
+    prep: "Decoct Ge Gen first.", caution: "Cold — not for cold/deficiency diarrhoea. Bloody diarrhoea or dehydration needs medical care." },
+  bai_tou_weng_tang: { name: "Bai Tou Weng Tang", en: "Pulsatilla Decoction", zh: "白頭翁湯", src: "Shang Han Lun (c. 210)", form: "Decoction",
+    herbs: ["Bai Tou Weng|15|C", "Huang Lian|6|D", "Huang Bai|12|D", "Qin Pi|12|A"],
+    prep: "Decoction.", caution: "Dysentery/bloody diarrhoea needs medical assessment and hydration." },
+  shao_yao_tang: { name: "Shao Yao Tang", en: "Peony Decoction", zh: "芍藥湯", src: "Su Wen Bing Ji Qi Yi Bao Ming Ji (Liu Wansu, 1186)", form: "Decoction",
+    herbs: ["Bai Shao|15–20|C", "Huang Qin|9|D", "Huang Lian|6–9|D", "Da Huang|6–9|A", "Dang Gui|9|A", "Mu Xiang|6|A|add late", "Bing Lang|6|A", "Rou Gui|3|A|add late", "Zhi Gan Cao|6|E"],
+    prep: "Decoction.", caution: "Contraindicated in pregnancy (Da Huang). Dysentery needs medical assessment." },
+  tiao_wei_cheng_qi_tang: { name: "Tiao Wei Cheng Qi Tang", en: "Regulate the Stomach and Order the Qi Decoction", zh: "調胃承氣湯", src: "Shang Han Lun (c. 210)", form: "Decoction",
+    herbs: ["Da Huang|12|C|add late", "Mang Xiao|12|D|dissolve in strained decoction", "Zhi Gan Cao|6|A/E"],
+    prep: "Decoct Gan Cao, add Da Huang near the end, strain, dissolve Mang Xiao. Stop once bowels move.", caution: "Purgative — contraindicated in pregnancy, the elderly/weak and in bowel obstruction; short-term only." },
+  ma_zi_ren_wan: { name: "Ma Zi Ren Wan", en: "Hemp Seed Pill", zh: "麻子仁丸", src: "Shang Han Lun (c. 210)", form: "Honey pill (decoction-equivalent doses shown)",
+    herbs: ["Huo Ma Ren|20|C|crushed", "Da Huang|9–12|D", "Xing Ren|9|A", "Bai Shao|9|A", "Zhi Shi|9|A", "Hou Po|9|A"],
+    prep: "Pill 9 g 1–2× daily, or decoction.", caution: "Contraindicated in pregnancy. Hemp seed can be restricted — check local import rules (sterilised seed)." },
+  run_chang_wan: { name: "Run Chang Wan", en: "Moisten the Intestines Pill", zh: "潤腸丸", src: "Shen Shi Zun Sheng Shu (Shen Jin'ao, 1773)", form: "Pill (decoction-equivalent doses shown)",
+    herbs: ["Dang Gui|9|C", "Sheng Di Huang|12|C", "Huo Ma Ren|12|D", "Tao Ren|9|D", "Zhi Ke|6|A"],
+    prep: "Pill 9 g twice daily, or decoction.", caution: "Contraindicated in pregnancy (Tao Ren). New change in bowel habit in older patients needs assessment." },
+  zheng_qi_tian_xiang_san: { name: "Zheng Qi Tian Xiang San", en: "Rectify the Qi Powder Fragrant as Heaven", zh: "正氣天香散", src: "Yi Xue Gang Mu (Lou Ying, 1565), attrib. Liu Hejian", form: "Powder (decoction doses shown)",
+    herbs: ["Xiang Fu|12|C", "Wu Yao|6|D", "Chen Pi|6|A", "Zi Su Ye|6|A", "Gan Jiang|3|A"],
+    prep: "Original ratio 8:2:1:1:1; powder 9 g, or decoction. For Cold invading the Large Intestine usually combined with Liang Fu Wan.", caution: "Warm-acrid — not for heat or Yin deficiency." },
+  ba_zheng_san: { name: "Ba Zheng San", en: "Eight-Herb Powder for Rectification", zh: "八正散", src: "Tai Ping Hui Min He Ji Ju Fang (1107)", form: "Powder, usually decocted",
+    herbs: ["Qu Mai|9|C", "Bian Xu|9|C", "Che Qian Zi|9|D|wrap", "Hua Shi|15|D|wrap", "Mu Tong|6|D|Akebia only, or Tong Cao 3–6 g", "Zhi Zi|9|A", "Da Huang|6|A", "Zhi Gan Cao|6|E", "Deng Xin Cao|3|E"],
+    prep: "Decoction.", caution: "Contraindicated in pregnancy; short-term only. UTI with fever/flank pain needs medical care." },
+  xiao_ji_yin_zi: { name: "Xiao Ji Yin Zi", en: "Cephalanoplos Decoction", zh: "小薊飲子", src: "Ji Sheng Fang (Yan Yonghe, 1253)", form: "Decoction",
+    herbs: ["Xiao Ji|15|C", "Sheng Di Huang|30|C", "Pu Huang|9|D|wrap", "Ou Jie|9|D", "Hua Shi|15|A|wrap", "Mu Tong|6|A|Akebia only, or Tong Cao", "Dan Zhu Ye|9|A", "Zhi Zi|9|A", "Dang Gui|6|A", "Zhi Gan Cao|6|E"],
+    prep: "Decoction.", caution: "Blood in urine always needs medical investigation. Contraindicated in pregnancy." },
+  bi_xie_fen_qing_yin: { name: "Bi Xie Fen Qing Yin", en: "Dioscorea Hypoglauca Decoction to Separate the Clear", zh: "萆薢分清飲", src: "Yang Shi Jia Cang Fang (Yang Tan, 1178)", form: "Decoction",
+    herbs: ["Chuan Bi Xie|9|C", "Yi Zhi Ren|9|D", "Wu Yao|9|A", "Shi Chang Pu|9|A"],
+    prep: "Decoct with a pinch of salt.", caution: "For cold/deficient turbid urine; not for damp-heat." },
+  // ------------------------------------------------ QI / BLOOD / FLUIDS
+  xi_jiao_di_huang_tang: { name: "Xi Jiao Di Huang Tang (with Shui Niu Jiao)", en: "Rhinoceros Horn and Rehmannia Decoction — water buffalo horn substitute", zh: "犀角地黃湯", src: "Bei Ji Qian Jin Yao Fang (Sun Simiao, 652)", form: "Decoction",
+    herbs: ["Shui Niu Jiao|30|C|REPLACES Xi Jiao (rhino horn, 1.5–3 g); pre-cook 1–3 h", "Sheng Di Huang|24|D", "Chi Shao|12|A", "Mu Dan Pi|9|A"],
+    prep: "Pre-cook buffalo horn shavings/powder at least 1 h (or take 1.5–3 g concentrated powder).", caution: "Rhinoceros horn is banned (CITES I) — never use. Bleeding with high fever is an emergency. Contraindicated in pregnancy." },
+  qing_jing_san: { name: "Qing Jing San", en: "Clear the Menses Powder", zh: "清經散", src: "Fu Qing Zhu Nu Ke (Fu Shan, 1827)", form: "Decoction",
+    herbs: ["Di Gu Pi|15|C", "Mu Dan Pi|9|C", "Qing Hao|6|D", "Huang Bai|1.5|D", "Shu Di Huang|9|A", "Bai Shao|9|A", "Fu Ling|3|A"],
+    prep: "Decoction.", caution: "Cold — not for deficient-cold bleeding. Heavy/irregular bleeding needs gynaecological assessment." },
+  hai_zao_yu_hu_tang: { name: "Hai Zao Yu Hu Tang", en: "Sargassum Decoction for the Jade Flask", zh: "海藻玉壺湯", src: "Wai Ke Zheng Zong (Chen Shigong, 1617)", form: "Decoction",
+    herbs: ["Hai Zao|12|C", "Kun Bu|12|C", "Zhe Bei Mu|9|D", "Zhi Ban Xia|9|D", "Qing Pi|6|A", "Chen Pi|6|A", "Dang Gui|9|A", "Chuan Xiong|6|A", "Lian Qiao|9|A", "Du Huo|6|A", "Gan Cao|3|E|classical antagonism with Hai Zao"],
+    prep: "Decoction (Hai Dai omitted).", caution: "Iodine-rich — avoid in hyperthyroidism/Graves' and with thyroid medication unless supervised. Hai Zao + Gan Cao is one of the 18 classical incompatibilities, deliberately combined here — omit Gan Cao if unsure. Thyroid nodules need ultrasound/biopsy." },
+  xiao_luo_wan: { name: "Xiao Luo Wan", en: "Reduce Scrofula Pill", zh: "消瘰丸", src: "Yi Xue Xin Wu (Cheng Guopeng, 1732)", form: "Pill (decoction-equivalent doses shown)",
+    herbs: ["Xuan Shen|12|C", "Zhe Bei Mu|9|D", "Mu Li|15–30|D|pre-cook"],
+    prep: "Equal parts in pill; 9 g twice daily, or decoction.", caution: "Persistent lymph nodes need investigation (TB, lymphoma)." },
+  san_ren_tang: { name: "San Ren Tang", en: "Three-Nut Decoction", zh: "三仁湯", src: "Wen Bing Tiao Bian (Wu Jutong, 1798)", form: "Decoction",
+    herbs: ["Xing Ren|15|C", "Bai Kou Ren|6|C|add late", "Yi Yi Ren|18|C", "Hua Shi|18|D|wrap", "Tong Cao|6|D", "Zhu Ye|6|D", "Hou Po|6|A", "Zhi Ban Xia|15|A"],
+    prep: "Decoction; Bai Kou Ren added late.", caution: "Not for Yin deficiency or heat predominating over dampness; caution in pregnancy (Yi Yi Ren, Hua Shi)." },
+  si_miao_wan: { name: "Si Miao Wan", en: "Four-Marvel Pill", zh: "四妙丸", src: "Cheng Fang Bian Du (Zhang Bingcheng, 1904)", form: "Pill (decoction-equivalent doses shown)",
+    herbs: ["Huang Bai|12|C", "Cang Zhu|9|D", "Huai Niu Xi|9|A", "Yi Yi Ren|24|A"],
+    prep: "Pill 6 g twice daily, or decoction.", caution: "Cold-drying — not for Yin deficiency; contraindicated in pregnancy (Niu Xi). Hot swollen joint — rule out gout/septic arthritis." },
+  // ------------------------------------------------ EXTERIOR / SUMMER-HEAT / BI
+  qing_shu_yi_qi_tang: { name: "Qing Shu Yi Qi Tang (Wang Shixiong)", en: "Clear Summer-Heat and Augment the Qi Decoction", zh: "清暑益氣湯", src: "Wen Re Jing Wei (Wang Shixiong, 1852)", form: "Decoction",
+    herbs: ["Xi Yang Shen|5|C|decoct separately", "Xi Gua Cui Yi|30|C", "Shi Hu|15|D|cultivated", "Mai Men Dong|9|D", "He Geng|15|D", "Huang Lian|3|A", "Zhi Mu|6|A", "Zhu Ye|6|A", "Jing Mi|15|A", "Gan Cao|3|E"],
+    prep: "Decoction.", caution: "Heat stroke (confusion, very high temperature) is an EMERGENCY. Not for summer-dampness without fluid damage." },
+  liu_yi_san: { name: "Liu Yi San", en: "Six-to-One Powder", zh: "六一散", src: "Shang Han Zhi Ge (Liu Wansu, 1186)", form: "Powder",
+    herbs: ["Hua Shi|18|C|wrap", "Gan Cao|3|A/E"],
+    prep: "Ratio 6:1; 9–18 g of powder wrapped in the decoction, or 6–9 g taken in warm water.", caution: "Caution in pregnancy and with fluid depletion or polyuria." },
+  xiang_ru_san: { name: "Xiang Ru San", en: "Elsholtzia Powder", zh: "香薷散", src: "Tai Ping Hui Min He Ji Ju Fang (1107)", form: "Powder, usually decocted",
+    herbs: ["Xiang Ru|9|C", "Bai Bian Dou|6|D", "Hou Po|6|A"],
+    prep: "Decoct briefly; take cool.", caution: "For summer cold-damp with no sweating; not for summer-heat with sweating and thirst." },
+  fang_feng_tang: { name: "Fang Feng Tang", en: "Saposhnikovia Decoction", zh: "防風湯", src: "Xuan Ming Lun Fang (Liu Wansu, 1172)", form: "Decoction",
+    herbs: ["Fang Feng|9|C", "Qin Jiao|6|D", "Ma Huang|3–6|D", "Rou Gui|3|A|add late", "Ge Gen|9|A", "Dang Gui|9|A", "Fu Ling|9|A|Chi Fu Ling", "Xing Ren|6|A", "Huang Qin|3|A", "Gan Cao|6|E", "Sheng Jiang|6|E", "Da Zao|6|E"],
+    prep: "Decoction.", caution: "Ephedra restrictions. Warm-acrid — not for heat Bi." },
+  juan_bi_tang: { name: "Juan Bi Tang (Cheng Guopeng)", en: "Remove Painful Obstruction Decoction", zh: "蠲痹湯", src: "Yi Xue Xin Wu (Cheng Guopeng, 1732)", form: "Decoction",
+    herbs: ["Qiang Huo|6|C", "Du Huo|6|C", "Qin Jiao|9|D", "Hai Feng Teng|9|D", "Sang Zhi|12|D", "Dang Gui|9|A", "Chuan Xiong|6|A", "Ru Xiang|6|A", "Mu Xiang|6|A", "Rou Gui|3|A|add late", "Zhi Gan Cao|3|E"],
+    prep: "Decoction. (A different Juan Bi Tang from Yang Shi Jia Cang Fang uses Qiang Huo, Jiang Huang, Dang Gui, Huang Qi, Chi Shao, Fang Feng, Gan Cao.)", caution: "Contraindicated in pregnancy (Ru Xiang); not for heat Bi." },
+  wu_tou_tang: { name: "Wu Tou Tang", en: "Aconite Main Tuber Decoction", zh: "烏頭湯", src: "Jin Gui Yao Lue (c. 210)", form: "Decoction",
+    herbs: ["Zhi Chuan Wu|6|C|prepared only; pre-cook 60 min in honey", "Ma Huang|9|D", "Bai Shao|9|A", "Huang Qi|9|A", "Zhi Gan Cao|9|E", "Feng Mi|30|E|honey"],
+    prep: "Chuan Wu is pre-cooked with honey for at least 60 min, then combined with the decoction of the other herbs.", caution: "HIGHLY TOXIC (aconitine) — prepared Chuan Wu only; never raw; start at the low dose; stop if numbness of lips/tongue, palpitations or nausea. Contraindicated in pregnancy. Ephedra restrictions." },
+  yi_yi_ren_tang: { name: "Yi Yi Ren Tang", en: "Coix Decoction", zh: "薏苡仁湯", src: "Lei Zheng Zhi Cai (Lin Peiqin, 1839)", form: "Decoction",
+    herbs: ["Yi Yi Ren|30|C", "Cang Zhu|9|D", "Qiang Huo|6|D", "Du Huo|6|D", "Fang Feng|6|D", "Ma Huang|3–6|A", "Gui Zhi|6|A", "Zhi Chuan Wu|3|A|prepared; pre-cook 30–60 min", "Dang Gui|9|A", "Chuan Xiong|6|A", "Sheng Jiang|6|E", "Gan Cao|3|E"],
+    prep: "Pre-cook Chuan Wu.", caution: "Aconite and ephedra — contraindicated in pregnancy; monitor for aconite toxicity." },
+  qiang_huo_sheng_shi_tang: { name: "Qiang Huo Sheng Shi Tang", en: "Notopterygium Decoction to Overcome Dampness", zh: "羌活勝濕湯", src: "Nei Wai Shang Bian Huo Lun (Li Dongyuan, 1247)", form: "Decoction",
+    herbs: ["Qiang Huo|6|C", "Du Huo|6|C", "Gao Ben|3|D", "Fang Feng|3|D", "Chuan Xiong|1.5|A", "Man Jing Zi|2|A", "Zhi Gan Cao|3|E"],
+    prep: "Decoction; modern doses often 6–9 g for the chief herbs.", caution: "Acrid-drying — not for Yin/Blood deficiency." },
+  bai_hu_jia_gui_zhi_tang: { name: "Bai Hu Jia Gui Zhi Tang", en: "White Tiger plus Cinnamon Twig Decoction", zh: "白虎加桂枝湯", src: "Jin Gui Yao Lue (c. 210)", form: "Decoction",
+    herbs: ["Shi Gao|30–50|C|pre-cook", "Zhi Mu|18|D", "Gui Zhi|9|A", "Jing Mi|9|A", "Zhi Gan Cao|6|E"],
+    prep: "Pre-cook Shi Gao; decoct until the rice is cooked.", caution: "Very cold — not for cold/deficiency. Hot swollen joint with fever — rule out septic arthritis/gout." },
+  xuan_bi_tang: { name: "Xuan Bi Tang", en: "Disband Painful Obstruction Decoction", zh: "宣痹湯", src: "Wen Bing Tiao Bian (Wu Jutong, 1798)", form: "Decoction",
+    herbs: ["Han Fang Ji|15|C|Stephania only", "Can Sha|9|D|wrap", "Yi Yi Ren|15|D", "Xing Ren|15|D", "Hua Shi|15|D|wrap", "Chi Xiao Dou Pi|9|A", "Lian Qiao|9|A", "Zhi Zi|9|A", "Zhi Ban Xia|9|A"],
+    prep: "Decoction.", caution: "Use only Han Fang Ji (Stephania) — never Aristolochia-containing Fang Ji. Caution in pregnancy." }
+};
 </script>
 <script>
 "use strict";
@@ -1603,6 +2319,87 @@ function renderFindings() {
   $("#pulseChips").innerHTML = PULSE_FINDINGS.map(p => `<button class="toggle${s.pulse.includes(p.id) ? " on" : ""}" data-pulse="${p.id}">${esc(p.name)}</button>`).join("");
 }
 
+/* ---------- Formulas (FORMULAS / HERBS / HERB_FLAGS data block) ---------- */
+const RX_DISCLAIMER = "Standard textbook doses for adults — adjust to the patient; verify before prescribing.";
+const RX_ROLE = { C: "Chief", D: "Deputy", A: "Assistant", E: "Envoy" };
+const RX_FLAG_LABEL = { toxic: "toxic", restricted: "restricted", aristolochic: "aristolochic acid risk", endangered: "endangered / CITES", animal: "animal product", interaction: "interactions", pregnancy: "pregnancy caution" };
+const RX_FLAG_ORDER = ["toxic", "restricted", "aristolochic", "endangered", "animal", "interaction", "pregnancy"];
+const PATTERN_BY_ID = Object.fromEntries(PATTERNS.map(p => [p.id, p]));
+function parseRxHerb(s) {
+  const [name, dose = "", role = "", note = ""] = s.split("|");
+  const m = /^(\d+(?:\.\d+)?(?:–\d+(?:\.\d+)?)?)\s*(.*)$/.exec(dose.trim());
+  const h = HERBS[name] || [];
+  return { name, dose: m ? m[1] : dose, unit: m && m[2] ? m[2] : "g", role, note, latin: h[0] || "", herbNote: h[1] || "" };
+}
+const rxRoleName = r => (r || "").split("/").map(x => RX_ROLE[x] || x).join(" / ");
+const rxHerbs = id => (FORMULAS[id] ? FORMULAS[id].herbs.map(parseRxHerb) : []);
+function rxFlags(id) {
+  const out = [];
+  for (const h of rxHerbs(id)) { const f = HERB_FLAGS[h.name]; if (f) out.push({ herb: h.name, ...f }); }
+  return out.sort((a, b) => RX_FLAG_ORDER.indexOf(a.type) - RX_FLAG_ORDER.indexOf(b.type));
+}
+function rxSearchText(id) {
+  const f = FORMULAS[id]; if (!f) return "";
+  return [f.name, f.en, f.zh || "", ...rxHerbs(id).map(h => h.name + " " + h.latin)].join(" | ");
+}
+function rxText(id) {   // plain text used by "Use this formula" and the print summary
+  const f = FORMULAS[id]; if (!f) return "";
+  return `${f.name}${f.zh ? " " + f.zh : ""} (${f.en}): ` + rxHerbs(id).map(h => `${h.name} ${h.dose}${h.unit === "g" ? " g" : " " + h.unit}`).join(", ") + (f.form && /pill|powder/i.test(f.form) ? ` [decoction doses; ${f.form}]` : "");
+}
+function formulaHTML(id, opt = {}) {
+  const f = FORMULAS[id];
+  if (!f) return `<div class="rx-missing">Formula data missing: ${esc(id)}</div>`;
+  const hl = opt.hl, flags = rxFlags(id), flagBy = Object.fromEntries(flags.map(x => [x.herb, x]));
+  const rows = rxHerbs(id).map(h => {
+    const fl = flagBy[h.name], hit = hl && hl.test((h.name + " " + h.latin).toLowerCase().replace(/[\s\-]+/g, " "));
+    return `<tr class="${hit ? "rx-hit" : ""}"><td class="rx-herb"><b>${esc(h.name)}</b>${fl ? ` <span class="rx-flag rx-${fl.type}" title="${esc(fl.text)}">⚠ ${esc(RX_FLAG_LABEL[fl.type] || fl.type)}</span>` : ""}${h.note ? `<div class="rx-hnote">${esc(h.note)}</div>` : ""}</td><td class="rx-latin">${esc(h.latin)}</td><td class="rx-dose">${esc(h.dose)}${h.unit !== "g" ? " " + esc(h.unit) : ""}</td><td class="rx-role">${esc(rxRoleName(h.role))}</td></tr>`;
+  }).join("");
+  return `<div class="rx" data-rx="${id}">
+    <div class="rx-title"><b>${esc(f.name)}</b>${f.zh ? ` <span class="rx-zh">${esc(f.zh)}</span>` : ""} <span class="rx-en">${esc(f.en)}</span></div>
+    <div class="rx-src">${esc(f.src)} · ${esc(f.form || "Decoction")}</div>
+    <div class="rx-wrap"><table class="rx-table"><thead><tr><th>Herb (pinyin)</th><th>Latin / pharmaceutical</th><th>Dose (g)</th><th>Role</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${f.prep ? `<div class="rx-prep"><b>Preparation:</b> ${esc(f.prep)}</div>` : ""}
+    ${f.caution ? `<div class="rx-caution"><b>Cautions:</b> ${esc(f.caution)}</div>` : ""}
+    ${flags.length ? `<ul class="rx-flags">${flags.map(x => `<li><b>${esc(x.herb)}</b> <span class="rx-flag rx-${x.type}">${esc(RX_FLAG_LABEL[x.type] || x.type)}</span> ${esc(x.text)}</li>`).join("")}</ul>` : ""}
+    ${opt.noUse ? "" : `<div class="rx-actions"><button class="small rx-use" data-use-rx="${id}" title="Append this formula to the Final diagnosis / treatment field">Use this formula</button></div>`}
+  </div>`;
+}
+function patternFormulasHTML(p, ctx, op = () => "", hl = null) {
+  const rx = (p && p.rx || []).filter(id => FORMULAS[id]);
+  if (!rx.length) return `<div class="ref-line"><b>Formulas:</b> ${esc(p ? p.formulas : "")}</div>`;
+  const [pri, ...alts] = rx;
+  const altHit = id => hl && hl.test(rxSearchText(id).toLowerCase().replace(/[\s\-]+/g, " "));
+  return `<div class="rx-block">
+    <div class="rx-label">Primary formula</div>${formulaHTML(pri, { hl })}
+    ${p.rxNote ? `<div class="rx-note">${esc(p.rxNote)}</div>` : ""}
+    ${alts.map(a => { const k = `${ctx}:alt:${p.id}:${a}`; return `<details class="rx-alt" data-dkey="${k}"${op(k) || (altHit(a) ? " open" : "")}><summary>Alternative: ${esc(FORMULAS[a].name)} <span class="rx-en">${esc(FORMULAS[a].en)}</span></summary>${formulaHTML(a, { hl })}</details>`; }).join("")}
+    <div class="rx-disc">${esc(RX_DISCLAIMER)}</div>
+  </div>`;
+}
+function useFormula(id) {
+  const f = FORMULAS[id]; if (!f) return;
+  const line = "Rx: " + rxText(id);
+  const cur = state.session.diagnosis || "";
+  if (cur.includes(line)) { toast(`${f.name} is already in the Final diagnosis / treatment field.`); return; }
+  state.session.diagnosis = cur ? cur.replace(/\s+$/, "") + "\n" + line : line;
+  const inp = $("#diagnosisInput"); if (inp) inp.value = state.session.diagnosis;
+  markDirty();
+  toast(`${f.name} added to Final diagnosis / treatment — adjust doses to the patient.`);
+}
+function rxPrintHTML(pid) {
+  const p = PATTERN_BY_ID[pid], id = p && (p.rx || [])[0], f = id && FORMULAS[id];
+  if (!f) return "";
+  const flags = rxFlags(id);
+  return `<h2>Reference formula for top pattern: ${esc(p.name)}</h2>
+    <p><b>${esc(f.name)}</b>${f.zh ? " " + esc(f.zh) : ""} — ${esc(f.en)}<br><span class="muted">${esc(f.src)} · ${esc(f.form || "Decoction")}</span></p>
+    <table><tr><th>Herb</th><th>Latin</th><th>Dose (g)</th><th>Role</th></tr>${rxHerbs(id).map(h => `<tr><td>${esc(h.name)}${h.note ? ` <small>(${esc(h.note)})</small>` : ""}</td><td>${esc(h.latin)}</td><td>${esc(h.dose)}${h.unit !== "g" ? " " + esc(h.unit) : ""}</td><td>${esc(rxRoleName(h.role))}</td></tr>`).join("")}</table>
+    ${f.prep ? `<p><b>Preparation:</b> ${esc(f.prep)}</p>` : ""}
+    ${f.caution ? `<p><b>Cautions:</b> ${esc(f.caution)}</p>` : ""}
+    ${flags.length ? `<p><b>Flagged herbs:</b> ${flags.map(x => `${esc(x.herb)} (${esc(RX_FLAG_LABEL[x.type] || x.type)}): ${esc(x.text)}`).join("<br>")}</p>` : ""}
+    ${(p.rx || []).length > 1 ? `<p><b>Alternatives:</b> ${p.rx.slice(1).map(a => esc(FORMULAS[a].name)).join("; ")}</p>` : ""}
+    <div class="muted" style="font-size:10.5px">${esc(RX_DISCLAIMER)}</div>`;
+}
+
 function renderPatterns() {
   const all = state.analysis.patterns;
   const list = all.slice(0, SCORING.topN);
@@ -1629,7 +2426,8 @@ function renderPatterns() {
       <details class="more" data-dkey="p:${r.id}"${op("p:" + r.id)}><summary>Details</summary>
         <div class="p-score-meta">Group: ${esc(r.organ || "—")} · matched weight ${r.matched}/${r.total}${r.contraPen ? `, contra −${r.contraPen}` : ""}${r.negPen ? `, denied −${r.negPen}` : ""} · key signs ${r.cardHit}/${r.cardTotal}</div>
         <div class="p-comp">Coverage ${pc(r.C)}% · explains ${pc(r.P)}% of findings · key signs ${pc(r.K)}%${r.E < 1 ? ` · limited evidence ×${r.E.toFixed(2)}` : ""}${r.gated ? " · <b>typical complaint absent (×" + SCORING.requireFactor + ")</b>" : ""}</div>
-        <div>Principle: ${esc(r.principle)}</div><div>Reference formulas: ${esc(r.formulas)}</div>
+        <div>Principle: ${esc(r.principle)}</div>
+        ${patternFormulasHTML(PATTERN_BY_ID[r.id], "top", op)}
         <div><button class="link-btn" data-ref-pattern="${r.id}">Open in Patterns reference</button></div>
       </details>
     </div>`).join("");
@@ -1649,7 +2447,7 @@ function refPatternText(p) {
     const s = SYMPTOM_BY_ID[id];
     return indicatorName(id) + (s ? " " + s.syn.join(" ") : "");
   });
-  return [p.name, p.id.replace(/_/g, " "), p.organ, p.principle, p.formulas, ...names].join(" | ").toLowerCase().replace(/[\s\-]+/g, " ");
+  return [p.name, p.id.replace(/_/g, " "), p.organ, p.principle, p.formulas, ...(p.rx || []).map(rxSearchText), ...names].join(" | ").toLowerCase().replace(/[\s\-]+/g, " ");
 }
 function renderPatternsRef(focusId) {
   const q = $("#refSearch").value.trim().toLowerCase();
@@ -1658,6 +2456,11 @@ function renderPatternsRef(focusId) {
   const scored = new Map((state.analysis.patterns || []).map(r => [r.id, r]));
   const present = expandImplied([...state.analysis.presentSym, ...(state.session.tongue || []), ...(state.session.pulse || [])]);
   const qre = q ? new RegExp("(^|[^\\p{L}\\p{N}])" + escapeRegExp(q.replace(/[\s\-]+/g, " ")), "u") : null;   // phrase, matched at a word start
+  const refEl = $("#refList");
+  const openKeys = new Set([...refEl.querySelectorAll("details[data-dkey]")].filter(d => d.open).map(d => d.dataset.dkey));
+  const op = k => openKeys.has(k) ? " open" : "";
+  const norm = t => t.toLowerCase().replace(/[\s\-]+/g, " ");
+  const rxMatches = qre ? Object.keys(FORMULAS).filter(id => qre.test(norm(rxSearchText(id)))) : [];
   const shown = PATTERNS.filter(p => (!organ || p.organ === organ) && (!onlyHit || (scored.get(p.id) || {}).pct > 0) && (!qre || qre.test(refPatternText(p))));
   const chip = (id, w, key) => `<span class="w${w}${key ? " key" : ""}${present.has(id) ? " on" : ""}" title="weight ${w}${key ? ", key sign" : ""}">${key ? "★ " : ""}${esc(shortIndicatorName(id))}</span>`;
   const card = p => {
@@ -1669,6 +2472,7 @@ function renderPatternsRef(focusId) {
       <h4><span>${esc(p.name)}</span>${r && r.pct > 0 ? `<span class="fit">current fit ${r.pct}%</span>` : ""}</h4>
       <div class="ref-line"><b>Principle:</b> ${esc(p.principle)}</div>
       <div class="ref-line"><b>Formulas:</b> ${esc(p.formulas)}</div>
+      ${patternFormulasHTML(p, "ref", op, qre)}
       <div class="ref-line"><b>Signs &amp; symptoms:</b><div class="ref-signs">${sym.map(([id, w]) => chip(id, w, card.has(id))).join("")}</div></div>
       ${ton.length ? `<div class="ref-line"><b>Tongue:</b><div class="ref-signs">${ton.map(([id, w]) => chip(id, w, card.has(id))).join("")}</div></div>` : ""}
       ${pul.length ? `<div class="ref-line"><b>Pulse:</b><div class="ref-signs">${pul.map(([id, w]) => chip(id, w, card.has(id))).join("")}</div></div>` : ""}
@@ -1677,8 +2481,9 @@ function renderPatternsRef(focusId) {
     </div>`;
   };
   const html = PATTERN_GROUPS.map(g => { const ps = shown.filter(p => p.organ === g); return ps.length ? `<div class="ref-group">${esc(g)} <small>(${ps.length})</small></div>` + ps.map(card).join("") : ""; }).join("");
-  $("#refCount").textContent = `${shown.length} of ${PATTERNS.length} patterns shown`;
-  $("#refList").innerHTML = html || `<div class="empty">No pattern matches this search.</div>`;
+  $("#refCount").textContent = `${shown.length} of ${PATTERNS.length} patterns shown` + (rxMatches.length ? ` · ${rxMatches.length} formula${rxMatches.length === 1 ? "" : "s"} match` : "");
+  const rxHead = rxMatches.length ? `<div class="ref-rx-hits"><b>Formulas matching “${esc(q)}” (${rxMatches.length}):</b> ${rxMatches.map(id => { const users = PATTERNS.filter(p => (p.rx || []).includes(id)); return `<span class="ref-rx-hit" title="Used for: ${esc(users.map(p => p.name).join("; "))}">${esc(FORMULAS[id].name)}</span>`; }).join(", ")}<div class="muted">Matching herbs are highlighted in the tables below.</div></div>` : "";
+  refEl.innerHTML = rxHead + (html || `<div class="empty">No pattern matches this search.</div>`);
   if (focusId) {
     const t = $("#refList").querySelector(`[data-ref-id="${focusId}"]`);
     if (t) { t.classList.add("flash"); setTimeout(() => t.scrollIntoView({ block: "center" }), 30); setTimeout(() => t.classList.remove("flash"), 2500); }
@@ -1902,6 +2707,7 @@ function printVisit() {
     <h2>Pattern fit (decision support only, not a diagnosis)</h2>
     <table><tr><th>Pattern</th><th>Fit</th><th>Matched indicators</th></tr>${a.patterns.slice(0, SCORING.topN).map(r => `<tr><td>${esc(r.name)}</td><td>${r.pct}%</td><td>${r.hits.map(h => esc(shortIndicatorName(h.id)) + (h.cardinal ? "*" : "")).join(", ")}</td></tr>`).join("") || `<tr><td colspan="3">—</td></tr>`}</table>
     <div class="muted" style="font-size:10.5px">* key sign</div>
+    ${a.patterns[0] && a.patterns[0].pct > 0 ? rxPrintHTML(a.patterns[0].id) : ""}
     <h2>Practitioner notes</h2><p style="white-space:pre-wrap">${esc(s.notes) || "—"}</p>
     <h2>Final diagnosis / treatment</h2><p style="white-space:pre-wrap">${esc(s.diagnosis) || "—"}</p>
     ${s.ai && s.ai.content ? `<h2>AI suggestions (${esc(s.ai.model)}, ${esc(fmtDateTime(s.ai.at))}) — decision support only, verify before use</h2><div class="md">${renderMarkdownSafe(s.ai.content)}</div>` : ""}
@@ -2411,6 +3217,9 @@ function bindEvents() {
   $("#refOrgan").onchange = () => renderPatternsRef();
   $("#refMatchedOnly").onchange = () => renderPatternsRef();
   $("#patternList").addEventListener("click", e => { const b = e.target.closest("[data-ref-pattern]"); if (b) { e.stopPropagation(); openPatternsRef(b.dataset.refPattern); } });
+  const onUseRx = e => { const u = e.target.closest("[data-use-rx]"); if (u) { e.preventDefault(); e.stopPropagation(); useFormula(u.dataset.useRx); } };
+  $("#patternList").addEventListener("click", onUseRx);
+  $("#refList").addEventListener("click", onUseRx);
   $("#exportBtn").onclick = exportAll;
   $("#importBtn").onclick = () => $("#importFile").click();
   $("#importFile").onchange = async e => { const f = e.target.files[0]; if (f) await importData(await f.text()); e.target.value = ""; };
@@ -2504,7 +3313,7 @@ async function init() {
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { FORMULAS, HERBS, HERB_FLAGS, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>
