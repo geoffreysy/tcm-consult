@@ -516,6 +516,23 @@ dialog.herbs-dlg[open]{display:flex;flex-direction:column}
   .hb-foot{padding:6px 8px}
   .herbs-btn{padding:6px 10px;min-height:32px}
 }
+/* (v15) Practitioner notes → detection */
+.notes-field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.notes-detect{border:1px solid var(--line);border-radius:6px;background:#fbfdfc;padding:4px 7px;font-size:12.5px;line-height:1.55;min-width:0}
+.notes-detect .nd-head{font-size:11px;color:var(--muted);margin-bottom:2px}
+.notes-detect .nd-text{white-space:pre-wrap;overflow-wrap:anywhere;max-height:7.8em;overflow:auto;-webkit-overflow-scrolling:touch}
+mark.tp{background:#efe9fb;border-bottom:2px solid #7a5cc4;color:inherit;border-radius:3px;padding:0 2px;cursor:help}
+mark.tp.tp-pulse{background:#e6f0fb;border-bottom-color:#3a78c2}
+mark.tp.neg{background:#f1f1f1;border-bottom:2px dashed #999;text-decoration:line-through;text-decoration-color:#888;color:#666}
+mark.tp.removed{background:none;border-bottom:1px dotted #bbb}
+.src-notes{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.2px;text-transform:uppercase;color:#6a4fb3;background:#f1ecfb;border:1px solid #dcd0f5;border-radius:3px;padding:0 3px;margin-left:4px;vertical-align:1px;line-height:1.3}
+.toggle.on.notes{background:color-mix(in srgb,var(--accent) 78%,white);border-style:dashed}
+.toggle.on.notes .src-notes{background:#fff;color:#1f5d50;border-color:#fff}
+.toggle.notes-off{border-style:dashed;color:#8a9793}
+@media (max-width:760px){
+  .notes-detect{font-size:13px}
+  .notes-detect .nd-text{max-height:9em}
+}
 /* (v14) formulas list */
 .dx-tools .herbs-btn.formulas-btn{margin-left:0}
 .fx-list{padding-top:0}
@@ -641,7 +658,7 @@ textarea,input,select,button{font-family:inherit}
       </div>
     </div>
     <div class="notes">
-      <label>Practitioner notes<textarea id="notesInput" placeholder="Observations, history, plan…"></textarea></label>
+      <div class="notes-field"><label>Practitioner notes<textarea id="notesInput" placeholder="Observations, history, plan… (symptoms, tongue and pulse written here are detected too, e.g. “no fever; tongue pale, teeth marks; pulse wiry”)"></textarea></label><div class="notes-detect" id="notesDetect" aria-live="polite" hidden></div></div>
       <div class="dx-field"><div class="dx-head"><label for="diagnosisInput">Final TCM diagnosis / treatment</label><button type="button" class="small dx-copy" id="dxCopyBtn" title="Copy the whole field (date, diagnosis, Rx in the chosen herb-name form)">📋 Copy</button><div class="dx-tools">
         <span class="hn-seg" role="group" aria-label="Herb names in Rx lines"><button type="button" data-hn-mode="py" title="Herb names in pinyin (Dang Gui 9 g)">Pinyin</button><button type="button" data-hn-mode="zh" title="Herb names in Chinese characters (当归 9 g)">中文</button><button type="button" data-hn-mode="both" title="Chinese + pinyin (当归 Dang Gui 9 g)">Both</button></span>
         <span class="hn-seg hn-script" id="hnScript" role="group" aria-label="Chinese script" hidden><button type="button" data-hn-script="s" lang="zh-Hans" title="Simplified characters (简体)">简</button><button type="button" data-hn-script="t" lang="zh-Hant" title="Traditional characters (繁體)">繁</button></span>
@@ -3770,6 +3787,161 @@ function detectText(text) {
   return out;
 }
 
+/* ---------- Practitioner notes (v15): tongue / pulse terms + symptoms ----------
+   The notes box goes through the same symptom detection as the transcript (incl. denial:
+   "no fever" = denied). In addition, tongue and pulse findings are read from the notes when a
+   term sits next to "tongue / coat / T:" or "pulse / P:" in the same sentence ("Tongue pale,
+   swollen, teeth marks, thin white coat. Pulse wiry and thready."). Notes-derived findings are
+   recomputed from the current text every time — they never duplicate or remove transcript /
+   manual findings. */
+const TP_TERMS = [
+  // [regex source, tongue id | null, pulse id | null]   (longest / most specific first; order matters)
+  ["thin[\\s,]+white(?:[\\s\\-]+(?:coat|coating|fur|moss))?", "t_thin_white", null],
+  ["(?:no|without(?:\\s+a)?|absent)[\\s\\-]+(?:coat|coating|fur|moss)|coatless|peeled|mirror(?:ed)?(?:[\\s\\-]+tongue)?|geographic", "t_peeled", null],
+  ["thin[\\s\\-]+(?:coat|coating|fur|moss)", "", null],   // normal coat: consumed, not counted
+  ["red[\\s\\-]+tip(?:ped)?|tip[\\s\\-]+(?:is[\\s\\-]+)?red", "t_red_tip", null],
+  ["red[\\s\\-]+(?:sides|edges|margins)|(?:sides|edges|margins)[\\s\\-]+(?:are[\\s\\-]+)?red", "t_red_sides", null],
+  ["crimson|deep[\\s\\-]+red|dark[\\s\\-]+red", "t_dark_red", null],
+  ["thin[\\s,]+yellow(?:[\\s\\-]+(?:coat|coating|fur|moss))?", "t_yellow", null],
+  ["teeth[\\s\\-]*marks?|tooth[\\s\\-]*marks?|teeth[\\s\\-]+marked|scallop(?:ed|ing)|indented[\\s\\-]+(?:edges|sides)", "t_teeth_marks", null],
+  ["(?:purple|dark|stasis|blood)[\\s\\-]+spots|ecchymo(?:sis|ses)|petechiae", "t_dark_spots", null],
+  ["(?:distended|dilated|engorged|dark)[\\s\\-]+sublingual(?:[\\s\\-]+veins?)?|sublingual[\\s\\-]+(?:veins?|vessels?)(?:[\\s\\-]+(?:distended|dilated|engorged|dark))?", "t_sublingual", null],
+  ["rootless", "t_rootless", null],
+  ["(?:black|gr[ae]y)(?:[\\s\\-]+(?:coat|coating|fur))?", "t_black", null],
+  ["greasy|sticky|slimy|oily|curdy", "t_greasy", null],
+  ["thick", "t_thick", null],
+  ["yellow(?:ish)?", "t_yellow", null],
+  ["white", "t_white", null],
+  ["dry", "t_dry", null],
+  ["wet|watery", "t_wet", null],
+  ["swollen|enlarged|puffy", "t_swollen", null],
+  ["flabby|flaccid", "t_flabby", null],
+  ["cracked|cracks?|fissured|fissures?", "t_cracked", null],
+  ["stiff", "t_stiff", null],
+  ["deviated|deviating|deviation", "t_deviated", null],
+  ["purple|purplish|bluish|dusky", "t_purple", null],
+  ["pale|maputla", "t_pale", null],
+  ["red(?:dish)?|mapula", "t_red", null],
+  ["trembling|quivering|tremulous", "t_trembling", "p_moving"],
+  ["thin", "t_thin", "p_thin"],
+  ["thready|fine", null, "p_thin"],
+  // pulse
+  ["floating|superficial", null, "p_floating"],
+  ["deep|sunken", null, "p_deep"],
+  ["rapid|fast|quick|mabilis", null, "p_rapid"],
+  ["slow|mabagal", null, "p_slow"],
+  ["wiry|string[\\s\\-]*like|taut|bowstring", null, "p_wiry"],
+  ["slippery|rolling", null, "p_slippery"],
+  ["weak|feeble|forceless|deficient|mahina", null, "p_weak"],
+  ["empty", null, "p_empty"],
+  ["choppy|rough|hesitant", null, "p_choppy"],
+  ["tight", null, "p_tight"],
+  ["full|forceful|strong", null, "p_full"],
+  ["knotted|irregularly[\\s\\-]+irregular|irregular", null, "p_irregular"],
+  ["intermittent", null, "p_intermittent"],
+  ["hurried|hasty", null, "p_hurried"],
+  ["soggy|soft", null, "p_soggy"],
+  ["minute|faint", null, "p_minute"],
+  ["hollow|scallion", null, "p_hollow"],
+  ["leather|drum[\\s\\-]*skin", null, "p_leather"],
+  ["short", null, "p_short"],
+  ["moving|spinning[\\s\\-]+bean", null, "p_moving"],
+  ["overflowing|flooding", null, "p_overflowing"],
+  ["hidden", null, "p_hidden"]
+];
+const TP_RE = new RegExp("(?<![\\p{L}\\p{N}])(?:" + TP_TERMS.map(t => "(" + t[0] + ")").join("|") + ")(?![\\p{L}\\p{N}])", "giu");
+const TP_ANCHORS = [   // [regex, kind] — "T:" / "P:" only as capital letters followed by ":" or "="
+  [/(?<![\p{L}\p{N}])(?:tongues?|dila|coat(?:ing|ed)?|fur(?:red)?|moss)(?![\p{L}\p{N}])/giu, "tongue"],
+  [/(?<![\p{L}\p{N}])T(?=\s*[:=])/gu, "tongue"],
+  [/(?<![\p{L}\p{N}])(?:pulses?|pulso)(?![\p{L}\p{N}])/giu, "pulse"],
+  [/(?<![\p{L}\p{N}])P(?=\s*[:=])/gu, "pulse"]
+];
+const TP_MAX_GAP = 60;           // max characters between a term and its "tongue" / "pulse" anchor
+const TP_NEG = /(?<![\p{L}\p{N}'])(no|not|never|without|none|nor|isnt|isn't|arent|aren't|wasnt|wasn't|negative\s+for|free\s+of|hindi|walang?)(?![\p{L}\p{N}])/iu;
+// → [{ start, end, id, kind: "tongue"|"pulse", text, negated }]
+function detectTP(text, symMatches) {
+  const out = [];
+  if (!text || !/tongue|coat|fur|moss|pulse|pulso|dila|\b[TP]\s*[:=]/i.test(text)) return out;
+  const syms = symMatches || detectText(text);
+  const symWins = (m, t0, t1) => (m.start < t0 || m.end > t1) && (m.end - m.start) > (t1 - t0) + 2;
+  // sentences: split on . ; ! ? and newlines (but not on decimal points)
+  const sentRe = /[^.;!?\n]+(?:[.;!?\n]|$)/g; let sm;
+  while ((sm = sentRe.exec(text)) !== null) {
+    const sent = sm[0], off = sm.index; if (!sent.trim()) { if (!sm[0].length) sentRe.lastIndex++; continue; }
+    const anchors = [];
+    for (const [re, kind] of TP_ANCHORS) {
+      re.lastIndex = 0; let a;
+      while ((a = re.exec(sent)) !== null) { anchors.push({ s: a.index, e: a.index + a[0].length, kind }); if (!a[0].length) re.lastIndex++; }
+    }
+    if (!anchors.length) continue;
+    TP_RE.lastIndex = 0; let m;
+    const terms = [];
+    while ((m = TP_RE.exec(sent)) !== null) {
+      const gi = m.slice(1).findIndex(x => x !== undefined); if (gi < 0) continue;
+      const ms = m.index, me = ms + m[0].length;
+      if (anchors.some(a => ms >= a.s && me <= a.e)) continue;   // the anchor word itself ("coat")
+      // a longer symptom phrase wins ("swollen ankles", "dry mouth", "red face")
+      if (syms.some(x => x.start - off < me && x.end - off > ms && symWins({ start: x.start - off, end: x.end - off }, ms, me))) continue;
+      terms.push({ ms, me, m0: m[0], gi });
+    }
+    const symIn = (lo, hi) => syms.some(x => x.start - off >= lo && x.end - off <= hi);
+    for (const t of terms) {
+      const [, tId, pId] = TP_TERMS[t.gi], ms = t.ms, me = t.me;
+      let best = null;
+      for (const a of anchors) {
+        if ((a.kind === "tongue" && tId == null) || (a.kind === "pulse" && pId == null)) continue;
+        if (ms < a.e && me > a.s) { best = { a, d: 0 }; break; }   // term contains the anchor ("thin white coat", "no coat")
+        const d = a.e <= ms ? ms - a.e : a.s - me;
+        if (d < 0 || d > TP_MAX_GAP) continue;
+        // a term never belongs to an anchor on the far side of another anchor
+        const lo = Math.min(a.e, me), hi = Math.max(a.s, ms);
+        if (anchors.some(b => b !== a && b.s >= lo && b.e <= hi)) continue;
+        if (symIn(lo, hi)) continue;                                  // a symptom phrase in between → different clause
+        if (a.s >= me) {   // term BEFORE the anchor ("pale, swollen tongue"): only an adjective chain may sit in between
+          let gap = sent.slice(me, a.s);
+          for (const u of terms) if (u.ms >= me && u.me <= a.s) gap = gap.slice(0, u.ms - me) + "#".repeat(u.me - u.ms) + gap.slice(u.me - me);
+          const tail = gap.slice(gap.lastIndexOf("#") + 1);
+          if (!/^[\s\-]*$/.test(tail) || !/^(?:[\s,\-#]|and|or|&)*$/i.test(gap)) continue;
+        }
+        if (!best || d < best.d) best = { a, d };
+      }
+      if (!best) continue;
+      const m = { index: ms, 0: t.m0 };
+      const id = best.a.kind === "tongue" ? tId : pId;
+      // negation: cue in the same comma-clause, before the term ("tongue not red", "no teeth marks")
+      const seg = sent.slice(0, ms).split(/[,:=(]|\band\b|\bwith\b|\bbut\b/i).pop();
+      const negated = id !== "t_peeled" && TP_NEG.test(seg.split(/\s+/).filter(Boolean).slice(-4).join(" "));
+      out.push({ start: off + ms, end: off + me, id, kind: best.a.kind, text: m[0], negated });
+    }
+  }
+  return out;
+}
+// notes detections (cached by text): symptoms (same engine as the transcript) + tongue / pulse
+let NOTES_CACHE = { text: null, r: null };
+function notesDetections(text) {
+  text = String(text || "");
+  if (NOTES_CACHE.text === text) return NOTES_CACHE.r;
+  const rawSym = detectText(text), tp = detectTP(text, rawSym);
+  // a symptom phrase overlapping a tongue / pulse term is dropped unless it is clearly longer
+  // (e.g. "red face" stays a symptom, "swollen" after "tongue" is a tongue finding)
+  const symWins = (m, t) => (m.start < t.start || m.end > t.end) && (m.end - m.start) > (t.end - t.start) + 2;
+  const sym = rawSym.filter(m => !tp.some(t => m.start < t.end && m.end > t.start && !symWins(m, t)));
+  const tpC = tp.filter(t => t.id);
+  const count = {}; for (const m of [...sym, ...tpC]) if (!m.negated) count[m.id] = (count[m.id] || 0) + 1;
+  const r = { sym, tp: tpC, count,
+    tongue: [...new Set(tpC.filter(t => t.kind === "tongue" && !t.negated).map(t => t.id))],
+    pulse: [...new Set(tpC.filter(t => t.kind === "pulse" && !t.negated).map(t => t.id))] };
+  NOTES_CACHE = { text, r };
+  return r;
+}
+// effective tongue / pulse = manual chips ∪ notes findings − notes findings the practitioner switched off
+function sessionTP(s) {
+  const n = notesDetections(s && s.notes), off = (s && s.tpDismiss) || {};
+  const eff = key => { const man = (s && s[key]) || []; return [...man, ...n[key].filter(id => !man.includes(id) && !(id in off))]; };
+  return { tongue: eff("tongue"), pulse: eff("pulse"), notesTongue: n.tongue, notesPulse: n.pulse };
+}
+const effTongue = s => sessionTP(s).tongue, effPulse = s => sessionTP(s).pulse;
+
 /* Aggregate detection over the session transcript + manual overrides. */
 const detCache = new WeakMap();
 function entryDetections(entry) {
@@ -3779,17 +3951,18 @@ function entryDetections(entry) {
 }
 function computeSymptoms(session, liveMatches) {
   const agg = {};
-  const addMatch = (m, live) => {
-    const a = agg[m.id] || (agg[m.id] = { id: m.id, pos: 0, neg: 0, livePos: 0, phrases: new Set(), detected: true });
-    if (m.negated) a.neg++; else { a.pos++; if (live) a.livePos++; }
+  const addMatch = (m, live, notes) => {
+    const a = agg[m.id] || (agg[m.id] = { id: m.id, pos: 0, neg: 0, livePos: 0, notesPos: 0, notesNeg: 0, phrases: new Set(), detected: true });
+    if (m.negated) { a.neg++; if (notes) a.notesNeg++; } else { a.pos++; if (live) a.livePos++; if (notes) a.notesPos++; }
     a.phrases.add(m.text.toLowerCase());
   };
   for (const e of session.entries) for (const m of entryDetections(e)) addMatch(m, false);
   for (const m of (liveMatches || [])) addMatch(m, true);
+  for (const m of notesDetections(session.notes).sym) addMatch(m, false, true);   // Practitioner notes (recomputed from the text)
   const ov = session.overrides || {};
   for (const [id, v] of Object.entries(ov)) {
     if (!SYMPTOM_BY_ID[id]) continue;
-    if (!agg[id]) agg[id] = { id, pos: 0, neg: 0, livePos: 0, phrases: new Set(), detected: false };
+    if (!agg[id]) agg[id] = { id, pos: 0, neg: 0, livePos: 0, notesPos: 0, notesNeg: 0, phrases: new Set(), detected: false };
     agg[id].override = v;
   }
   const list = Object.values(agg).map(a => {
@@ -3797,7 +3970,8 @@ function computeSymptoms(session, liveMatches) {
     if (a.override === "present") status = "present";
     else if (a.override === "removed") status = "removed";
     else if (a.override === "negated") status = "negated";
-    return { ...a, phrases: [...a.phrases], status, live: a.pos > 0 && a.pos === a.livePos && a.override !== "present", manual: !a.detected || (a.override === "present" && a.pos === 0) };
+    return { ...a, phrases: [...a.phrases], status, live: a.pos > 0 && a.pos === a.livePos && a.override !== "present", manual: !a.detected || (a.override === "present" && a.pos === 0),
+      fromNotes: a.notesPos > 0 || (a.pos === 0 && a.notesNeg > 0), notesOnly: a.notesPos > 0 && a.notesPos === a.pos };
   });
   return list;
 }
@@ -3870,9 +4044,10 @@ function analyzeSession(session, liveMatches) {
   const symptoms = computeSymptoms(session, liveMatches);
   const presentSym = symptoms.filter(s => s.status === "present").map(s => s.id);
   const negatedSym = symptoms.filter(s => s.status === "negated").map(s => s.id);
-  const present = [...presentSym, ...(session.tongue || []), ...(session.pulse || [])];
+  const tp = sessionTP(session);
+  const present = [...presentSym, ...tp.tongue, ...tp.pulse];
   const patterns = scorePatterns(present, negatedSym);
-  return { symptoms, presentSym, negatedSym, patterns };
+  return { symptoms, presentSym, negatedSym, patterns, tongue: tp.tongue, pulse: tp.pulse };
 }
 
 /* =====================================================================
@@ -3976,7 +4151,7 @@ const state = {
 function newSession(patientId) {
   const startedAt = new Date().toISOString();
   return { id: uid(), patientId: patientId || null, startedAt, savedAt: null,
-           lang: $("#langSel") ? $("#langSel").value : "en-PH", entries: [], overrides: {}, tongue: [], pulse: [], notes: "", diagnosis: "Date: " + dxDateText(startedAt) + "\n", dxDated: true, ai: null, dirty: false };
+           lang: $("#langSel") ? $("#langSel").value : "en-PH", entries: [], overrides: {}, tongue: [], pulse: [], notes: "", notesDismiss: {}, tpDismiss: {}, diagnosis: "Date: " + dxDateText(startedAt) + "\n", dxDated: true, ai: null, dirty: false };
 }
 function sessionHasContent(s) {
   return s && (s.entries.length || s.tongue.length || s.pulse.length || s.notes.trim() || stripDateLines(s.diagnosis).trim() || Object.keys(s.overrides).length || s.ai);
@@ -4019,6 +4194,7 @@ function refreshAnalysis() {
   state.live = live;
   state.analysis = analyzeSession(state.session, live ? live.liveMatches : null);
   renderTranscript(); renderSymptoms(); renderPatterns(); renderHistory();
+  renderFindings(); renderNotesDetect();
 }
 // throttle for high-frequency speech events
 function scheduleRefresh(ms = 150) {
@@ -4143,19 +4319,25 @@ function renderSymptoms() {
   const negated = syms.filter(s => s.status === "negated").sort(byCat);
   setHTML($("#symptomChips"), present.length ? present.map(s => {
     const sym = SYMPTOM_BY_ID[s.id], c = CATEGORIES[sym.cat];
-    const tip = `${sym.name} (${c.label})` + (s.phrases.length ? `\nHeard: “${s.phrases.join("”, “")}”` : "\nAdded manually");
-    return `<span class="chip sym${s.manual ? " manual" : ""}${s.live ? " live" : ""}" style="--c:${c.color}" title="${esc(tip)}${s.live ? "\n(heard just now — not final yet)" : ""}">${esc(sym.name)}${s.pos > 1 ? ` <span class="cnt">×${s.pos}</span>` : ""}<button class="x" data-remove="${s.id}" title="Remove (false positive)">×</button></span>`;
+    const tip = `${sym.name} (${c.label})` + (s.phrases.length ? `\nHeard: “${s.phrases.join("”, “")}”` : "\nAdded manually") + (s.notesPos ? (s.notesOnly ? "\nFrom Practitioner notes" : `\nAlso in Practitioner notes (×${s.notesPos})`) : "");
+    return `<span class="chip sym${s.manual ? " manual" : ""}${s.live ? " live" : ""}${s.notesPos ? " from-notes" : ""}" style="--c:${c.color}" title="${esc(tip)}${s.live ? "\n(heard just now — not final yet)" : ""}"${s.notesPos ? ` data-notes="${s.notesOnly ? "only" : "also"}"` : ""}>${esc(sym.name)}${s.pos > 1 ? ` <span class="cnt">×${s.pos}</span>` : ""}${s.notesPos ? `<span class="src-notes" title="${s.notesOnly ? "from Practitioner notes" : "also in Practitioner notes"}">notes</span>` : ""}<button class="x" data-remove="${s.id}" title="Remove (false positive)">×</button></span>`;
   }).join("") : `<span class="empty" style="padding:2px 0">None yet — symptoms are picked up from the transcript as they are heard.</span>`);
   setHTML($("#negatedWrap"), negated.length ? `<div class="subhead">Negated / denied</div><div class="chips">${negated.map(s => {
     const sym = SYMPTOM_BY_ID[s.id];
-    return `<span class="chip neg" title="${esc(sym.name)} — patient denied\nHeard: “${esc(s.phrases.join("”, “"))}”">${esc(sym.name)}<button class="ok" data-present="${s.id}" title="Actually present — mark as present">✓</button><button class="x" data-remove="${s.id}" title="Dismiss">×</button></span>`;
+    return `<span class="chip neg${s.notesNeg ? " from-notes" : ""}" title="${esc(sym.name)} — patient denied\nHeard: “${esc(s.phrases.join("”, “"))}”${s.notesNeg ? "\n(in Practitioner notes)" : ""}">${esc(sym.name)}${s.notesNeg ? `<span class="src-notes">notes</span>` : ""}<button class="ok" data-present="${s.id}" title="Actually present — mark as present">✓</button><button class="x" data-remove="${s.id}" title="Dismiss">×</button></span>`;
   }).join("")}</div>` : "");
 }
 
 function renderFindings() {
   const s = state.session;
-  $("#tongueChips").innerHTML = TONGUE_FINDINGS.map(t => `<button class="toggle${s.tongue.includes(t.id) ? " on" : ""}" data-tongue="${t.id}">${esc(t.name)}</button>`).join("");
-  $("#pulseChips").innerHTML = PULSE_FINDINGS.map(p => `<button class="toggle${s.pulse.includes(p.id) ? " on" : ""}" data-pulse="${p.id}">${esc(p.name)}</button>`).join("");
+  const tp = sessionTP(s), off = s.tpDismiss || {};
+  const chip = (key, f, eff, fromNotes) => {
+    const man = s[key].includes(f.id), on = eff.includes(f.id), nt = !man && on, dis = !on && fromNotes.includes(f.id) && (f.id in off);
+    const title = nt ? `${f.name} — from Practitioner notes (tap to ignore)` : dis ? `${f.name} — in the notes but switched off (tap to use)` : man && fromNotes.includes(f.id) ? `${f.name} — selected (also in the notes)` : "";
+    return `<button class="toggle${on ? " on" : ""}${nt ? " notes" : ""}${dis ? " notes-off" : ""}" data-${key}="${f.id}"${title ? ` title="${esc(title)}"` : ""} aria-pressed="${on}">${esc(f.name)}${nt ? `<span class="src-notes" aria-label="from notes">notes</span>` : ""}</button>`;
+  };
+  setHTML($("#tongueChips"), TONGUE_FINDINGS.map(t => chip("tongue", t, tp.tongue, tp.notesTongue)).join(""));
+  setHTML($("#pulseChips"), PULSE_FINDINGS.map(p => chip("pulse", p, tp.pulse, tp.notesPulse)).join(""));
 }
 
 /* ---------- Formulas (FORMULAS / HERBS / HERB_FLAGS data block) ---------- */
@@ -4662,7 +4844,7 @@ function renderPatternsRef(focusId) {
   const organ = $("#refOrgan").value;
   const onlyHit = $("#refMatchedOnly").checked;
   const scored = new Map((state.analysis.patterns || []).map(r => [r.id, r]));
-  const present = expandImplied([...state.analysis.presentSym, ...(state.session.tongue || []), ...(state.session.pulse || [])]);
+  const present = expandImplied([...state.analysis.presentSym, ...effTongue(state.session), ...effPulse(state.session)]);
   const qre = q ? new RegExp("(^|[^\\p{L}\\p{N}])" + escapeRegExp(q.replace(/[\s\-]+/g, " ")), "u") : null;   // phrase, matched at a word start
   const refEl = $("#refList");
   const openKeys = new Set([...refEl.querySelectorAll("details[data-dkey]")].filter(d => d.open).map(d => d.dataset.dkey));
@@ -4710,6 +4892,7 @@ function openPatternsRef(focusId) {
 function renderAll() {
   renderSessionInfo(); renderPatients(); renderProfile(); renderFindings();
   $("#notesInput").value = state.session.notes || "";
+  clearTimeout(onNotesChanged._t); onNotesChanged._t = null; notesSeen = state.session.notes || "";   // re-derive only; never marks dirty
   $("#diagnosisInput").value = state.session.diagnosis || "";
   refreshHerbButtons();
   refreshAnalysis();
@@ -4776,7 +4959,12 @@ function openVisit(vid) {
   } else if (!confirmDiscard()) return;
   state.session = { ...newSession(v.patientId), ...JSON.parse(JSON.stringify(v)), diagnosis: v.diagnosis || "", dxDated: false, dirty: false };
   ensureDxDate(state.session);   // show that visit's date (not today's) if it has none
+  if (Array.isArray(v.tongueManual)) state.session.tongue = [...v.tongueManual];   // notes-derived tongue / pulse are re-derived from the notes
+  if (Array.isArray(v.pulseManual)) state.session.pulse = [...v.pulseManual];
+  delete state.session.tongueManual; delete state.session.pulseManual;
   ["entries", "tongue", "pulse"].forEach(k => state.session[k] = state.session[k] || []);
+  state.session.notesDismiss = state.session.notesDismiss || {}; state.session.tpDismiss = state.session.tpDismiss || {};
+  notesSeen = state.session.notes || "";
   state.session.entries = mergeLegacyEntries(state.session.entries);
   state.session.overrides = state.session.overrides || {};
   state.selectedPatientId = v.patientId; state.ptChanging = false;
@@ -4785,6 +4973,84 @@ function openVisit(vid) {
   toast("Opened visit from " + fmtDateTime(v.startedAt));
 }
 
+/* ---------- Practitioner notes → detection (v15) ----------
+   Behaviour:
+   • Notes are re-detected ~400 ms after typing stops. Notes-derived findings are recomputed from
+     the current text each time (source-tracked: notesPos / notesNeg), so editing or deleting notes
+     text only changes the notes' contribution; transcript and manual findings are untouched.
+   • × on a symptom chip dismisses it (as before) and remembers how many times the notes mention it.
+     It stays dismissed while the notes are edited, and comes back only if the notes gain a NEW
+     mention of it (more mentions than at dismissal, e.g. the phrase is typed again). Deleting a
+     mention lowers the remembered count, so re-typing it re-adds the symptom.
+   • Tongue / pulse chips found in the notes are shown "on" with a small "notes" tag. Tapping one
+     switches it off (tpDismiss) with the same rule; tapping again uses it. Manual chips work as before.
+   • Loading a visit re-derives everything from the saved notes without marking it dirty. */
+let notesSeen = "";
+function removeSymptom(id) {
+  const s = state.session;
+  s.overrides[id] = "removed";
+  (s.notesDismiss || (s.notesDismiss = {}))[id] = notesDetections(s.notes).count[id] || 0;
+}
+function toggleTP(key, id) {
+  const s = state.session, arr = s[key], i = arr.indexOf(id), off = s.tpDismiss || (s.tpDismiss = {});
+  const n = notesDetections(s.notes), fromNotes = n[key].includes(id), on = i >= 0 || (fromNotes && !(id in off));
+  if (on) { if (i >= 0) arr.splice(i, 1); if (fromNotes) off[id] = n.count[id] || 1; }
+  else { delete off[id]; if (!fromNotes) arr.push(id); }
+}
+// after a notes edit: re-open dismissals when the notes gained a new mention; lower the remembered count when one was deleted
+function reconcileNotesDismiss(s = state.session) {
+  const c = notesDetections(s.notes).count;
+  let changed = false;
+  for (const [id, n0] of Object.entries(s.notesDismiss || {})) {
+    const n = c[id] || 0;
+    if (n > n0) { if (s.overrides[id] === "removed") delete s.overrides[id]; delete s.notesDismiss[id]; changed = true; }
+    else if (n < n0) s.notesDismiss[id] = n;
+  }
+  for (const [id, n0] of Object.entries(s.tpDismiss || {})) {
+    const n = c[id] || 0;
+    if (n > n0) { delete s.tpDismiss[id]; changed = true; }
+    else if (n < n0) { if (n === 0) delete s.tpDismiss[id]; else s.tpDismiss[id] = n; }
+  }
+  return changed;
+}
+function notesHighlightHTML(text) {
+  const n = notesDetections(text);
+  const statusById = Object.fromEntries((state.analysis?.symptoms || []).map(x => [x.id, x.status]));
+  const tpOn = new Set(state.session ? [...effTongue(state.session), ...effPulse(state.session)] : []);
+  const ms = [...n.sym.map(m => ({ ...m, k: "sym" })), ...n.tp.map(m => ({ ...m, k: m.kind }))].sort((a, b) => a.start - b.start);
+  let out = "", pos = 0;
+  for (const m of ms) {
+    if (m.start < pos) continue;
+    out += esc(text.slice(pos, m.start));
+    if (m.k === "sym") {
+      const sym = SYMPTOM_BY_ID[m.id], cat = CATEGORIES[sym.cat], removed = statusById[m.id] === "removed";
+      out += `<mark class="sym${m.negated ? " neg" : ""}${removed ? " removed" : ""}" style="--c:${cat.color}" title="${esc(sym.name + " — " + cat.label + (m.negated ? " (denied)" : "") + (removed ? " (dismissed)" : ""))}" data-sym="${m.id}">${esc(text.slice(m.start, m.end))}</mark>`;
+    } else {
+      const f = m.k === "tongue" ? TONGUE_BY_ID[m.id] : PULSE_BY_ID[m.id], off = !m.negated && !tpOn.has(m.id);
+      out += `<mark class="tp tp-${m.k}${m.negated ? " neg" : ""}${off ? " removed" : ""}" title="${esc((m.k === "tongue" ? "Tongue: " : "Pulse: ") + f.name + (m.negated ? " (negated)" : "") + (off ? " (switched off)" : ""))}" data-nd-${m.k}="${m.id}">${esc(text.slice(m.start, m.end))}</mark>`;
+    }
+    pos = m.end;
+  }
+  return { html: out + esc(text.slice(pos)), n };
+}
+function renderNotesDetect() {
+  const box = $("#notesDetect"); if (!box || !state.session) return;
+  const text = state.session.notes || "";
+  const { html, n } = notesHighlightHTML(text);
+  const pos = new Set(n.sym.filter(m => !m.negated).map(m => m.id)).size, neg = new Set(n.sym.filter(m => m.negated).map(m => m.id)).size;
+  if (!n.sym.length && !n.tp.length) { box.hidden = true; setHTML(box, ""); return; }
+  box.hidden = false;
+  const parts = [pos ? `${pos} symptom${pos === 1 ? "" : "s"}` : "", neg ? `${neg} denied` : "", n.tongue.length ? `tongue: ${n.tongue.map(tName).join(", ")}` : "", n.pulse.length ? `pulse: ${n.pulse.map(pName).join(", ")}` : ""].filter(Boolean);
+  setHTML(box, `<div class="nd-head">Detected in notes: ${esc(parts.join(" · ") || "—")}</div><div class="nd-text">${html}</div>`);
+}
+function onNotesChanged() {
+  clearTimeout(onNotesChanged._t); onNotesChanged._t = null;
+  const s = state.session; if (!s) return;
+  if ((s.notes || "") !== notesSeen) { notesSeen = s.notes || ""; reconcileNotesDismiss(s); }
+  refreshAnalysis();
+}
+const flushNotes = () => { if (onNotesChanged._t) onNotesChanged(); };
+
 function buildVisitRecord() {
   const s = state.session, a = analyzeSession(s);
   const rec = {
@@ -4792,8 +5058,10 @@ function buildVisitRecord() {
     transcript: s.entries.map(e => e.text).join("\n\n"),
     entries: s.entries.map(e => ({ id: e.id, ts: e.ts, lastTs: e.lastTs || e.ts, src: e.src, text: e.text })),
     overrides: s.overrides,
-    symptoms: a.symptoms.filter(x => x.status !== "removed").map(x => ({ id: x.id, name: SYMPTOM_BY_ID[x.id].name, category: SYMPTOM_BY_ID[x.id].cat, status: x.status, mentions: x.pos, negatedMentions: x.neg, manual: !!x.manual, phrases: x.phrases })),
-    tongue: [...s.tongue], pulse: [...s.pulse],
+    symptoms: a.symptoms.filter(x => x.status !== "removed").map(x => ({ id: x.id, name: SYMPTOM_BY_ID[x.id].name, category: SYMPTOM_BY_ID[x.id].cat, status: x.status, mentions: x.pos, negatedMentions: x.neg, manual: !!x.manual, phrases: x.phrases, ...(x.notesPos || x.notesNeg ? { notesMentions: x.notesPos, notesNegatedMentions: x.notesNeg } : {}) })),
+    tongue: [...a.tongue], pulse: [...a.pulse],                       // effective (manual chips + Practitioner notes)
+    tongueManual: [...s.tongue], pulseManual: [...s.pulse],           // chips only — notes findings are re-derived on open
+    notesDismiss: { ...(s.notesDismiss || {}) }, tpDismiss: { ...(s.tpDismiss || {}) },
     patterns: a.patterns.slice(0, SCORING.topN).map(r => ({ id: r.id, name: r.name, pct: r.pct, matched: r.hits.map(h => h.id), contra: r.contraHits.map(h => h.id) })),
     patternScores: Object.fromEntries(a.patterns.filter(r => r.pct > 0).map(r => [r.id, r.pct])),   // full snapshot for trends
     prevVisitId: (priorVisits(s)[0] || {}).id || null,
@@ -4805,6 +5073,7 @@ function buildVisitRecord() {
   return rec;
 }
 async function saveSession() {
+  flushNotes();
   const s = state.session;
   if (!s.patientId) {
     if (state.selectedPatientId && confirm(`Save this session to ${patientById(state.selectedPatientId).name}?`)) s.patientId = state.selectedPatientId;
@@ -4945,8 +5214,8 @@ function progressCompare(v, a = state.analysis, s = state.session) {
     still: a.presentSym.filter(id => last.has(id)),
     resDenied: f.present.filter(id => !now.has(id) && neg.has(id)),
     resNm: f.present.filter(id => !now.has(id) && !neg.has(id)),
-    tongue: diff(f.tongue, s.tongue || []), pulse: diff(f.pulse, s.pulse || []),
-    then: f, hasToday: !!(a.presentSym.length || a.negatedSym.length || (s.tongue || []).length || (s.pulse || []).length)
+    tongue: diff(f.tongue, effTongue(s)), pulse: diff(f.pulse, effPulse(s)),
+    then: f, hasToday: !!(a.presentSym.length || a.negatedSym.length || effTongue(s).length || effPulse(s).length)
   };
 }
 function patternTrend(v, a = state.analysis) {
@@ -5152,8 +5421,8 @@ function buildHistorySummary(session, a, n = 2) {
   L.push(`- Resolved — denied today: ${list(c.resDenied)}`);
   L.push(`- Resolved? — not mentioned today (may not have been asked): ${list(c.resNm)}`);
   const tp = (then, now, nm) => `${then.length ? then.map(nm).join(", ") : "not recorded"} → ${now.length ? now.map(nm).join(", ") : "not recorded"}`;
-  L.push(`- Tongue then → now: ${tp(c.then.tongue, session.tongue || [], tName)}`);
-  L.push(`- Pulse then → now: ${tp(c.then.pulse, session.pulse || [], pName)}`);
+  L.push(`- Tongue then → now: ${tp(c.then.tongue, effTongue(session), tName)}`);
+  L.push(`- Pulse then → now: ${tp(c.then.pulse, effPulse(session), pName)}`);
   const tr = patternTrend(v, a).filter(r => r.then);
   if (tr.length) L.push(`- Pattern fit then → now: ${tr.map(r => `${r.name} ${r.then.approx ? "≈" : ""}${r.then.pct}% → ${r.now}%`).join("; ")}`);
   return L;
@@ -5201,10 +5470,10 @@ function printVisit() {
     <table><tr><th>Name</th><td>${esc(p ? p.name : "—")}</td><th>Age</th><td>${p ? esc(ageOf(p)) : ""}</td><th>Sex</th><td>${esc(p?.sex || "")}</td></tr>
     <tr><th>Contact</th><td colspan="5">${esc(p?.contact || "")}</td></tr>${p?.notes ? `<tr><th>Notes</th><td colspan="5">${esc(p.notes)}</td></tr>` : ""}</table>
     <h2>Symptoms reported</h2>
-    <table><tr><th>Category</th><th>Symptom</th><th>Source</th></tr>${present.map(x => `<tr><td>${esc(CATEGORIES[SYMPTOM_BY_ID[x.id].cat].label)}</td><td>${esc(SYMPTOM_BY_ID[x.id].name)}</td><td>${x.manual ? "added manually" : "“" + esc(x.phrases.join("”, “")) + "”"}</td></tr>`).join("") || `<tr><td colspan="3">None recorded</td></tr>`}</table>
+    <table><tr><th>Category</th><th>Symptom</th><th>Source</th></tr>${present.map(x => `<tr><td>${esc(CATEGORIES[SYMPTOM_BY_ID[x.id].cat].label)}</td><td>${esc(SYMPTOM_BY_ID[x.id].name)}</td><td>${x.manual ? "added manually" : "“" + esc(x.phrases.join("”, “")) + "”"}${x.notesPos ? (x.notesOnly ? " (notes)" : " (+ notes)") : ""}</td></tr>`).join("") || `<tr><td colspan="3">None recorded</td></tr>`}</table>
     ${negated.length ? `<p><b>Denied:</b> ${negated.map(x => esc(SYMPTOM_BY_ID[x.id].name)).join("; ")}</p>` : ""}
     <h2>Tongue &amp; pulse</h2>
-    <p><b>Tongue:</b> ${s.tongue.map(id => esc(TONGUE_BY_ID[id].name)).join(", ") || "—"}<br><b>Pulse:</b> ${s.pulse.map(id => esc(PULSE_BY_ID[id].name)).join(", ") || "—"}</p>
+    <p><b>Tongue:</b> ${effTongue(s).map(id => esc(TONGUE_BY_ID[id].name)).join(", ") || "—"}<br><b>Pulse:</b> ${effPulse(s).map(id => esc(PULSE_BY_ID[id].name)).join(", ") || "—"}</p>
     <h2>Pattern fit (decision support only, not a diagnosis)</h2>
     <table><tr><th>Pattern</th><th>Fit</th><th>Matched indicators</th></tr>${a.patterns.slice(0, SCORING.topN).map(r => `<tr><td>${esc(r.name)}</td><td>${r.pct}%</td><td>${r.hits.map(h => esc(shortIndicatorName(h.id)) + (h.cardinal ? "*" : "")).join(", ")}</td></tr>`).join("") || `<tr><td colspan="3">—</td></tr>`}</table>
     <div class="muted" style="font-size:10.5px">* key sign</div>
@@ -5391,7 +5660,7 @@ function renderPicker() {
   }).join("") || `<li class="empty">No match</li>`;
 }
 function addSymptomManually(id) {
-  state.session.overrides[id] = "present";
+  state.session.overrides[id] = "present"; if (state.session.notesDismiss) delete state.session.notesDismiss[id];
   markDirty(); refreshAnalysis();
   toast("Added: " + SYMPTOM_BY_ID[id].name);
 }
@@ -5496,8 +5765,9 @@ function buildAICaseSummary(session, includeTranscript, includeHistory = true) {
   lines.push("Symptoms DENIED by the patient:");
   lines.push(...(a.negatedSym.length ? byCat(a.negatedSym).map(x => "- " + x) : ["- none recorded"]));
   lines.push("");
-  lines.push("Tongue: " + (session.tongue.length ? session.tongue.map(id => TONGUE_BY_ID[id].name).join(", ") : "not recorded"));
-  lines.push("Pulse: " + (session.pulse.length ? session.pulse.map(id => PULSE_BY_ID[id].name).join(", ") : "not recorded"));
+  const tgE = effTongue(session), plE = effPulse(session);
+  lines.push("Tongue: " + (tgE.length ? tgE.map(id => TONGUE_BY_ID[id].name).join(", ") : "not recorded"));
+  lines.push("Pulse: " + (plE.length ? plE.map(id => PULSE_BY_ID[id].name).join(", ") : "not recorded"));
   lines.push("");
   lines.push("App pattern-fit ranking (heuristic, top 5):");
   const top = a.patterns.slice(0, SCORING.topN);
@@ -6346,7 +6616,8 @@ function bindEvents() {
     const id = e.target.dataset.deleid;
     if (id) { state.session.entries = state.session.entries.filter(x => x.id !== id); markDirty(); refreshAnalysis(); }
   };
-  $("#notesInput").oninput = e => { state.session.notes = e.target.value; markDirty(); };
+  $("#notesInput").oninput = e => { state.session.notes = e.target.value; markDirty(); clearTimeout(onNotesChanged._t); onNotesChanged._t = setTimeout(onNotesChanged, 400); };
+  $("#notesInput").addEventListener("blur", flushNotes);
   $("#diagnosisInput").oninput = e => { state.session.diagnosis = e.target.value; markDirty(); clearTimeout(refreshHerbButtons._t); refreshHerbButtons._t = setTimeout(() => refreshHerbButtons(), 250); };
 
   // patient link bar
@@ -6383,12 +6654,10 @@ function bindEvents() {
 
   $("#rightPanel").onclick = e => {
     const t = e.target.closest("button"); if (!t) return;
-    if (t.dataset.remove) { state.session.overrides[t.dataset.remove] = "removed"; markDirty(); refreshAnalysis(); toast("Removed: " + SYMPTOM_BY_ID[t.dataset.remove].name + " (re-add via + Add symptom)"); }
-    else if (t.dataset.present) { state.session.overrides[t.dataset.present] = "present"; markDirty(); refreshAnalysis(); }
+    if (t.dataset.remove) { removeSymptom(t.dataset.remove); markDirty(); refreshAnalysis(); toast("Removed: " + SYMPTOM_BY_ID[t.dataset.remove].name + " (re-add via + Add symptom)"); }
+    else if (t.dataset.present) { state.session.overrides[t.dataset.present] = "present"; if (state.session.notesDismiss) delete state.session.notesDismiss[t.dataset.present]; markDirty(); refreshAnalysis(); }
     else if (t.dataset.tongue || t.dataset.pulse) {
-      const key = t.dataset.tongue ? "tongue" : "pulse", id = t.dataset.tongue || t.dataset.pulse;
-      const arr = state.session[key], i = arr.indexOf(id);
-      if (i >= 0) arr.splice(i, 1); else arr.push(id);
+      toggleTP(t.dataset.tongue ? "tongue" : "pulse", t.dataset.tongue || t.dataset.pulse);
       markDirty(); renderFindings(); refreshAnalysis();
     }
   };
@@ -6431,7 +6700,7 @@ async function init() {
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>
