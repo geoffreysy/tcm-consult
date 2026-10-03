@@ -595,6 +595,13 @@ details.est .est-svc{display:flex;flex-direction:row;align-items:center;gap:4px;
   .est-ctl input,.est-ctl select{font-size:16px}
   details.est>summary{min-height:38px}
 }
+/* (v17) Send to front desk */
+.fd-send{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}
+.fd-send-btn{border-color:var(--accent);color:var(--accent);font-weight:600}
+.fd-st{font-size:12px;color:var(--muted)}
+.fd-st.fd-paid{color:#1f5d50;font-weight:600}.fd-st.fd-dispensed{color:#8a5a00}.fd-st.fd-err::after{content:" ⚠";color:#a12d22}
+.rt-fd-st{margin-top:6px;word-break:break-word}
+@media (max-width:760px){.fd-send-btn{min-height:38px;font-size:14px}}
 /* (v15) Practitioner notes → detection */
 .notes-field{display:flex;flex-direction:column;gap:4px;min-width:0}
 .notes-detect{border:1px solid var(--line);border-radius:6px;background:#fbfdfc;padding:4px 7px;font-size:12.5px;line-height:1.55;min-width:0}
@@ -694,6 +701,7 @@ textarea,input,select,button{font-family:inherit}
         <button id="exportBtn">⬇ Export all data (JSON backup)</button>
         <button id="importBtn">⬆ Import data from JSON…</button>
         <button id="accountMenuBtn">☁ Google account &amp; Drive sync…</button>
+        <a class="menu-link" href="frontdesk.html" target="_blank" rel="noopener" id="frontdeskLink">🧾 Front desk page (queue, billing &amp; receipts)</a>
         <a class="menu-link" href="privacy.html" target="_blank" rel="noopener">🔒 Privacy policy</a>
       </div>
     </div>
@@ -744,7 +752,8 @@ textarea,input,select,button{font-family:inherit}
         <span class="hn-seg hn-script" id="hnScript" role="group" aria-label="Chinese script" hidden><button type="button" data-hn-script="s" lang="zh-Hans" title="Simplified characters (简体)">简</button><button type="button" data-hn-script="t" lang="zh-Hant" title="Traditional characters (繁體)">繁</button></span>
         <button type="button" class="small herbs-btn" id="herbsBtn" data-open-herbs title="All herbs A–Z with TCM category and dose range — tap + to add to the Rx line">🌿 Herbs</button><button type="button" class="small herbs-btn formulas-btn" id="formulasBtn" data-open-formulas title="All formulas A–Z with category, herbs, doses and cautions — Use this formula or + single herbs">📜 Formulas</button>
       </div></div><textarea id="diagnosisInput" placeholder="Pattern differentiation, treatment principle, formula / points…"></textarea>
-        <details class="est" id="estBox" hidden><summary><span class="est-title">₱ Estimated charges</span><b class="est-total" id="estTotal">—</b></summary><div class="est-body" id="estBody"></div></details></div>
+        <details class="est" id="estBox" hidden><summary><span class="est-title">₱ Estimated charges</span><b class="est-total" id="estTotal">—</b></summary><div class="est-body" id="estBody"></div></details>
+        <div class="fd-send" id="fdSendRow" hidden><button type="button" class="small fd-send-btn" id="fdSendBtn">📤 Send to front desk</button><span class="fd-st" id="fdSendStatus" role="status"></span></div></div>
     </div>
   </section>
 
@@ -934,7 +943,7 @@ textarea,input,select,button{font-family:inherit}
     <section class="rt-sec"><h4>Services</h4><div id="ratesServices"></div><button type="button" class="small" id="ratesAddSvc">+ Add service</button></section>
     <section class="rt-sec rt-clinic"><h4>Clinic herb price list <small class="muted">(same for all doctors)</small></h4><div id="ratesClinic"></div></section>
     <section class="rt-sec"><h4>Payment methods</h4><div class="rt-pays" id="ratesPay"></div></section>
-    <section class="rt-sec"><h4>Front desk</h4><label class="rt-fd">Front desk e-mail <small class="muted">— used when Front desk is set up (nothing is shared yet)</small><input type="email" id="rtFrontEmail" placeholder="frontdesk@clinic.ph" autocomplete="off" spellcheck="false"></label></section>
+    <section class="rt-sec"><h4>Front desk</h4><label class="rt-fd">Front desk e-mail (Google account) <small class="muted">— used when Front desk is set up: your slips file is shared with it so she can mark Dispensed / Paid. Your patient records are never shared.</small><input type="email" id="rtFrontEmail" placeholder="frontdesk@clinic.ph" autocomplete="off" spellcheck="false"></label><div class="hint rt-fd-st" id="rtFdStatus"></div></section>
     <p class="hint" id="ratesMsg" role="status"></p>
   </div>
   <div class="dlg-foot"><button type="button" data-close>Cancel</button><button type="button" class="primary" id="ratesSaveBtn">Save</button></div>
@@ -3786,6 +3795,176 @@ const HERB_POPUP_ONLY = new Set(Object.keys(HERBS_EXTRA).filter(n => !Object.val
 <script>
 "use strict";
 /* =====================================================================
+   SHARED BILLING CORE (v17) — included in index.html AND frontdesk.html
+   • Pricing: pure price calculation (clinic herb price list + a doctor's fees)
+   • Slips:   front-desk slip documents (merge by slip id, newest wins per part:
+              the doctor's part by slip.updatedAt, the front desk's part by slip.fd.updatedAt)
+   No DOM, no app state, no Drive calls here.
+   ===================================================================== */
+const CLINIC_PRICES_FILE = "tcm-clinic-herb-prices.json";
+const FRONTDESK_SLIPS_FILE = "tcm-frontdesk-slips.json";
+const RECORDS_FILE_NAME = "tcm-consult-data.json";   // the doctor's records — never shared, never opened by frontdesk.html
+/* ---------- PRICING (pure; shared with frontdesk.html later — no DOM, no app state) ---------- */
+const Pricing = (() => {
+  const PAYMENTS = [["cash", "Cash"], ["gcash", "GCash"], ["maya", "Maya"], ["card", "Card"], ["bank", "Bank transfer"]];
+  const SERVICES = ["Acupuncture", "Cupping", "Moxibustion", "Gua Sha", "Tui Na"];
+  const num = v => { if (v === "" || v == null) return null; const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[₱,\s]/g, "")); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null; };
+  const sid = () => "s" + Math.random().toString(36).slice(2, 9);
+  function defaultBilling() {
+    return { v: 1, currency: "PHP", clinic: { name: "", doctor: "", address: "", phone: "", tin: "", footer: "" },
+      consult: { first: null, followup: null },
+      services: SERVICES.map((n, i) => ({ id: "svc" + (i + 1), name: n, price: null })),
+      payments: PAYMENTS.map(([id, name]) => ({ id, name, on: true })),
+      frontDeskEmail: "", clinicFileId: "", updatedAt: "" };
+  }
+  function defaultHerbPrices() {
+    return { v: 1, currency: "PHP", mode: "gram", perGram: null, overrides: {}, perPack: null, perFormula: null, formulaTimesPacks: true, prepFee: null, rounding: 0, updatedAt: "" };
+  }
+  function normalizeBilling(b) {
+    const d = defaultBilling(); b = b && typeof b === "object" ? b : {};
+    const c = b.clinic || {};
+    return { ...d, clinic: Object.fromEntries(Object.keys(d.clinic).map(k => [k, String(c[k] || "").slice(0, 500)])),
+      consult: { first: num((b.consult || {}).first), followup: num((b.consult || {}).followup) },
+      services: Array.isArray(b.services) ? b.services.filter(x => x && String(x.name || "").trim()).map(x => ({ id: String(x.id || sid()), name: String(x.name).trim().slice(0, 80), price: num(x.price) })) : d.services,
+      payments: Array.isArray(b.payments) ? b.payments.filter(x => x && x.name).map(x => ({ id: String(x.id || sid()), name: String(x.name).slice(0, 40), on: x.on !== false })) : d.payments,
+      frontDeskEmail: String(b.frontDeskEmail || "").trim().slice(0, 200), clinicFileId: String(b.clinicFileId || "").slice(0, 200), updatedAt: String(b.updatedAt || "") };
+  }
+  function normalizeHerbPrices(p) {
+    const d = defaultHerbPrices(); p = p && typeof p === "object" ? p : {};
+    const ov = {}; for (const [k, v] of Object.entries(p.overrides || {})) { const n = num(v); if (n != null && k) ov[k] = n; }
+    return { ...d, mode: ["gram", "pack", "formula"].includes(p.mode) ? p.mode : "gram", perGram: num(p.perGram), overrides: ov, perPack: num(p.perPack), perFormula: num(p.perFormula),
+      formulaTimesPacks: p.formulaTimesPacks !== false, prepFee: num(p.prepFee), rounding: [0, 1, 5, 10].includes(+p.rounding) ? +p.rounding : 0, updatedAt: String(p.updatedAt || "") };
+  }
+  const roundTo = (x, step) => step ? Math.round(x / step) * step : Math.round(x * 100) / 100;
+  const r2 = x => Math.round(x * 100) / 100;
+  function fmt(n) { if (n == null || !isFinite(n)) return "—"; const neg = n < 0; return (neg ? "−" : "") + "₱" + Math.abs(n).toLocaleString("en-PH", { minimumFractionDigits: Number.isInteger(r2(n)) ? 0 : 2, maximumFractionDigits: 2 }); }
+  const herbPricesSet = p => !!p && (p.mode === "gram" ? p.perGram != null || Object.keys(p.overrides || {}).length > 0 : p.mode === "pack" ? p.perPack != null : p.perFormula != null);
+  const billingSet = b => !!b && (b.consult.first != null || b.consult.followup != null || b.services.some(s => s.price != null));
+  /* computeCharges({ prices, billing, rx: [{ label, herbs: [{ name, qty, unit }] }], packs, consult: "first"|"followup"|"none", services: [id] })
+     → { lines: [{ kind, label, detail, amount }], warnings, herbsPerPack, subtotal, rounding, total }
+     Doses in an Rx are per pack (= per day). Per gram: Σ grams × (override[herb] ?? perGram) per pack × packs.
+     Per pack: perPack × packs. Per formula: perFormula per Rx line (× packs unless formulaTimesPacks is false).
+     Preparation / decoction fee: prepFee × packs (when there are herbs). Rounding applies to the grand total. */
+  function computeCharges({ prices, billing, rx = [], packs = 1, consult = "none", services = [] } = {}) {
+    const P = normalizeHerbPrices(prices), B = normalizeBilling(billing), lines = [], warnings = [];
+    packs = Math.max(0, Math.floor(+packs || 0));
+    const forms = rx.filter(f => f && f.herbs && f.herbs.length);
+    let herbsPerPack = 0;
+    if (consult === "first" || consult === "followup") {
+      const fee = B.consult[consult];
+      if (fee != null) lines.push({ kind: "consult", label: consult === "first" ? "Consultation (first visit)" : "Consultation (follow-up)", detail: "", amount: fee });
+      else warnings.push(`No ${consult === "first" ? "first-visit" : "follow-up"} consultation fee set`);
+    }
+    if (forms.length && packs > 0) {
+      if (!herbPricesSet(P)) warnings.push("Clinic herb price list not set — herbs not priced");
+      else if (P.mode === "gram") {
+        for (const f of forms) {
+          let per = 0, grams = 0;
+          for (const h of f.herbs) {
+            if (!(h.qty > 0)) { warnings.push(`${h.name} — no dose, not priced`); continue; }
+            if (h.unit !== "g") { warnings.push(`${h.name} ${h.qty} ${h.unit || ""}`.trim() + " — not priced (not in grams)"); continue; }
+            const pg = P.overrides[h.name] != null ? P.overrides[h.name] : P.perGram;
+            if (pg == null) { warnings.push(`${h.name} — no price per gram`); continue; }
+            per += h.qty * pg; grams += h.qty;
+          }
+          per = r2(per); herbsPerPack += per;
+          lines.push({ kind: "herbs", label: f.label || "Herbs", detail: `${r2(grams)} g/pack = ${fmt(per)} × ${packs} pack${packs === 1 ? "" : "s"}`, amount: r2(per * packs) });
+        }
+      } else if (P.mode === "pack") {
+        herbsPerPack = P.perPack;
+        lines.push({ kind: "herbs", label: "Herbs", detail: `${packs} pack${packs === 1 ? "" : "s"} × ${fmt(P.perPack)}`, amount: r2(P.perPack * packs) });
+      } else {
+        for (const f of forms) {
+          const k = P.formulaTimesPacks ? packs : 1; herbsPerPack += P.formulaTimesPacks ? P.perFormula : 0;
+          lines.push({ kind: "herbs", label: f.label || "Formula", detail: P.formulaTimesPacks ? `${fmt(P.perFormula)} × ${packs} pack${packs === 1 ? "" : "s"}` : "flat", amount: r2(P.perFormula * k) });
+        }
+      }
+      if (P.prepFee != null && P.prepFee > 0) lines.push({ kind: "prep", label: "Preparation / decoction", detail: `${packs} × ${fmt(P.prepFee)}`, amount: r2(P.prepFee * packs) });
+    }
+    for (const id of services) {
+      const s = B.services.find(x => x.id === id); if (!s) continue;
+      if (s.price == null) { warnings.push(`${s.name} — no price set`); continue; }
+      lines.push({ kind: "service", label: s.name, detail: "", amount: s.price });
+    }
+    const subtotal = r2(lines.reduce((t, l) => t + l.amount, 0));
+    const total = r2(roundTo(subtotal, P.rounding));
+    return { lines, warnings, herbsPerPack: r2(herbsPerPack), subtotal, rounding: r2(total - subtotal), total, currency: "PHP" };
+  }
+  return { PAYMENTS, SERVICES, defaultBilling, defaultHerbPrices, normalizeBilling, normalizeHerbPrices, computeCharges, roundTo, fmt, num, herbPricesSet, billingSet };
+})();
+
+const Slips = (() => {
+  const r2 = x => Math.round(x * 100) / 100;
+  const T = x => (x && x.updatedAt) || "";
+  const FT = s => (s && s.fd && s.fd.updatedAt) || "";
+  function emptyDoc() { return { app: "tcm-consult-assistant", kind: "frontdesk-slips", format: 1, doctor: { name: "", email: "" }, doctorUpdatedAt: "", receiptSeq: 0, slips: [], updatedAt: "" }; }
+  const status = s => !s ? "" : (s.fd && s.fd.paidAt) ? "paid" : (s.fd && s.fd.dispensedAt) ? "dispensed" : "pending";
+  // one slip: the doctor's fields from the newer slip.updatedAt, the front desk's `fd` from the newer fd.updatedAt
+  function mergeSlip(a, b) {
+    if (!a || !b) { const x = a || b; return x ? { ...x, status: status(x) } : x; }
+    const base = T(b) > T(a) ? b : a;
+    const fd = FT(b) > FT(a) ? b.fd : (a.fd || b.fd);
+    const out = { ...base }; delete out.fd; if (fd) out.fd = fd;
+    out.status = status(out);
+    return out;
+  }
+  function merge(a, b) {
+    a = a && Array.isArray(a.slips) ? a : emptyDoc(); b = b && Array.isArray(b.slips) ? b : emptyDoc();
+    const m = new Map();
+    for (const s of a.slips) if (s && s.id) m.set(s.id, mergeSlip(s, null));
+    for (const s of b.slips) if (s && s.id) m.set(s.id, mergeSlip(m.get(s.id), s));
+    const slips = [...m.values()].sort((x, y) => (y.visitAt || "").localeCompare(x.visitAt || "") || String(x.id).localeCompare(String(y.id)));
+    const newer = (b.doctorUpdatedAt || "") > (a.doctorUpdatedAt || "") ? b : a;
+    const times = slips.flatMap(s => [T(s), FT(s)]).concat([a.updatedAt || "", b.updatedAt || ""]).sort();
+    return { ...emptyDoc(), doctor: newer.doctor || a.doctor || b.doctor || { name: "", email: "" }, doctorUpdatedAt: newer.doctorUpdatedAt || "",
+      receiptSeq: Math.max(+a.receiptSeq || 0, +b.receiptSeq || 0), slips, updatedAt: times.pop() || "" };
+  }
+  // order-independent JSON (to decide whether an upload is needed)
+  const stable = o => JSON.stringify(o, (k, v) => v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(x => [x, v[x]])) : v);
+  const same = (a, b) => stable(a) === stable(b);
+  /* Bill for one slip: clinic herb price list (if connected) + the doctor's fees carried in the slip,
+     then the front desk's adjustments (line overrides, extra lines, discount), then the clinic rounding. */
+  function bill(slip, prices, fd = (slip && slip.fd) || {}) {
+    const P0 = prices ? Pricing.normalizeHerbPrices(prices) : null, P = P0 && Pricing.herbPricesSet(P0) ? P0 : null;
+    let lines, warnings, source, step;
+    if (P) {
+      const r = Pricing.computeCharges({ prices: P, billing: { consult: (slip.fees || {}).consult || {}, services: slip.services || [] }, rx: slip.rx || [], packs: slip.packs, consult: slip.consult, services: (slip.services || []).map(s => s.id) });
+      lines = r.lines; warnings = r.warnings; source = "clinic"; step = P.rounding;
+    } else {
+      lines = ((slip.estimate || {}).lines || []).map(l => ({ ...l }));
+      warnings = ["Clinic herb price list not connected — amounts are the doctor's estimate"]; source = "estimate"; step = +slip.rounding || 0;
+    }
+    const seen = {}, ov = fd.lineOverrides || {};
+    lines = lines.map(l => { let k = l.kind + ":" + l.label; seen[k] = (seen[k] || 0) + 1; if (seen[k] > 1) k += "#" + seen[k];
+      const o = Pricing.num(ov[k]); return { ...l, key: k, computed: l.amount, amount: o != null ? o : l.amount, adjusted: o != null && o !== l.amount }; });
+    const extras = (fd.extras || []).filter(e => e && String(e.label || "").trim() && Pricing.num(e.amount) != null).map(e => ({ kind: "extra", label: String(e.label).trim().slice(0, 80), detail: "", amount: Pricing.num(e.amount) }));
+    const subtotal = r2([...lines, ...extras].reduce((t, l) => t + (+l.amount || 0), 0));
+    const pct = Pricing.num(fd.discountPct);
+    const discount = Math.min(subtotal, pct != null ? r2(subtotal * Math.min(100, pct) / 100) : (Pricing.num(fd.discount) || 0));
+    const net = Math.max(0, r2(subtotal - discount));
+    const total = r2(Pricing.roundTo(net, step));
+    return { lines, extras, warnings, source, subtotal, discount, discountPct: pct, rounding: r2(total - net), roundStep: step, total };
+  }
+  const initials = name => (String(name || "").replace(/^\s*(dr|doc|doctor)\.?\s+/i, "").match(/\b[A-Za-z]/g) || ["X"]).slice(0, 3).join("").toUpperCase();
+  const receiptNo = (doc, seq) => `${initials(doc && doc.doctor && doc.doctor.name)}-${String(seq).padStart(5, "0")}`;
+  const ymd = iso => { if (!iso) return ""; const d = new Date(iso); if (isNaN(d)) return ""; return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  // daily totals over [{ slip, doctorKey, doctorName }] — paid slips whose payment date is `day`
+  function totals(items, day) {
+    const byDoctor = {}, byMethod = {}; let total = 0, count = 0;
+    for (const it of items) {
+      const p = it.slip.fd && it.slip.fd.paid; if (!p || !it.slip.fd.paidAt || ymd(it.slip.fd.paidAt) !== day) continue;
+      const amt = +p.amount || 0; total += amt; count++;
+      const d = byDoctor[it.doctorKey] || (byDoctor[it.doctorKey] = { name: it.doctorName, count: 0, total: 0 }); d.count++; d.total = r2(d.total + amt);
+      const m = p.method || "—"; const mm = byMethod[m] || (byMethod[m] = { count: 0, total: 0 }); mm.count++; mm.total = r2(mm.total + amt);
+    }
+    return { day, count, total: r2(total), byDoctor, byMethod };
+  }
+  return { emptyDoc, status, mergeSlip, merge, same, stable, bill, initials, receiptNo, ymd, totals };
+})();
+</script>
+<script>
+"use strict";
+/* =====================================================================
    DETECTION ENGINE
    ===================================================================== */
 const SYMPTOM_BY_ID = Object.fromEntries(SYMPTOMS.map(s => [s.id, s]));
@@ -6146,98 +6325,10 @@ function bindAIEvents() {
      caches it locally per account.
    • Never part of Copy for AI / the AI case summary.
    ===================================================================== */
-const CLINIC_PRICES_FILE = "tcm-clinic-herb-prices.json";
 const PICKER_APP_ID = (String(typeof GOOGLE_CLIENT_ID === "string" ? GOOGLE_CLIENT_ID : "").match(/^(\d+)-/) || [])[1] || "";
 const pickerAvailable = () => typeof GOOGLE_PICKER_API_KEY === "string" && GOOGLE_PICKER_API_KEY.trim() !== "" && !!PICKER_APP_ID;
 
-/* ---------- PRICING (pure; shared with frontdesk.html later — no DOM, no app state) ---------- */
-const Pricing = (() => {
-  const PAYMENTS = [["cash", "Cash"], ["gcash", "GCash"], ["maya", "Maya"], ["card", "Card"], ["bank", "Bank transfer"]];
-  const SERVICES = ["Acupuncture", "Cupping", "Moxibustion", "Gua Sha", "Tui Na"];
-  const num = v => { if (v === "" || v == null) return null; const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[₱,\s]/g, "")); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null; };
-  const sid = () => "s" + Math.random().toString(36).slice(2, 9);
-  function defaultBilling() {
-    return { v: 1, currency: "PHP", clinic: { name: "", doctor: "", address: "", phone: "", tin: "", footer: "" },
-      consult: { first: null, followup: null },
-      services: SERVICES.map((n, i) => ({ id: "svc" + (i + 1), name: n, price: null })),
-      payments: PAYMENTS.map(([id, name]) => ({ id, name, on: true })),
-      frontDeskEmail: "", clinicFileId: "", updatedAt: "" };
-  }
-  function defaultHerbPrices() {
-    return { v: 1, currency: "PHP", mode: "gram", perGram: null, overrides: {}, perPack: null, perFormula: null, formulaTimesPacks: true, prepFee: null, rounding: 0, updatedAt: "" };
-  }
-  function normalizeBilling(b) {
-    const d = defaultBilling(); b = b && typeof b === "object" ? b : {};
-    const c = b.clinic || {};
-    return { ...d, clinic: Object.fromEntries(Object.keys(d.clinic).map(k => [k, String(c[k] || "").slice(0, 500)])),
-      consult: { first: num((b.consult || {}).first), followup: num((b.consult || {}).followup) },
-      services: Array.isArray(b.services) ? b.services.filter(x => x && String(x.name || "").trim()).map(x => ({ id: String(x.id || sid()), name: String(x.name).trim().slice(0, 80), price: num(x.price) })) : d.services,
-      payments: Array.isArray(b.payments) ? b.payments.filter(x => x && x.name).map(x => ({ id: String(x.id || sid()), name: String(x.name).slice(0, 40), on: x.on !== false })) : d.payments,
-      frontDeskEmail: String(b.frontDeskEmail || "").trim().slice(0, 200), clinicFileId: String(b.clinicFileId || "").slice(0, 200), updatedAt: String(b.updatedAt || "") };
-  }
-  function normalizeHerbPrices(p) {
-    const d = defaultHerbPrices(); p = p && typeof p === "object" ? p : {};
-    const ov = {}; for (const [k, v] of Object.entries(p.overrides || {})) { const n = num(v); if (n != null && k) ov[k] = n; }
-    return { ...d, mode: ["gram", "pack", "formula"].includes(p.mode) ? p.mode : "gram", perGram: num(p.perGram), overrides: ov, perPack: num(p.perPack), perFormula: num(p.perFormula),
-      formulaTimesPacks: p.formulaTimesPacks !== false, prepFee: num(p.prepFee), rounding: [0, 1, 5, 10].includes(+p.rounding) ? +p.rounding : 0, updatedAt: String(p.updatedAt || "") };
-  }
-  const roundTo = (x, step) => step ? Math.round(x / step) * step : Math.round(x * 100) / 100;
-  const r2 = x => Math.round(x * 100) / 100;
-  function fmt(n) { if (n == null || !isFinite(n)) return "—"; const neg = n < 0; return (neg ? "−" : "") + "₱" + Math.abs(n).toLocaleString("en-PH", { minimumFractionDigits: Number.isInteger(r2(n)) ? 0 : 2, maximumFractionDigits: 2 }); }
-  const herbPricesSet = p => !!p && (p.mode === "gram" ? p.perGram != null || Object.keys(p.overrides || {}).length > 0 : p.mode === "pack" ? p.perPack != null : p.perFormula != null);
-  const billingSet = b => !!b && (b.consult.first != null || b.consult.followup != null || b.services.some(s => s.price != null));
-  /* computeCharges({ prices, billing, rx: [{ label, herbs: [{ name, qty, unit }] }], packs, consult: "first"|"followup"|"none", services: [id] })
-     → { lines: [{ kind, label, detail, amount }], warnings, herbsPerPack, subtotal, rounding, total }
-     Doses in an Rx are per pack (= per day). Per gram: Σ grams × (override[herb] ?? perGram) per pack × packs.
-     Per pack: perPack × packs. Per formula: perFormula per Rx line (× packs unless formulaTimesPacks is false).
-     Preparation / decoction fee: prepFee × packs (when there are herbs). Rounding applies to the grand total. */
-  function computeCharges({ prices, billing, rx = [], packs = 1, consult = "none", services = [] } = {}) {
-    const P = normalizeHerbPrices(prices), B = normalizeBilling(billing), lines = [], warnings = [];
-    packs = Math.max(0, Math.floor(+packs || 0));
-    const forms = rx.filter(f => f && f.herbs && f.herbs.length);
-    let herbsPerPack = 0;
-    if (consult === "first" || consult === "followup") {
-      const fee = B.consult[consult];
-      if (fee != null) lines.push({ kind: "consult", label: consult === "first" ? "Consultation (first visit)" : "Consultation (follow-up)", detail: "", amount: fee });
-      else warnings.push(`No ${consult === "first" ? "first-visit" : "follow-up"} consultation fee set`);
-    }
-    if (forms.length && packs > 0) {
-      if (!herbPricesSet(P)) warnings.push("Clinic herb price list not set — herbs not priced");
-      else if (P.mode === "gram") {
-        for (const f of forms) {
-          let per = 0, grams = 0;
-          for (const h of f.herbs) {
-            if (!(h.qty > 0)) { warnings.push(`${h.name} — no dose, not priced`); continue; }
-            if (h.unit !== "g") { warnings.push(`${h.name} ${h.qty} ${h.unit || ""}`.trim() + " — not priced (not in grams)"); continue; }
-            const pg = P.overrides[h.name] != null ? P.overrides[h.name] : P.perGram;
-            if (pg == null) { warnings.push(`${h.name} — no price per gram`); continue; }
-            per += h.qty * pg; grams += h.qty;
-          }
-          per = r2(per); herbsPerPack += per;
-          lines.push({ kind: "herbs", label: f.label || "Herbs", detail: `${r2(grams)} g/pack = ${fmt(per)} × ${packs} pack${packs === 1 ? "" : "s"}`, amount: r2(per * packs) });
-        }
-      } else if (P.mode === "pack") {
-        herbsPerPack = P.perPack;
-        lines.push({ kind: "herbs", label: "Herbs", detail: `${packs} pack${packs === 1 ? "" : "s"} × ${fmt(P.perPack)}`, amount: r2(P.perPack * packs) });
-      } else {
-        for (const f of forms) {
-          const k = P.formulaTimesPacks ? packs : 1; herbsPerPack += P.formulaTimesPacks ? P.perFormula : 0;
-          lines.push({ kind: "herbs", label: f.label || "Formula", detail: P.formulaTimesPacks ? `${fmt(P.perFormula)} × ${packs} pack${packs === 1 ? "" : "s"}` : "flat", amount: r2(P.perFormula * k) });
-        }
-      }
-      if (P.prepFee != null && P.prepFee > 0) lines.push({ kind: "prep", label: "Preparation / decoction", detail: `${packs} × ${fmt(P.prepFee)}`, amount: r2(P.prepFee * packs) });
-    }
-    for (const id of services) {
-      const s = B.services.find(x => x.id === id); if (!s) continue;
-      if (s.price == null) { warnings.push(`${s.name} — no price set`); continue; }
-      lines.push({ kind: "service", label: s.name, detail: "", amount: s.price });
-    }
-    const subtotal = r2(lines.reduce((t, l) => t + l.amount, 0));
-    const total = r2(roundTo(subtotal, P.rounding));
-    return { lines, warnings, herbsPerPack: r2(herbsPerPack), subtotal, rounding: r2(total - subtotal), total, currency: "PHP" };
-  }
-  return { PAYMENTS, SERVICES, defaultBilling, defaultHerbPrices, normalizeBilling, normalizeHerbPrices, computeCharges, roundTo, fmt, num, herbPricesSet, billingSet };
-})();
+/* PRICING module: see the shared block (02c_shared.js) — also used by frontdesk.html */
 
 /* Rx lines in the Final diagnosis field → pricing input (one entry per Rx line) */
 function rxChargeInput(text) {
@@ -6460,6 +6551,7 @@ function renderRatesForm() {
   renderServices();
   setHTML($("#ratesPay"), b.payments.map((p, i) => `<label class="check rt-pay"><input type="checkbox" data-pay="${i}"${p.on ? " checked" : ""}> ${esc(p.name)}</label>`).join(""));
   $("#rtFrontEmail").value = b.frontDeskEmail || "";
+  renderFdShareStatus();
   renderClinicSection();
 }
 function renderServices() {
@@ -6564,6 +6656,8 @@ async function saveRates() {
 }
 function bindRatesEvents() {
   $("#ratesMenuBtn").onclick = () => openRates();
+  $("#fdSendBtn").onclick = async e => { const b = e.currentTarget; b.disabled = true; try { await sendToFrontdesk(); } finally { renderSendRow(); } };
+  $("#rtFrontEmail").addEventListener("input", () => renderFdShareStatus());
   $("#ratesSaveBtn").onclick = e => { e.preventDefault(); saveRates(); };
   $("#ratesAddSvc").onclick = () => { readRatesForm(); ratesDraft.services.push({ id: "s" + uid(), name: "New service", price: null }); renderServices(); const i = ratesDraft.services.length - 1; const n = $(`[data-svc-name="${i}"]`); if (n) { n.focus(); n.select(); } };
   $("#ratesDialog").addEventListener("click", async e => {
@@ -6607,6 +6701,7 @@ function estimateFor(s = state.session) {
 }
 function renderEstimate(keepInputs) {
   const box = $("#estBox"); if (!box || !state.session) return;
+  try { renderSendRow(); } catch {}
   if (!ratesReady()) { box.hidden = true; return; }
   box.hidden = false;
   if (box._init !== true) { box.open = lsGet("tcm_est_open") === "1"; box._init = true; }
@@ -6626,6 +6721,162 @@ function renderEstimate(keepInputs) {
   if ($("#estBody").contains(document.activeElement) && document.activeElement !== document.body) keepInputs = true;   // don't steal focus from the packs / consult inputs
   if (keepInputs && $("#estLines")) { setHTML($("#estLines"), table); return; }
   setHTML($("#estBody"), ctl + `<div id="estLines">${table}</div>`);
+}
+
+/* =====================================================================
+   FRONT DESK — doctor side (v17)
+   "Send to front desk" writes a slip to tcm-frontdesk-slips.json (one per doctor, in the doctor's
+   "TCM Consult Assistant" folder; never the records file). The slips file is shared WRITER with the
+   Rates "Front desk e-mail" (so she can mark Dispensed / Paid) and unshared when it changes or is cleared.
+   A slip carries ONLY: id, doctor, patient name (+ phone if the contact is a phone number), visit time,
+   Rx (structured + display text), packs, consult type, services, fees, the estimate, receipt header
+   info, enabled payment methods, and status. No symptoms / notes / diagnosis / patterns / tongue /
+   pulse / history.
+   ===================================================================== */
+const fdState = { doc: null, fileId: null, sharedWith: [], shareStatus: null, pending: false, error: "", lastSyncAt: "" };
+async function loadFrontdesk() {
+  const m = await DB.get("meta", "fdSlips").catch(() => null);
+  Object.assign(fdState, { doc: null, fileId: null, sharedWith: [], shareStatus: null, pending: false, error: "", lastSyncAt: "" }, (m && m.data) || {});
+}
+async function saveFdLocal(patch = {}) {
+  Object.assign(fdState, patch);
+  const { doc, fileId, sharedWith, shareStatus, pending, error, lastSyncAt } = fdState;
+  await DB.put("meta", { id: "fdSlips", data: { doc, fileId, sharedWith, shareStatus, pending, error, lastSyncAt } });
+  renderSendRow(); renderFdShareStatus();
+}
+const slipFor = id => fdState.doc && (fdState.doc.slips || []).find(s => s.id === id) || null;
+const fdDoctorName = () => (billingState.billing.clinic.doctor || (Cloud.account && Cloud.account.name) || "").trim();
+const PHONE_RE = /^\+?[\d][\d\s\-().]{5,}\d$/;
+function buildSlip(s = state.session) {
+  const p = s.patientId ? patientById(s.patientId) : null;
+  const B = billingState.billing, sb = sessionBilling(s), est = estimateFor(s);
+  const consult = sb.consult === "auto" ? (s.patientId && priorVisits(s).length ? "followup" : "first") : sb.consult;
+  const rx = [];
+  for (const line of String(s.diagnosis || "").split("\n")) {
+    const parsed = rxChargeInput(line)[0]; if (!parsed) continue;
+    const fid = Object.keys(FORMULAS).find(id => line.includes(FORMULAS[id].name + " ") || line.endsWith(FORMULAS[id].name)) || null;
+    rx.push({ label: parsed.label, formulaId: fid, formula: fid ? { py: FORMULAS[fid].name, en: FORMULAS[fid].en || "", zhS: formulaZh(fid, "s"), zhT: formulaZh(fid, "t") } : null,
+      text: convertRxLine(line), herbs: parsed.herbs.map(h => ({ name: h.name, zhS: herbZh(h.name, "s"), zhT: herbZh(h.name, "t"), qty: h.qty, unit: h.unit })) });
+  }
+  const phone = p && PHONE_RE.test(String(p.contact || "").trim()) ? String(p.contact).trim() : "";
+  const now = new Date().toISOString();
+  return { id: s.id, doctor: fdDoctorName(), patient: { name: p ? p.name : "", ...(phone ? { phone } : {}) }, visitAt: s.startedAt,
+    rx, herbNames: { mode: HN.mode, script: HN.script }, packs: sb.packs, consult,
+    fees: { consult: { first: B.consult.first, followup: B.consult.followup } },
+    services: sb.services.map(id => B.services.find(x => x.id === id)).filter(Boolean).map(x => ({ id: x.id, name: x.name, price: x.price })),
+    estimate: { lines: est.lines.map(l => ({ kind: l.kind, label: l.label, detail: l.detail, amount: l.amount })), subtotal: est.subtotal, rounding: est.rounding, total: est.total, warnings: est.warnings.slice(0, 10) },
+    rounding: (clinicPrices() || {}).rounding || 0,
+    receipt: { ...B.clinic }, payments: B.payments.filter(x => x.on).map(x => x.name),
+    sentAt: now, updatedAt: now, status: "pending" };
+}
+async function sendToFrontdesk() {
+  const s = state.session, B = billingState.billing;
+  if (!B.frontDeskEmail) { toast("Set the front desk e-mail in ₱ Rates first — the slip is shared with that account.", 4500); openRates(); return false; }
+  if (!Cloud.account) { toast("Sign in with Google (☁ Data menu) to send slips to the front desk.", 4500); return false; }
+  if (!s.patientId || !patientById(s.patientId)) { toast("Link the patient to this visit first — the slip needs the patient's name.", 4500); return false; }
+  const slip = buildSlip(s);
+  if (!slip.rx.length && !slip.services.length && slip.consult === "none") { toast("Nothing to send — add an Rx, a consultation or a service.", 4000); return false; }
+  const old = slipFor(s.id);
+  if (old && Slips.status(old) === "paid") { alert("This visit was already PAID at the front desk, so the slip was not changed.\nAsk the front desk to correct the bill if something is different."); return false; }
+  if (old && Slips.status(old) === "dispensed" && !confirm("The front desk already marked this slip as dispensed. Send the updated slip anyway?")) return false;
+  if (old) { slip.sentAt = old.sentAt || slip.sentAt; slip.resentAt = slip.updatedAt; }
+  const local = { ...Slips.emptyDoc(), ...(fdState.doc || {}), slips: [slip] };
+  await saveFdLocal({ doc: Slips.merge(fdState.doc, local), pending: true, error: "" });
+  try { await syncSlips(Cloud.account); toast(old ? "Slip updated for the front desk" : "Sent to the front desk ✓"); }
+  catch (e) { console.warn("Front desk slip:", e); await saveFdLocal({ error: "Not uploaded yet — will retry on the next sync" + (e.status ? ` (Google Drive ${e.status})` : "") }); toast("Saved — will upload to the front desk on the next sync.", 4000); }
+  return true;
+}
+// owner = this doctor: merge local ↔ Drive (by slip id; doctor part / front-desk part newest wins), then sharing
+let fdRun = null;
+function syncSlips(acc = Cloud.account, folderId) {
+  const run = (fdRun || Promise.resolve()).catch(() => {}).then(() => syncSlipsOnce(acc, folderId));
+  fdRun = run.finally(() => { if (fdRun === run) fdRun = null; });
+  return run;
+}
+async function syncSlipsOnce(acc, folderId) {
+  if (!acc || Cloud.account !== acc) return;
+  const want = normEmail(billingState.billing.frontDeskEmail);
+  if (!fdState.fileId && !want && !(fdState.doc && fdState.doc.slips && fdState.doc.slips.length)) return;
+  let fileId = fdState.fileId, remote = null;
+  if (fileId) { try { remote = await driveDownload(fileId); } catch (e) { if (e.status === 404) fileId = null; else throw e; } }
+  if (!fileId) {
+    const f = (await driveList(`name='${qEsc(FRONTDESK_SLIPS_FILE)}' and 'me' in owners and trashed=false`))[0];
+    if (f) { fileId = f.id; remote = await driveDownload(f.id); }
+  }
+  if (Cloud.account !== acc) return;
+  const name = fdDoctorName(), meta = (fdState.doc && fdState.doc.doctor) || {};
+  let local = fdState.doc || Slips.emptyDoc();
+  if (meta.name !== name || meta.email !== acc.email) local = { ...local, doctor: { name, email: acc.email }, doctorUpdatedAt: new Date().toISOString() };
+  let merged = Slips.merge(remote, local);
+  for (let i = 0; i < 3; i++) {
+    if (!fileId) {
+      const fid = folderId || await driveEnsureFolder(), bd = "tcm_" + uid();
+      const fm = { name: FRONTDESK_SLIPS_FILE, mimeType: "application/json", parents: [fid], appProperties: { tcmConsult: "frontdesk-slips" }, description: "TCM Consult Assistant — front desk slips (patient name, Rx, charges only; no clinical notes). Shared with the front desk." };
+      const body = `--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(fm)}\r\n--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(merged)}\r\n--${bd}--`;
+      fileId = (await gjson(`${GAUTH.upload}/files?uploadType=multipart&fields=id,modifiedTime`, { method: "POST", headers: { "Content-Type": `multipart/related; boundary=${bd}` }, body })).id;
+      break;
+    }
+    if (remote && Slips.same(remote, merged)) break;
+    await driveUpdate(fileId, merged);
+    // verify: a front-desk write may have landed between our download and upload → merge again
+    const again = await driveDownload(fileId);
+    const m2 = Slips.merge(again, merged);
+    if (Slips.same(again, m2)) { merged = m2; break; }
+    remote = again; merged = m2;
+  }
+  if (Cloud.account !== acc) return;
+  let { sharedWith, shareStatus } = fdState;
+  const cur = (sharedWith || [])[0] || "";
+  if (want !== cur || !shareStatus || (want && shareStatus.state !== "shared")) {
+    const base = `${GAUTH.drive}/files/${encodeURIComponent(fileId)}/permissions`;
+    const perms = (await gjson(`${base}?fields=${encodeURIComponent("permissions(id,emailAddress,role,type)")}`)).permissions || [];
+    for (const p of perms) if (p.type === "user" && p.role !== "owner" && normEmail(p.emailAddress) !== want) {
+      try { await gfetch(`${base}/${encodeURIComponent(p.id)}`, { method: "DELETE" }); } catch (e) { console.warn("unshare", e); }
+    }
+    if (want) {
+      const has = perms.find(p => normEmail(p.emailAddress) === want);
+      try {
+        if (!has) await gjson(`${base}?sendNotificationEmail=true&fields=id`, { method: "POST", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify({ type: "user", role: "writer", emailAddress: want }) });
+        else if (has.role !== "writer") await gjson(`${base}/${encodeURIComponent(has.id)}?fields=id`, { method: "PATCH", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify({ role: "writer" }) });
+        shareStatus = { email: want, state: "shared", at: new Date().toISOString() };
+      } catch (e) { shareStatus = { email: want, state: "error", detail: e.status ? `Google Drive ${e.status}` : (e.message || "error"), at: new Date().toISOString() }; }
+    } else shareStatus = { email: "", state: "none", at: new Date().toISOString() };
+    sharedWith = want && shareStatus.state === "shared" ? [want] : [];
+  }
+  await saveFdLocal({ doc: merged, fileId, sharedWith, shareStatus, pending: false, error: "", lastSyncAt: new Date().toISOString() });
+}
+const slipFileLink = () => fdState.fileId ? `https://drive.google.com/file/d/${fdState.fileId}/view` : "";
+function renderFdShareStatus() {
+  const el = $("#rtFdStatus"); if (!el) return;
+  const want = normEmail(($("#rtFrontEmail") || {}).value || billingState.billing.frontDeskEmail), st = fdState.shareStatus;
+  let h;
+  if (!want) h = st && st.state === "shared" ? `Will stop sharing the slips file with ${esc(st.email)} on Save.` : "Not set — the slips file is not shared with anyone.";
+  else if (!Cloud.account) h = "Sign in with Google to create and share the front desk slips file.";
+  else if (st && st.email === want && st.state === "shared") h = `<span class="rt-st ok">✓ slips file shared with ${esc(want)} (can mark Dispensed / Paid)</span>`;
+  else if (st && st.email === want && st.state === "error") h = `<span class="rt-st bad">Could not share with ${esc(want)}: ${esc(st.detail || "")}</span> — it retries on the next sync.`;
+  else h = `The slips file will be shared with <b>${esc(want)}</b> (edit access) after Save. Your patient records file is never shared.`;
+  const link = slipFileLink();
+  setHTML(el, h + (link ? `<br><span class="muted">Front desk page: <b>${esc(new URL("frontdesk.html", location.href).href)}</b> → “Connect a doctor”. Slips file link (paste fallback): <a href="${esc(link)}" target="_blank" rel="noopener">${esc(link)}</a></span>` : ""));
+}
+function renderSendRow() {
+  const row = $("#fdSendRow"); if (!row || !state.session) return;
+  const B = billingState.billing;
+  row.hidden = !(B.frontDeskEmail || ratesReady());
+  if (row.hidden) return;
+  const sl = slipFor(state.session.id), st = sl ? Slips.status(sl) : "";
+  const btn = $("#fdSendBtn");
+  btn.textContent = sl ? (st === "paid" ? "✓ Paid at front desk" : "📤 Update front desk slip") : "📤 Send to front desk";
+  btn.disabled = st === "paid";
+  let t = "";
+  if (sl) {
+    const p = sl.fd && sl.fd.paid;
+    t = st === "paid" ? `Paid ${Pricing.fmt(p ? p.amount : 0)}${p && p.method ? " · " + p.method : ""}${p && p.receiptNo ? " · receipt " + p.receiptNo : ""}`
+      : st === "dispensed" ? `Sent ${fmtTime(sl.sentAt)} · Dispensed` : `Sent ${fmtTime(sl.resentAt || sl.sentAt)} · waiting at front desk`;
+    if (fdState.pending) t += " · not uploaded yet";
+  } else if (!B.frontDeskEmail) t = "set the front desk e-mail in ₱ Rates";
+  const el = $("#fdSendStatus");
+  el.textContent = t; el.className = "fd-st" + (st ? " fd-" + st : "") + (fdState.error ? " fd-err" : "");
+  el.title = fdState.error || "";
 }
 
 /* =====================================================================
@@ -6891,6 +7142,9 @@ function syncNow() {
       try { await syncClinicPrices(acc, folderId); }   // v16: clinic herb price list (own file, or a file shared by the clinic owner)
       catch (e) { if (e.status === 401 || AUTH_ERRORS.test(e.message || "")) throw e; console.warn("Clinic price list:", e); if (billingState.clinic) billingState.clinic.error = "Could not sync the clinic price list" + (e.status ? ` (Google Drive ${e.status})` : ""); }
       if (Cloud.account !== acc) return;
+      try { await syncSlips(acc, folderId); }   // v17: front desk slips file (own file, shared with the front desk e-mail)
+      catch (e) { if (e.status === 401 || AUTH_ERRORS.test(e.message || "")) throw e; console.warn("Front desk slips:", e); fdState.error = "Could not sync front desk slips" + (e.status ? ` (Google Drive ${e.status})` : ""); renderSendRow(); }
+      if (Cloud.account !== acc) return;
       Object.assign(meta, { fileId, folderId, lastSyncAt: new Date().toISOString() });
       await DB.put("meta", meta);
       Cloud.folderId = folderId; Cloud.lastSyncAt = meta.lastSyncAt; Cloud.retryDelay = 0; clearTimeout(Cloud.retryTimer);
@@ -7131,6 +7385,7 @@ async function loadData() {
   state.patients = await DB.all("patients");
   state.visits = await DB.all("visits");
   await loadBilling();
+  await loadFrontdesk();
 }
 function bindEvents() {
   bindAIEvents();
@@ -7304,7 +7559,7 @@ async function init() {
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Slips, fdState, buildSlip, sendToFrontdesk, syncSlips, renderSendRow, FRONTDESK_SLIPS_FILE, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>
