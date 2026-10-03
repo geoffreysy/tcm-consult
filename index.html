@@ -21,7 +21,7 @@ const GOOGLE_CLIENT_ID = "416895917493-3j5kk308fk420kcc2rjnfuoap45hep2s.apps.goo
    "Connect clinic herb price list" with Google Picker. Leave "" → doctors connect by pasting the
    shared file link instead. The Picker App ID is the Cloud project number = the digits before "-"
    in GOOGLE_CLIENT_ID (derived automatically). */
-const GOOGLE_PICKER_API_KEY = "";
+const GOOGLE_PICKER_API_KEY = "AIzaSyAwoxJwp1HPBfx8ZN1L-TNW06mnTwylges";   // "TCM Consult Picker" (project tcm-consult-assistant): referrer-restricted to this site, Picker API only — safe in client code
 </script>
 <style>
 :root{
@@ -555,7 +555,8 @@ dialog.rates-dlg .dlg-body{flex:1 1 auto;max-height:none;min-height:0;-webkit-ov
 .rt-btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .rt-connect{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
 .rt-paste{width:100%}
-.rt-paste-row{display:flex;gap:6px;width:100%}.rt-paste-row input{flex:1 1 auto;min-width:0}
+.rt-paste-row{display:flex;gap:6px;width:100%}
+.rt-paste-alt{width:100%;font-size:12.5px}.rt-paste-alt>summary{cursor:pointer;color:var(--muted);padding:2px 0}.rt-paste-alt .rt-paste{margin-top:6px}.rt-paste-row input{flex:1 1 auto;min-width:0}
 .rt-share{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);margin-top:10px}
 .rt-share-st{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
 .rt-st{font-size:11px;border-radius:10px;padding:1px 7px;background:#f1f1f1}.rt-st.ok{background:#e1f0ea;color:#1f5d50}.rt-st.bad{background:#fdecea;color:#a12d22}
@@ -6397,13 +6398,22 @@ function loadPicker() {
 }
 async function connectClinicPicker() {
   if (!pickerAvailable()) { rateMsg("Google Picker isn't configured for this site (no Picker API key) — paste the shared link below instead.", true); return; }
-  if (!Cloud.account) { rateMsg("Sign in with Google first.", true); return; }
+  if (!Cloud.account) {   // sign in first (GIS popup within this click), then continue with the Picker
+    if (!Cloud.configured) { rateMsg("Google sign-in isn't configured on this site.", true); return; }
+    rateMsg("Sign in with Google to open your Drive…");
+    await signIn();
+    if (!Cloud.account) { rateMsg("Sign-in didn't complete — try again.", true); return; }
+    if (Cloud.running) { try { await Cloud.running; } catch {} }
+    if ($("#ratesDialog").open) { openRates(); }
+    if (billingState.clinic) { rateMsg(`Signed in — this account already uses ${billingState.clinic.role === "owner" ? "its own" : (billingState.clinic.ownerName || "the clinic") + "'s"} price list.`); return; }
+  }
+  rateMsg("Opening Google Drive…");
   try {
     const tok = await ensureToken(); await loadPicker();
     const view = new google.picker.DocsView(google.picker.ViewId.DOCS).setMimeTypes("application/json").setQuery(CLINIC_PRICES_FILE).setOwnedByMe(false);
     const picker = new google.picker.PickerBuilder().setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID)
       .addView(view).setTitle("Select the clinic herb price list (" + CLINIC_PRICES_FILE + ")")
-      .setCallback(async d => { if (d.action === google.picker.Action.PICKED && d.docs && d.docs[0]) await connectClinicById(d.docs[0].id); }).build();
+      .setCallback(async d => { if (d.action === google.picker.Action.PICKED && d.docs && d.docs[0]) await connectClinicById(d.docs[0].id); else if (d.action === google.picker.Action.CANCEL) rateMsg(""); }).build();
     picker.setVisible(true);
   } catch (e) { rateMsg("Google Picker failed: " + (e.message || e) + " — paste the shared link instead.", true); }
 }
@@ -6470,13 +6480,14 @@ function renderClinicSection() {
   const box = $("#ratesClinic"); if (!box) return;
   const c = clinicDraft;
   const signed = !!Cloud.account;
+  const pasteHTML = `<label class="rt-paste">${pickerAvailable() ? "Shared link / file ID" : "…or paste the shared link / file ID"}<span class="rt-paste-row"><input id="rtPasteLink" placeholder="https://drive.google.com/file/d/…" spellcheck="false" autocomplete="off"><button type="button" class="small" id="rtPasteBtn"${signed ? "" : " disabled"}>Connect</button></span></label>`;
   if (!c) {
     setHTML(box, `<p class="hint" style="margin-top:0">Herb prices are the <b>same for every doctor</b>: the clinic owner keeps one price list in their Google Drive and shares it read-only with the doctors and the front desk.</p>
       <div class="rt-connect">
-        <button type="button" class="primary" id="rtPickBtn"${pickerAvailable() && signed ? "" : " disabled"}>Connect clinic price list (Google Picker)</button>
-        ${pickerAvailable() ? "" : `<div class="hint">Google Picker isn't set up for this site yet (it needs a Picker API key) — paste the link instead.</div>`}
-        <label class="rt-paste">…or paste the shared link / file ID<span class="rt-paste-row"><input id="rtPasteLink" placeholder="https://drive.google.com/file/d/…" spellcheck="false" autocomplete="off"><button type="button" class="small" id="rtPasteBtn"${signed ? "" : " disabled"}>Connect</button></span></label>
-        ${signed ? "" : `<div class="hint">Sign in with Google (☁ in the Data menu) to connect the clinic's price list.</div>`}
+        <button type="button" class="primary" id="rtPickBtn"${pickerAvailable() ? "" : " disabled"}>📂 Connect clinic price list</button>
+        ${pickerAvailable() ? `<div class="hint">Opens Google Drive — choose <b>${esc(CLINIC_PRICES_FILE)}</b> shared with you by the clinic owner.${signed ? "" : " You'll be asked to sign in with Google first."}</div>` : `<div class="hint">Google Picker isn't set up for this site yet (it needs a Picker API key) — paste the link instead.</div>`}
+        ${pickerAvailable() ? `<details class="rt-paste-alt"><summary>Picker not working? Paste the shared link instead</summary>${pasteHTML}</details>` : pasteHTML}
+        ${signed || pickerAvailable() ? "" : `<div class="hint">Sign in with Google (☁ in the Data menu) to connect the clinic's price list.</div>`}
         <button type="button" class="link-btn" id="rtOwnerBtn">I'm the clinic owner — create the clinic price list</button>
       </div>`);
     return;
@@ -6558,7 +6569,7 @@ function bindRatesEvents() {
   $("#ratesDialog").addEventListener("click", async e => {
     const t = e.target.closest("button"); if (!t) return;
     if (t.dataset.svcDel != null) { readRatesForm(); ratesDraft.services.splice(+t.dataset.svcDel, 1); renderServices(); }
-    else if (t.id === "rtPickBtn") connectClinicPicker();
+    else if (t.id === "rtPickBtn") { await connectClinicPicker(); if (billingState.clinic && (!clinicDraft || clinicDraft.fileId !== billingState.clinic.fileId)) { clinicDraft = JSON.parse(JSON.stringify(billingState.clinic)); renderClinicSection(); } }
     else if (t.id === "rtPasteBtn") { if (await connectClinicById($("#rtPasteLink").value)) { clinicDraft = JSON.parse(JSON.stringify(billingState.clinic)); renderClinicSection(); } }
     else if (t.id === "rtOwnerBtn") { await becomeClinicOwner(); clinicDraft = JSON.parse(JSON.stringify(billingState.clinic)); renderClinicSection(); }
     else if (t.id === "rtRefreshBtn") { try { rateMsg("Refreshing…"); await clinicFetch(billingState.clinic.fileId); clinicDraft = JSON.parse(JSON.stringify(billingState.clinic)); renderClinicSection(); rateMsg("Up to date ✓"); } catch (err) { rateMsg(err.message, true); } }
@@ -7293,7 +7304,7 @@ async function init() {
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>
