@@ -16,6 +16,12 @@
    enable the Google Drive API. Leave "" to keep the app in local-only mode.
    ===================================================================== */
 const GOOGLE_CLIENT_ID = "416895917493-3j5kk308fk420kcc2rjnfuoap45hep2s.apps.googleusercontent.com";
+/* GOOGLE_PICKER_API_KEY: browser API key from the same Cloud project, restricted to the Google
+   Picker API (website restrictions: this site + https://docs.google.com/*). Needed only for
+   "Connect clinic herb price list" with Google Picker. Leave "" → doctors connect by pasting the
+   shared file link instead. The Picker App ID is the Cloud project number = the digits before "-"
+   in GOOGLE_CLIENT_ID (derived automatically). */
+const GOOGLE_PICKER_API_KEY = "";
 </script>
 <style>
 :root{
@@ -516,6 +522,78 @@ dialog.herbs-dlg[open]{display:flex;flex-direction:column}
   .hb-foot{padding:6px 8px}
   .herbs-btn{padding:6px 10px;min-height:32px}
 }
+/* (v16) Rates + Estimated charges */
+dialog.rates-dlg[open]{display:flex;flex-direction:column;max-height:92vh}
+dialog.rates-dlg .dlg-body{flex:1 1 auto;max-height:none;min-height:0;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.rt-sec{border-top:1px solid var(--line);padding:10px 0 12px}
+.rt-sec h4{margin:0 0 8px;font-size:13.5px;color:#1f4f45}
+.rt-row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin:6px 0}
+.rt-row>label,.rt-fd,.rt-paste{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);min-width:0}
+.money{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:6px;background:#fff;overflow:hidden}
+.money .cur{padding:0 6px;color:var(--muted);background:#f4f7f6;align-self:stretch;display:flex;align-items:center;border-right:1px solid var(--line)}
+.money input{border:0;width:110px;min-width:0;padding:6px 7px;font-variant-numeric:tabular-nums}
+.money input:focus{outline:2px solid color-mix(in srgb,var(--accent) 40%,white);outline-offset:-2px}
+.rt-svc{display:flex;gap:6px;align-items:center;margin:0 0 6px}
+.rt-svc .rt-svc-name{flex:1 1 auto;min-width:0}
+.rt-svc .money input{width:90px}
+.rt-del{padding:2px 9px}
+.rt-pays{display:flex;flex-wrap:wrap;gap:4px 14px}
+.rt-pays .check{margin:2px 0}
+.rt-modes{display:flex;flex-wrap:wrap;gap:2px 14px}
+.rt-modes .check{margin:4px 0}
+.rt-sub{font-size:12.5px;font-weight:600;margin:8px 0 4px}
+.rt-ov input[type=search]{width:100%}
+.rt-ov-list{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:6px;margin-top:4px;-webkit-overflow-scrolling:touch}
+.rt-ov-list>.muted{padding:8px}
+.rt-ovr{display:flex;align-items:center;gap:6px;padding:4px 8px;border-bottom:1px solid #eef2f0}
+.rt-ovn{flex:1 1 auto;min-width:0}
+.rt-ovr .money input{width:80px}
+.rt-owner{font-size:13px;margin-bottom:6px}
+.rt-ro-tag{font-size:10.5px;font-weight:700;text-transform:uppercase;color:#1f5d50;background:#e1f0ea;border-radius:3px;padding:0 4px}
+.rt-ro-list{margin:6px 0;padding-left:18px;font-size:13px}
+.rt-ovt{width:100%;font-size:12.5px;border-collapse:collapse}.rt-ovt td{padding:2px 4px;border-top:1px solid #eef2f0}.rt-ovt .num{text-align:right;white-space:nowrap}
+.rt-btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.rt-connect{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.rt-paste{width:100%}
+.rt-paste-row{display:flex;gap:6px;width:100%}.rt-paste-row input{flex:1 1 auto;min-width:0}
+.rt-share{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);margin-top:10px}
+.rt-share-st{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.rt-st{font-size:11px;border-radius:10px;padding:1px 7px;background:#f1f1f1}.rt-st.ok{background:#e1f0ea;color:#1f5d50}.rt-st.bad{background:#fdecea;color:#a12d22}
+.rt-err,#ratesMsg.err{color:#a12d22}
+.rt-err{font-size:12px;margin:4px 0}
+details.est{margin-top:6px;border:1px solid var(--line);border-radius:8px;background:#fbfdfc;font-size:12.5px}
+details.est>summary{display:flex;align-items:center;gap:8px;padding:5px 9px;cursor:pointer;list-style:none;min-height:30px}
+details.est>summary::-webkit-details-marker{display:none}
+details.est>summary::before{content:"▸";color:var(--muted);transition:transform .12s}
+details.est[open]>summary::before{transform:rotate(90deg)}
+.est-title{color:var(--muted);font-size:12px}
+.est-total{margin-left:auto;font-variant-numeric:tabular-nums;color:#1f4f45}
+.est-body{padding:2px 9px 8px}
+.est-ctl{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:2px 0 6px}
+details.est .est-ctl label{display:flex;flex-direction:row;align-items:center;gap:5px;font-size:12px;color:var(--muted);margin:0}
+.est-ctl input{width:64px}
+.est-svcs{display:flex;flex-wrap:wrap;gap:4px 12px;margin:0 0 6px}
+details.est .est-svc{display:flex;flex-direction:row;align-items:center;gap:4px;font-size:12px;margin:0;color:inherit}.est-svc input{width:auto;margin:0}
+.est-table{width:100%;border-collapse:collapse}
+.est-table td{padding:3px 2px;border-top:1px solid #eef2f0;vertical-align:top}
+.est-table .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.est-d{font-size:11px;color:var(--muted)}
+.est-tot td{font-weight:700;border-top:2px solid var(--line)}
+.est-sub td{color:var(--muted)}
+.est-warn{font-size:11px;color:#8a5a00;margin-top:4px}
+.est-note{font-size:10.5px;color:var(--muted);margin-top:4px}
+@media (max-width:760px){
+  dialog.rates-dlg{width:100vw;max-width:100vw;max-height:94vh;height:94vh;margin:auto 0 0;border-radius:12px 12px 0 0}
+  .rates-body input,.rates-body select,.rates-body textarea{font-size:16px}
+  .rates-body .form-grid{grid-template-columns:1fr}
+  .money input{width:100%}
+  .rt-row>label{flex:1 1 140px}
+  .rt-row .money{width:100%}
+  .rt-svc .money{flex:0 0 120px}
+  .rt-ovr .money{flex:0 0 104px}
+  .est-ctl input,.est-ctl select{font-size:16px}
+  details.est>summary{min-height:38px}
+}
 /* (v15) Practitioner notes → detection */
 .notes-field{display:flex;flex-direction:column;gap:4px;min-width:0}
 .notes-detect{border:1px solid var(--line);border-radius:6px;background:#fbfdfc;padding:4px 7px;font-size:12.5px;line-height:1.55;min-width:0}
@@ -610,6 +688,7 @@ textarea,input,select,button{font-family:inherit}
         <button id="patternsRefBtn">📖 Patterns reference (knowledge base)</button>
         <button id="herbsMenuBtn" data-open-herbs>🌿 Herbs — all herbs A–Z (add to Rx)</button>
         <button id="formulasMenuBtn" data-open-formulas>📜 Formulas — all formulas A–Z (use / add herbs)</button>
+        <button id="ratesMenuBtn">₱ Rates — clinic info, fees, services &amp; herb prices…</button>
         <button id="aiSettingsBtn">⚙ AI settings (Copy for AI / optional Grok)…</button>
         <button id="exportBtn">⬇ Export all data (JSON backup)</button>
         <button id="importBtn">⬆ Import data from JSON…</button>
@@ -663,7 +742,8 @@ textarea,input,select,button{font-family:inherit}
         <span class="hn-seg" role="group" aria-label="Herb names in Rx lines"><button type="button" data-hn-mode="py" title="Herb names in pinyin (Dang Gui 9 g)">Pinyin</button><button type="button" data-hn-mode="zh" title="Herb names in Chinese characters (当归 9 g)">中文</button><button type="button" data-hn-mode="both" title="Chinese + pinyin (当归 Dang Gui 9 g)">Both</button></span>
         <span class="hn-seg hn-script" id="hnScript" role="group" aria-label="Chinese script" hidden><button type="button" data-hn-script="s" lang="zh-Hans" title="Simplified characters (简体)">简</button><button type="button" data-hn-script="t" lang="zh-Hant" title="Traditional characters (繁體)">繁</button></span>
         <button type="button" class="small herbs-btn" id="herbsBtn" data-open-herbs title="All herbs A–Z with TCM category and dose range — tap + to add to the Rx line">🌿 Herbs</button><button type="button" class="small herbs-btn formulas-btn" id="formulasBtn" data-open-formulas title="All formulas A–Z with category, herbs, doses and cautions — Use this formula or + single herbs">📜 Formulas</button>
-      </div></div><textarea id="diagnosisInput" placeholder="Pattern differentiation, treatment principle, formula / points…"></textarea></div>
+      </div></div><textarea id="diagnosisInput" placeholder="Pattern differentiation, treatment principle, formula / points…"></textarea>
+        <details class="est" id="estBox" hidden><summary><span class="est-title">₱ Estimated charges</span><b class="est-total" id="estTotal">—</b></summary><div class="est-body" id="estBody"></div></details></div>
     </div>
   </section>
 
@@ -841,6 +921,22 @@ textarea,input,select,button{font-family:inherit}
   </div>
   <div class="hb-list fx-list" id="fxList"></div>
   <div class="dlg-foot hb-foot"><span class="hb-legend">Tap a formula for herbs, doses (g, adult daily decoction), preparation and cautions · <b>Use this formula</b> adds the whole Rx line · + adds one herb. Textbook doses — verify before prescribing.</span><button type="button" data-close>Close</button></div>
+</dialog>
+
+<!-- Rates (per doctor) + clinic herb price list (clinic-wide, owned by the clinic owner) -->
+<dialog id="ratesDialog" class="wide rates-dlg" aria-labelledby="ratesTitle">
+  <div class="dlg-head"><h3 id="ratesTitle">₱ Rates</h3><button type="button" class="link" data-close aria-label="Close">✕</button></div>
+  <div class="dlg-body rates-body" id="ratesBody">
+    <p class="hint" style="margin-top:0">Your receipt info, fees and services are stored with <b>your</b> records (your Google Drive when signed in, this device otherwise). Herb prices come from the <b>clinic price list</b>, the same for every doctor. Rates are never included in Copy for AI.</p>
+    <section class="rt-sec"><h4>Clinic info for receipts</h4><div id="ratesDoctor"></div></section>
+    <section class="rt-sec"><h4>Consultation fee</h4><div id="ratesFees"></div></section>
+    <section class="rt-sec"><h4>Services</h4><div id="ratesServices"></div><button type="button" class="small" id="ratesAddSvc">+ Add service</button></section>
+    <section class="rt-sec rt-clinic"><h4>Clinic herb price list <small class="muted">(same for all doctors)</small></h4><div id="ratesClinic"></div></section>
+    <section class="rt-sec"><h4>Payment methods</h4><div class="rt-pays" id="ratesPay"></div></section>
+    <section class="rt-sec"><h4>Front desk</h4><label class="rt-fd">Front desk e-mail <small class="muted">— used when Front desk is set up (nothing is shared yet)</small><input type="email" id="rtFrontEmail" placeholder="frontdesk@clinic.ph" autocomplete="off" spellcheck="false"></label></section>
+    <p class="hint" id="ratesMsg" role="status"></p>
+  </div>
+  <div class="dlg-foot"><button type="button" data-close>Cancel</button><button type="button" class="primary" id="ratesSaveBtn">Save</button></div>
 </dialog>
 
 <!-- Symptom picker -->
@@ -4550,6 +4646,7 @@ function herbInRx(name, text = state.session ? state.session.diagnosis || "" : "
   return rxIdSet(text).has(name);   // herb identity — matches pinyin, 简体, 繁體 or "中文 pinyin" forms
 }
 function refreshHerbButtons(root = document) {
+  if (root === document) try { renderEstimate(); } catch {}
   root.querySelectorAll("[data-add-herb]").forEach(b => {
     const on = herbInRx(b.dataset.addHerb);
     if (b.classList.contains("added") !== on) { b.classList.toggle("added", on); b.textContent = on ? "✓" : "+"; b.title = on ? `${b.dataset.addHerb} is already in the treatment field` : `Add ${b.dataset.addHerb} ${b.dataset.dose} to Final diagnosis / treatment`; }
@@ -5067,6 +5164,7 @@ function buildVisitRecord() {
     prevVisitId: (priorVisits(s)[0] || {}).id || null,
     carriedFrom: s.carriedFrom || null,
     notes: s.notes, diagnosis: s.diagnosis,
+    ...(s.billing ? { billing: { ...s.billing } } : {}),   // packs / consult type / services ticked in Estimated charges
     ai: s.ai || null
   };
   rec.updatedAt = rec.savedAt;
@@ -5430,7 +5528,7 @@ function buildHistorySummary(session, a, n = 2) {
 
 /* ---------- export / import / print ---------- */
 async function exportAll() {
-  const data = { app: "tcm-consult-assistant", version: 1, exportedAt: new Date().toISOString(), patients: await DB.all("patients"), visits: await DB.all("visits") };
+  const data = { app: "tcm-consult-assistant", version: 1, exportedAt: new Date().toISOString(), patients: await DB.all("patients"), visits: await DB.all("visits"), ...(billingState.billing.updatedAt ? { billing: billingState.billing } : {}) };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -5448,6 +5546,7 @@ async function importData(text) {
   const now = new Date().toISOString();   // an explicit import overrides older copies (also in Google Drive)
   for (const p of data.patients) if (p && p.id && p.name) { await DB.put("patients", { ...p, updatedAt: now }); np++; }
   for (const v of data.visits) if (v && v.id && v.patientId) { await DB.put("visits", { ...v, updatedAt: now }); nv++; }
+  if (data.billing && typeof data.billing === "object") await saveBillingLocal(data.billing);   // the doctor's own Rates (no clinic herb prices)
   markDataChanged();
   await loadData();
   renderAll();
@@ -6036,6 +6135,489 @@ function bindAIEvents() {
 }
 
 /* =====================================================================
+   BILLING (v16) — step 1 of the front-desk system
+   • Per doctor ("Rates", stored with that doctor's own data file in their Drive, section `billing`):
+     receipt info, consultation fees, services, payment methods, front-desk e-mail.
+   • Clinic-wide herb price list (same for every doctor): a small file
+     "tcm-clinic-herb-prices.json" owned by ONE admin Google account (the clinic owner), in the
+     owner's "TCM Consult Assistant" folder, shared READ-ONLY with the doctors + front desk.
+     Other doctors connect it once (Google Picker, or by pasting the shared link) and the app
+     caches it locally per account.
+   • Never part of Copy for AI / the AI case summary.
+   ===================================================================== */
+const CLINIC_PRICES_FILE = "tcm-clinic-herb-prices.json";
+const PICKER_APP_ID = (String(typeof GOOGLE_CLIENT_ID === "string" ? GOOGLE_CLIENT_ID : "").match(/^(\d+)-/) || [])[1] || "";
+const pickerAvailable = () => typeof GOOGLE_PICKER_API_KEY === "string" && GOOGLE_PICKER_API_KEY.trim() !== "" && !!PICKER_APP_ID;
+
+/* ---------- PRICING (pure; shared with frontdesk.html later — no DOM, no app state) ---------- */
+const Pricing = (() => {
+  const PAYMENTS = [["cash", "Cash"], ["gcash", "GCash"], ["maya", "Maya"], ["card", "Card"], ["bank", "Bank transfer"]];
+  const SERVICES = ["Acupuncture", "Cupping", "Moxibustion", "Gua Sha", "Tui Na"];
+  const num = v => { if (v === "" || v == null) return null; const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[₱,\s]/g, "")); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null; };
+  const sid = () => "s" + Math.random().toString(36).slice(2, 9);
+  function defaultBilling() {
+    return { v: 1, currency: "PHP", clinic: { name: "", doctor: "", address: "", phone: "", tin: "", footer: "" },
+      consult: { first: null, followup: null },
+      services: SERVICES.map((n, i) => ({ id: "svc" + (i + 1), name: n, price: null })),
+      payments: PAYMENTS.map(([id, name]) => ({ id, name, on: true })),
+      frontDeskEmail: "", clinicFileId: "", updatedAt: "" };
+  }
+  function defaultHerbPrices() {
+    return { v: 1, currency: "PHP", mode: "gram", perGram: null, overrides: {}, perPack: null, perFormula: null, formulaTimesPacks: true, prepFee: null, rounding: 0, updatedAt: "" };
+  }
+  function normalizeBilling(b) {
+    const d = defaultBilling(); b = b && typeof b === "object" ? b : {};
+    const c = b.clinic || {};
+    return { ...d, clinic: Object.fromEntries(Object.keys(d.clinic).map(k => [k, String(c[k] || "").slice(0, 500)])),
+      consult: { first: num((b.consult || {}).first), followup: num((b.consult || {}).followup) },
+      services: Array.isArray(b.services) ? b.services.filter(x => x && String(x.name || "").trim()).map(x => ({ id: String(x.id || sid()), name: String(x.name).trim().slice(0, 80), price: num(x.price) })) : d.services,
+      payments: Array.isArray(b.payments) ? b.payments.filter(x => x && x.name).map(x => ({ id: String(x.id || sid()), name: String(x.name).slice(0, 40), on: x.on !== false })) : d.payments,
+      frontDeskEmail: String(b.frontDeskEmail || "").trim().slice(0, 200), clinicFileId: String(b.clinicFileId || "").slice(0, 200), updatedAt: String(b.updatedAt || "") };
+  }
+  function normalizeHerbPrices(p) {
+    const d = defaultHerbPrices(); p = p && typeof p === "object" ? p : {};
+    const ov = {}; for (const [k, v] of Object.entries(p.overrides || {})) { const n = num(v); if (n != null && k) ov[k] = n; }
+    return { ...d, mode: ["gram", "pack", "formula"].includes(p.mode) ? p.mode : "gram", perGram: num(p.perGram), overrides: ov, perPack: num(p.perPack), perFormula: num(p.perFormula),
+      formulaTimesPacks: p.formulaTimesPacks !== false, prepFee: num(p.prepFee), rounding: [0, 1, 5, 10].includes(+p.rounding) ? +p.rounding : 0, updatedAt: String(p.updatedAt || "") };
+  }
+  const roundTo = (x, step) => step ? Math.round(x / step) * step : Math.round(x * 100) / 100;
+  const r2 = x => Math.round(x * 100) / 100;
+  function fmt(n) { if (n == null || !isFinite(n)) return "—"; const neg = n < 0; return (neg ? "−" : "") + "₱" + Math.abs(n).toLocaleString("en-PH", { minimumFractionDigits: Number.isInteger(r2(n)) ? 0 : 2, maximumFractionDigits: 2 }); }
+  const herbPricesSet = p => !!p && (p.mode === "gram" ? p.perGram != null || Object.keys(p.overrides || {}).length > 0 : p.mode === "pack" ? p.perPack != null : p.perFormula != null);
+  const billingSet = b => !!b && (b.consult.first != null || b.consult.followup != null || b.services.some(s => s.price != null));
+  /* computeCharges({ prices, billing, rx: [{ label, herbs: [{ name, qty, unit }] }], packs, consult: "first"|"followup"|"none", services: [id] })
+     → { lines: [{ kind, label, detail, amount }], warnings, herbsPerPack, subtotal, rounding, total }
+     Doses in an Rx are per pack (= per day). Per gram: Σ grams × (override[herb] ?? perGram) per pack × packs.
+     Per pack: perPack × packs. Per formula: perFormula per Rx line (× packs unless formulaTimesPacks is false).
+     Preparation / decoction fee: prepFee × packs (when there are herbs). Rounding applies to the grand total. */
+  function computeCharges({ prices, billing, rx = [], packs = 1, consult = "none", services = [] } = {}) {
+    const P = normalizeHerbPrices(prices), B = normalizeBilling(billing), lines = [], warnings = [];
+    packs = Math.max(0, Math.floor(+packs || 0));
+    const forms = rx.filter(f => f && f.herbs && f.herbs.length);
+    let herbsPerPack = 0;
+    if (consult === "first" || consult === "followup") {
+      const fee = B.consult[consult];
+      if (fee != null) lines.push({ kind: "consult", label: consult === "first" ? "Consultation (first visit)" : "Consultation (follow-up)", detail: "", amount: fee });
+      else warnings.push(`No ${consult === "first" ? "first-visit" : "follow-up"} consultation fee set`);
+    }
+    if (forms.length && packs > 0) {
+      if (!herbPricesSet(P)) warnings.push("Clinic herb price list not set — herbs not priced");
+      else if (P.mode === "gram") {
+        for (const f of forms) {
+          let per = 0, grams = 0;
+          for (const h of f.herbs) {
+            if (!(h.qty > 0)) { warnings.push(`${h.name} — no dose, not priced`); continue; }
+            if (h.unit !== "g") { warnings.push(`${h.name} ${h.qty} ${h.unit || ""}`.trim() + " — not priced (not in grams)"); continue; }
+            const pg = P.overrides[h.name] != null ? P.overrides[h.name] : P.perGram;
+            if (pg == null) { warnings.push(`${h.name} — no price per gram`); continue; }
+            per += h.qty * pg; grams += h.qty;
+          }
+          per = r2(per); herbsPerPack += per;
+          lines.push({ kind: "herbs", label: f.label || "Herbs", detail: `${r2(grams)} g/pack = ${fmt(per)} × ${packs} pack${packs === 1 ? "" : "s"}`, amount: r2(per * packs) });
+        }
+      } else if (P.mode === "pack") {
+        herbsPerPack = P.perPack;
+        lines.push({ kind: "herbs", label: "Herbs", detail: `${packs} pack${packs === 1 ? "" : "s"} × ${fmt(P.perPack)}`, amount: r2(P.perPack * packs) });
+      } else {
+        for (const f of forms) {
+          const k = P.formulaTimesPacks ? packs : 1; herbsPerPack += P.formulaTimesPacks ? P.perFormula : 0;
+          lines.push({ kind: "herbs", label: f.label || "Formula", detail: P.formulaTimesPacks ? `${fmt(P.perFormula)} × ${packs} pack${packs === 1 ? "" : "s"}` : "flat", amount: r2(P.perFormula * k) });
+        }
+      }
+      if (P.prepFee != null && P.prepFee > 0) lines.push({ kind: "prep", label: "Preparation / decoction", detail: `${packs} × ${fmt(P.prepFee)}`, amount: r2(P.prepFee * packs) });
+    }
+    for (const id of services) {
+      const s = B.services.find(x => x.id === id); if (!s) continue;
+      if (s.price == null) { warnings.push(`${s.name} — no price set`); continue; }
+      lines.push({ kind: "service", label: s.name, detail: "", amount: s.price });
+    }
+    const subtotal = r2(lines.reduce((t, l) => t + l.amount, 0));
+    const total = r2(roundTo(subtotal, P.rounding));
+    return { lines, warnings, herbsPerPack: r2(herbsPerPack), subtotal, rounding: r2(total - subtotal), total, currency: "PHP" };
+  }
+  return { PAYMENTS, SERVICES, defaultBilling, defaultHerbPrices, normalizeBilling, normalizeHerbPrices, computeCharges, roundTo, fmt, num, herbPricesSet, billingSet };
+})();
+
+/* Rx lines in the Final diagnosis field → pricing input (one entry per Rx line) */
+function rxChargeInput(text) {
+  const out = [];
+  for (const line of String(text || "").split("\n")) {
+    const m0 = RX_LINE.exec(line); if (!m0) continue;
+    const head = m0[0].replace(/^\s*Rx\b\s*/i, "").replace(/:$/, "").trim();
+    const rest = line.slice(m0[0].length);
+    const items = rxItems(line);
+    const label = /custom/i.test(head) ? "Custom herbs" : (rest.split(/\s\(|:/)[0].trim() || "Formula");
+    const herbs = items.map(it => {
+      const d = /^\s*(\d+(?:\.\d+)?)\s*([^\d\s,;:，；、]*)/.exec(line.slice(it.end)) || [];
+      const unit = !d[2] || /^(g|gm|gms|grams?)$/i.test(d[2]) ? "g" : d[2];
+      return { name: it.id, qty: d[1] ? +d[1] : null, unit };
+    });
+    if (herbs.length) out.push({ label, herbs });
+  }
+  return out;
+}
+
+/* ---------- state + storage ---------- */
+const billingState = { billing: Pricing.normalizeBilling(null), clinic: null };   // clinic = { prices, fileId, role, ownerName, ownerEmail, ownerSub, sharedWith, shareStatus, modifiedTime, fetchedAt, pending, error }
+async function loadBilling() {
+  const b = await DB.get("meta", "billing").catch(() => null);
+  billingState.billing = Pricing.normalizeBilling(b && b.data);
+  const c = await DB.get("meta", "clinicPrices").catch(() => null);
+  billingState.clinic = c && c.data ? { ...c.data, prices: Pricing.normalizeHerbPrices(c.data.prices) } : null;
+}
+async function saveBillingLocal(b, opt = {}) {
+  billingState.billing = Pricing.normalizeBilling({ ...b, updatedAt: opt.updatedAt || new Date().toISOString() });
+  await DB.put("meta", { id: "billing", data: billingState.billing });
+  if (!opt.fromSync) markDataChanged();
+  renderEstimate();
+}
+async function saveClinicLocal(c, opt = {}) {
+  billingState.clinic = c ? { ...c, prices: Pricing.normalizeHerbPrices(c.prices) } : null;
+  if (c) await DB.put("meta", { id: "clinicPrices", data: billingState.clinic }); else await DB.del("meta", "clinicPrices");
+  if (!opt.noSync && Cloud.account && c && c.role === "owner") markDataChanged();
+  renderEstimate();
+  // dialog open: refresh a read-only / empty view; never re-render the admin form under the owner's unsaved edits
+  if ($("#ratesDialog") && $("#ratesDialog").open && !opt.keepDialog && (!clinicDraft || clinicDraft.role !== "owner")) { clinicDraft = billingState.clinic ? JSON.parse(JSON.stringify(billingState.clinic)) : null; renderClinicSection(); }
+}
+const clinicPrices = () => billingState.clinic && billingState.clinic.prices ? billingState.clinic.prices : null;
+const ratesReady = () => Pricing.billingSet(billingState.billing) || Pricing.herbPricesSet(clinicPrices());
+
+/* ---------- Drive: clinic herb price list ---------- */
+const driveFileMeta = id => gjson(`${GAUTH.drive}/files/${encodeURIComponent(id)}?fields=${encodeURIComponent("id,name,modifiedTime,owners(displayName,emailAddress,me),capabilities(canEdit)")}`);
+function parseDriveFileId(s) {
+  s = String(s || "").trim();
+  const m = /\/d\/([\w-]{20,})/.exec(s) || /[?&]id=([\w-]{20,})/.exec(s) || /^([\w-]{20,})$/.exec(s);
+  return m ? m[1] : null;
+}
+function clinicDoc(c) {
+  return { app: GAUTH.appId, kind: "clinic-herb-prices", format: 1, updatedAt: c.prices.updatedAt || new Date().toISOString(),
+    owner: { name: c.ownerName || "", email: c.ownerEmail || "" },
+    note: "Clinic herb price list from TCM Consult Assistant. Shared read-only with the clinic's doctors and front desk. No patient data.",
+    prices: c.prices };
+}
+async function clinicCreateFile(folderId, doc) {
+  const bd = "tcm_" + uid();
+  const meta = { name: CLINIC_PRICES_FILE, mimeType: "application/json", parents: [folderId], appProperties: { tcmConsult: "clinic-herb-prices" }, description: "TCM Consult Assistant — clinic herb price list (no patient data). Edit it in the app (Rates → Clinic herb price list)." };
+  const body = `--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(doc)}\r\n--${bd}--`;
+  return gjson(`${GAUTH.upload}/files?uploadType=multipart&fields=id,modifiedTime`, { method: "POST", headers: { "Content-Type": `multipart/related; boundary=${bd}` }, body });
+}
+const normEmail = e => String(e || "").trim().toLowerCase();
+function parseEmails(text) { return [...new Set(String(text || "").split(/[\s,;]+/).map(normEmail).filter(e => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)))]; }
+// owner: make the file's reader list match `emails` (never touches the owner or writers)
+async function clinicSyncShares(fileId, emails, ownerEmail) {
+  const base = `${GAUTH.drive}/files/${encodeURIComponent(fileId)}/permissions`;
+  const cur = (await gjson(`${base}?fields=${encodeURIComponent("permissions(id,emailAddress,role,type)")}`)).permissions || [];
+  const status = {};
+  const want = new Set(emails.filter(e => e !== normEmail(ownerEmail)));
+  for (const e of want) {
+    const has = cur.find(p => normEmail(p.emailAddress) === e);
+    if (has) { status[e] = has.role === "reader" ? "shared" : has.role; continue; }
+    try { await gjson(`${base}?sendNotificationEmail=true&fields=id`, { method: "POST", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify({ type: "user", role: "reader", emailAddress: e }) }); status[e] = "shared"; }
+    catch (err) { status[e] = "error " + (err.status || ""); }
+  }
+  for (const p of cur) if (p.type === "user" && p.role === "reader" && !want.has(normEmail(p.emailAddress))) {
+    try { await gfetch(`${base}/${encodeURIComponent(p.id)}`, { method: "DELETE" }); } catch (err) { status[normEmail(p.emailAddress)] = "remove failed"; }
+  }
+  return status;
+}
+// called from syncNow() after the main data file (folderId known)
+async function syncClinicPrices(acc, folderId) {
+  let c = billingState.clinic;
+  if (!c && billingState.billing.clinicFileId) {   // another device of a doctor who connected the clinic list: the file id travels with their own records
+    try { await clinicFetch(billingState.billing.clinicFileId); } catch (e) { if (e.status === 401) throw e; console.warn("Clinic price list:", e.message); }
+    return;
+  }
+  if (!c) {   // a new device of the clinic owner: find the owner's own price list
+    const f = (await driveList(`name='${qEsc(CLINIC_PRICES_FILE)}' and 'me' in owners and trashed=false`))[0];
+    if (!f || Cloud.account !== acc) return;
+    const doc = await driveDownload(f.id);
+    if (!doc || doc.kind !== "clinic-herb-prices") return;
+    c = { prices: doc.prices, fileId: f.id, role: "owner", ownerName: acc.name, ownerEmail: acc.email, ownerSub: acc.sub, sharedWith: doc.sharedWith || [], modifiedTime: f.modifiedTime, fetchedAt: new Date().toISOString() };
+    await saveClinicLocal(c, { noSync: true });
+    return;
+  }
+  if (c.role === "owner") {
+    if (c.ownerSub && c.ownerSub !== acc.sub) return;
+    let remote = null;
+    if (c.fileId) { try { remote = await driveDownload(c.fileId); } catch (e) { if (e.status === 404) c = { ...c, fileId: null }; else throw e; } }
+    if (Cloud.account !== acc) return;
+    const remoteNewer = remote && remote.prices && (remote.prices.updatedAt || "") > (c.prices.updatedAt || "");
+    if (remoteNewer) { c = { ...c, prices: Pricing.normalizeHerbPrices(remote.prices), sharedWith: remote.sharedWith || c.sharedWith || [] }; }
+    const doc = { ...clinicDoc(c), sharedWith: c.sharedWith || [] };
+    if (!c.fileId) { const fid = folderId || await driveEnsureFolder(); const f = await clinicCreateFile(fid, doc); c = { ...c, fileId: f.id, modifiedTime: f.modifiedTime }; }
+    else if (!remoteNewer && (!remote || JSON.stringify(remote.prices) !== JSON.stringify(doc.prices) || JSON.stringify(remote.sharedWith || []) !== JSON.stringify(doc.sharedWith))) { const f = await driveUpdate(c.fileId, doc); c = { ...c, modifiedTime: f.modifiedTime }; }
+    if (c.pendingShares || c.pending) c = { ...c, shareStatus: await clinicSyncShares(c.fileId, c.sharedWith || [], acc.email), pendingShares: false };
+    await saveClinicLocal({ ...c, pending: false, fetchedAt: new Date().toISOString(), error: "" }, { noSync: true });
+    return;
+  }
+  if (c.role === "reader" && c.fileId) await clinicFetch(c.fileId, { quiet: true });
+}
+// reader: fetch the shared price list (after Picker / pasted link, and on each sync)
+async function clinicFetch(fileId, opt = {}) {
+  let meta;
+  try { meta = await driveFileMeta(fileId); }
+  catch (e) {
+    const msg = e.status === 404 || e.status === 403
+      ? "This Google account can't open that file from the app yet. Make sure the clinic owner shared it with this e-mail, then connect it with Google Picker (the app's Drive permission only covers files you pick or the app created)."
+      : `Google Drive error ${e.status || ""}`.trim();
+    if (opt.quiet && billingState.clinic) { await saveClinicLocal({ ...billingState.clinic, error: msg }, { noSync: true }); return false; }
+    throw Object.assign(new Error(msg), { status: e.status });
+  }
+  const c0 = billingState.clinic;
+  if (opt.quiet && c0 && c0.fileId === fileId && c0.modifiedTime === meta.modifiedTime && !c0.error) return true;   // unchanged
+  const doc = await driveDownload(fileId);
+  if (!doc || doc.kind !== "clinic-herb-prices" || !doc.prices) throw new Error("That file is not a clinic herb price list from this app.");
+  const owner = (meta.owners || [])[0] || {};
+  const me = !!owner.me;
+  await saveClinicLocal({ prices: doc.prices, fileId, role: me ? "owner" : "reader", ownerName: owner.displayName || (doc.owner || {}).name || "", ownerEmail: owner.emailAddress || (doc.owner || {}).email || "",
+    ownerSub: me && Cloud.account ? Cloud.account.sub : "", sharedWith: me ? (doc.sharedWith || []) : [], modifiedTime: meta.modifiedTime, fetchedAt: new Date().toISOString(), error: "" }, { noSync: true });
+  return true;
+}
+async function connectClinicById(input) {
+  const id = parseDriveFileId(input);
+  if (!id) { rateMsg("Paste the share link of the clinic price list (…/file/d/<ID>/…) or its file ID.", true); return false; }
+  if (!Cloud.account) { rateMsg("Sign in with Google first (☁ Google account & Drive sync) — the price list lives in the clinic owner's Drive.", true); return false; }
+  rateMsg("Connecting…");
+  try { await clinicFetch(id);
+    if (billingState.billing.clinicFileId !== id) await saveBillingLocal({ ...billingState.billing, clinicFileId: id });   // remembered in this doctor's Drive → other devices connect automatically
+    rateMsg(`Connected ✓ — ${billingState.clinic.ownerName || "clinic owner"}'s price list`); toast("Clinic herb price list connected"); return true; }
+  catch (e) { rateMsg(e.message, true); return false; }
+}
+/* Google Picker (drive.file): the picked file becomes readable by the app for this account */
+let pickerLoad = null;
+function loadPicker() {
+  if (window.google && google.picker) return Promise.resolve();
+  if (pickerLoad) return pickerLoad;
+  pickerLoad = new Promise((res, rej) => {
+    const sc = document.createElement("script"); sc.src = "https://apis.google.com/js/api.js"; sc.async = true;
+    sc.onload = () => { try { gapi.load("picker", { callback: res, onerror: () => rej(new Error("picker_load_failed")) }); } catch (e) { rej(e); } };
+    sc.onerror = () => rej(new Error("picker_load_failed")); document.head.appendChild(sc);
+  }).catch(e => { pickerLoad = null; throw e; });
+  return pickerLoad;
+}
+async function connectClinicPicker() {
+  if (!pickerAvailable()) { rateMsg("Google Picker isn't configured for this site (no Picker API key) — paste the shared link below instead.", true); return; }
+  if (!Cloud.account) { rateMsg("Sign in with Google first.", true); return; }
+  try {
+    const tok = await ensureToken(); await loadPicker();
+    const view = new google.picker.DocsView(google.picker.ViewId.DOCS).setMimeTypes("application/json").setQuery(CLINIC_PRICES_FILE).setOwnedByMe(false);
+    const picker = new google.picker.PickerBuilder().setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID)
+      .addView(view).setTitle("Select the clinic herb price list (" + CLINIC_PRICES_FILE + ")")
+      .setCallback(async d => { if (d.action === google.picker.Action.PICKED && d.docs && d.docs[0]) await connectClinicById(d.docs[0].id); }).build();
+    picker.setVisible(true);
+  } catch (e) { rateMsg("Google Picker failed: " + (e.message || e) + " — paste the shared link instead.", true); }
+}
+async function becomeClinicOwner() {
+  if (billingState.clinic && billingState.clinic.role === "reader" && !confirm("Replace the connected clinic price list with your own (you become the owner/admin)?")) return;
+  const acc = Cloud.account;
+  if (billingState.billing.clinicFileId) await saveBillingLocal({ ...billingState.billing, clinicFileId: "" });
+  await saveClinicLocal({ prices: { ...Pricing.defaultHerbPrices(), updatedAt: new Date().toISOString() }, fileId: null, role: "owner", ownerName: acc ? acc.name : "", ownerEmail: acc ? acc.email : "", ownerSub: acc ? acc.sub : "", sharedWith: [], pending: true, fetchedAt: "" });
+  rateMsg(acc ? "Clinic price list created — set prices, add the doctors' / front desk e-mails, then Save." : "Created locally — sign in with Google to store it in your Drive and share it.");
+}
+async function disconnectClinic() {
+  const c = billingState.clinic; if (!c) return;
+  if (!confirm(c.role === "owner" ? "Stop using your clinic price list on this device? (The file stays in your Drive; it is found again after signing in.)" : "Disconnect the clinic herb price list on this device?")) return;
+  await saveClinicLocal(null, { noSync: true });
+  if (billingState.billing.clinicFileId) await saveBillingLocal({ ...billingState.billing, clinicFileId: "" });
+  rateMsg("Disconnected.");
+}
+
+/* ---------- Rates dialog ---------- */
+let ratesDraft = null, clinicDraft = null;
+const moneyInput = (id, v, ph = "", attrs = "") => `<span class="money"><span class="cur">₱</span><input type="number" inputmode="decimal" min="0" step="0.01" id="${id}" value="${v == null ? "" : esc(v)}" placeholder="${esc(ph)}" ${attrs}></span>`;
+function rateMsg(t, err) { const m = $("#ratesMsg"); if (m) { m.textContent = t || ""; m.classList.toggle("err", !!err); } }
+function openRates() {
+  ratesDraft = JSON.parse(JSON.stringify(billingState.billing));
+  clinicDraft = billingState.clinic ? JSON.parse(JSON.stringify(billingState.clinic)) : null;
+  renderRatesForm();
+  $("#menu").classList.remove("open");
+  rateMsg("");
+  if (!$("#ratesDialog").open) $("#ratesDialog").showModal();
+  $("#ratesBody").scrollTop = 0;
+}
+function renderRatesForm() {
+  const b = ratesDraft, c = b.clinic;
+  setHTML($("#ratesDoctor"), `
+    <div class="form-grid">
+      <label class="full">Clinic name<input id="rtClinicName" value="${esc(c.name)}" autocomplete="organization"></label>
+      <label>Doctor name<input id="rtDoctor" value="${esc(c.doctor)}" autocomplete="name"></label>
+      <label>Phone<input id="rtPhone" value="${esc(c.phone)}" inputmode="tel" autocomplete="tel"></label>
+      <label class="full">Address<textarea id="rtAddress" rows="2">${esc(c.address)}</textarea></label>
+      <label>TIN <small>(optional)</small><input id="rtTin" value="${esc(c.tin)}"></label>
+      <label class="full">Receipt footer note<textarea id="rtFooter" rows="2" placeholder="e.g. Thank you! This is not an official receipt.">${esc(c.footer)}</textarea></label>
+    </div>`);
+  setHTML($("#ratesFees"), `<div class="rt-row"><label>First visit${moneyInput("rtFirst", b.consult.first)}</label><label>Follow-up${moneyInput("rtFollow", b.consult.followup)}</label></div>`);
+  renderServices();
+  setHTML($("#ratesPay"), b.payments.map((p, i) => `<label class="check rt-pay"><input type="checkbox" data-pay="${i}"${p.on ? " checked" : ""}> ${esc(p.name)}</label>`).join(""));
+  $("#rtFrontEmail").value = b.frontDeskEmail || "";
+  renderClinicSection();
+}
+function renderServices() {
+  setHTML($("#ratesServices"), ratesDraft.services.map((s, i) => `<div class="rt-svc" data-svc="${i}"><input class="rt-svc-name" data-svc-name="${i}" value="${esc(s.name)}" aria-label="Service name" placeholder="Service name">${moneyInput("rtSvc" + i, s.price, "price", `data-svc-price="${i}"`)}<button type="button" class="small rt-del" data-svc-del="${i}" title="Remove ${esc(s.name)}" aria-label="Remove ${esc(s.name)}">×</button></div>`).join("") || `<div class="muted">No services — add one below.</div>`);
+}
+function readRatesForm() {
+  const b = ratesDraft, v = id => ($("#" + id) || {}).value || "";
+  b.clinic = { name: v("rtClinicName"), doctor: v("rtDoctor"), address: v("rtAddress"), phone: v("rtPhone"), tin: v("rtTin"), footer: v("rtFooter") };
+  b.consult = { first: Pricing.num(v("rtFirst")), followup: Pricing.num(v("rtFollow")) };
+  b.services.forEach((s, i) => { const n = $(`[data-svc-name="${i}"]`), p = $(`[data-svc-price="${i}"]`); if (n) s.name = n.value; if (p) s.price = Pricing.num(p.value); });
+  b.payments.forEach((p, i) => { const c = $(`[data-pay="${i}"]`); if (c) p.on = c.checked; });
+  b.frontDeskEmail = v("rtFrontEmail").trim();
+  if (clinicDraft && clinicDraft.role === "owner") readClinicForm();
+  return b;
+}
+const fmtWhen = iso => iso ? fmtDateTime(iso) : "—";
+function renderClinicSection() {
+  const box = $("#ratesClinic"); if (!box) return;
+  const c = clinicDraft;
+  const signed = !!Cloud.account;
+  if (!c) {
+    setHTML(box, `<p class="hint" style="margin-top:0">Herb prices are the <b>same for every doctor</b>: the clinic owner keeps one price list in their Google Drive and shares it read-only with the doctors and the front desk.</p>
+      <div class="rt-connect">
+        <button type="button" class="primary" id="rtPickBtn"${pickerAvailable() && signed ? "" : " disabled"}>Connect clinic price list (Google Picker)</button>
+        ${pickerAvailable() ? "" : `<div class="hint">Google Picker isn't set up for this site yet (it needs a Picker API key) — paste the link instead.</div>`}
+        <label class="rt-paste">…or paste the shared link / file ID<span class="rt-paste-row"><input id="rtPasteLink" placeholder="https://drive.google.com/file/d/…" spellcheck="false" autocomplete="off"><button type="button" class="small" id="rtPasteBtn"${signed ? "" : " disabled"}>Connect</button></span></label>
+        ${signed ? "" : `<div class="hint">Sign in with Google (☁ in the Data menu) to connect the clinic's price list.</div>`}
+        <button type="button" class="link-btn" id="rtOwnerBtn">I'm the clinic owner — create the clinic price list</button>
+      </div>`);
+    return;
+  }
+  const p = c.prices;
+  if (c.role === "reader") {
+    const ov = Object.entries(p.overrides || {}).sort((a, b) => a[0].localeCompare(b[0]));
+    const modeTxt = p.mode === "gram" ? `Per gram — default ${p.perGram == null ? "not set" : Pricing.fmt(p.perGram) + "/g"}${ov.length ? ` · ${ov.length} herb-specific price${ov.length === 1 ? "" : "s"}` : ""}` : p.mode === "pack" ? `Per pack (day) — ${Pricing.fmt(p.perPack)}` : `Per formula — ${Pricing.fmt(p.perFormula)}${p.formulaTimesPacks ? " × packs" : " flat"}`;
+    setHTML(box, `<div class="rt-ro">
+      <div class="rt-owner">📄 <b>${esc(c.ownerName || c.ownerEmail || "Clinic owner")}</b>'s price list${c.ownerEmail ? ` <span class="muted">(${esc(c.ownerEmail)})</span>` : ""} · <span class="rt-ro-tag">read-only</span></div>
+      <div class="muted">Last updated ${esc(fmtWhen(p.updatedAt || c.modifiedTime))} · checked ${esc(fmtWhen(c.fetchedAt))}</div>
+      ${c.error ? `<div class="rt-err">${esc(c.error)}</div>` : ""}
+      <ul class="rt-ro-list"><li>${esc(modeTxt)}</li><li>Preparation / decoction fee: ${p.prepFee == null ? "none" : Pricing.fmt(p.prepFee) + " per pack"}</li><li>Rounding: ${p.rounding ? "nearest " + Pricing.fmt(p.rounding) : "none"}</li></ul>
+      ${ov.length ? `<details class="rt-ro-ov"><summary>Herb-specific prices (${ov.length})</summary><table class="rt-ovt">${ov.map(([n, v]) => `<tr><td><b>${esc(n)}</b>${zhSpan(n)}</td><td class="num">${esc(Pricing.fmt(v))}/g</td></tr>`).join("")}</table></details>` : ""}
+      <div class="rt-btns"><button type="button" class="small" id="rtRefreshBtn">↻ Refresh</button><button type="button" class="small" id="rtDisconnectBtn">Disconnect</button></div>
+    </div>`);
+    return;
+  }
+  // owner / admin
+  const ovN = Object.keys(p.overrides || {}).length;
+  setHTML(box, `<div class="rt-admin">
+    <div class="rt-owner">🔑 <b>Admin</b> — you own this clinic price list${c.fileId ? ` <span class="muted">(${esc(CLINIC_PRICES_FILE)} in your Drive)</span>` : signed ? ` <span class="muted">(created in your Drive on Save)</span>` : ` <span class="muted">(local — sign in to store and share it)</span>`}</div>
+    <div class="rt-modes" role="radiogroup" aria-label="Herb pricing mode">
+      <label class="check"><input type="radio" name="rtMode" value="gram"${p.mode === "gram" ? " checked" : ""}> Per gram</label>
+      <label class="check"><input type="radio" name="rtMode" value="pack"${p.mode === "pack" ? " checked" : ""}> Per pack (day)</label>
+      <label class="check"><input type="radio" name="rtMode" value="formula"${p.mode === "formula" ? " checked" : ""}> Per formula (flat)</label>
+    </div>
+    <div class="rt-row rt-mode-gram"${p.mode === "gram" ? "" : " hidden"}><label>Default price per gram${moneyInput("rtPerGram", p.perGram, "e.g. 1.50")}</label></div>
+    <div class="rt-row rt-mode-pack"${p.mode === "pack" ? "" : " hidden"}><label>Price per pack (day)${moneyInput("rtPerPack", p.perPack)}</label></div>
+    <div class="rt-row rt-mode-formula"${p.mode === "formula" ? "" : " hidden"}><label>Price per formula${moneyInput("rtPerFormula", p.perFormula)}</label><label class="check"><input type="checkbox" id="rtFxPacks"${p.formulaTimesPacks ? " checked" : ""}> × number of packs</label></div>
+    <div class="rt-row"><label>Preparation / decoction fee per pack <small>(optional)</small>${moneyInput("rtPrep", p.prepFee)}</label>
+      <label>Round the total<select id="rtRound"><option value="0"${!p.rounding ? " selected" : ""}>No rounding</option><option value="1"${p.rounding === 1 ? " selected" : ""}>Nearest ₱1</option><option value="5"${p.rounding === 5 ? " selected" : ""}>Nearest ₱5</option><option value="10"${p.rounding === 10 ? " selected" : ""}>Nearest ₱10</option></select></label></div>
+    <div class="rt-ov rt-mode-gram"${p.mode === "gram" ? "" : " hidden"}>
+      <div class="rt-sub">Herb-specific price per gram <span class="muted" id="rtOvCount">(${ovN} set)</span></div>
+      <input type="search" id="rtOvSearch" placeholder="Search all ${Object.keys(HERBS).length} herbs — pinyin, 中文, other name…" autocomplete="off" spellcheck="false" enterkeyhint="search">
+      <div class="rt-ov-list" id="rtOvList"></div>
+    </div>
+    <label class="full rt-share">Share READ-ONLY with (doctors + front desk e-mails)<textarea id="rtShare" rows="3" placeholder="dr.cruz@gmail.com, frontdesk@clinic.ph" spellcheck="false">${esc((c.sharedWith || []).join("\n"))}</textarea></label>
+    ${c.shareStatus && Object.keys(c.shareStatus).length ? `<div class="rt-share-st">${Object.entries(c.shareStatus).map(([e, st]) => `<span class="rt-st${/shared/.test(st) ? " ok" : " bad"}">${esc(e)}: ${esc(st)}</span>`).join(" ")}</div>` : ""}
+    <div class="hint">Saving updates the file and the Drive sharing (Google e-mails each new reader once). Doctors then use “Connect clinic price list”. Last updated ${esc(fmtWhen(p.updatedAt))}.</div>
+    <div class="rt-btns"><button type="button" class="small" id="rtDisconnectBtn">Stop using on this device</button></div>
+  </div>`);
+  renderOverrideList();
+}
+function renderOverrideList() {
+  const list = $("#rtOvList"); if (!list || !clinicDraft) return;
+  const p = clinicDraft.prices, q = ($("#rtOvSearch") || {}).value || "";
+  const names = q.trim() ? herbsFiltered(q.trim()).slice(0, 60) : Object.keys(p.overrides).sort((a, b) => a.localeCompare(b));
+  const def = p.perGram == null ? "" : String(p.perGram);
+  setHTML(list, names.length ? names.map(n => `<div class="rt-ovr" data-ov-herb="${esc(n)}"><span class="rt-ovn"><b>${esc(n)}</b>${zhSpan(n)}<small class="muted"> ${esc((HERBS[n] || [])[2] || "")}</small></span><span class="money"><span class="cur">₱</span><input type="number" inputmode="decimal" min="0" step="0.01" data-ov="${esc(n)}" value="${p.overrides[n] == null ? "" : esc(p.overrides[n])}" placeholder="${esc(def || "per g")}" aria-label="Price per gram for ${esc(n)}"></span><span class="muted">/g</span></div>`).join("")
+    : `<div class="muted">${q.trim() ? "No herb matches." : "No herb-specific prices yet — search to set one (e.g. ren shen, 人参)."}</div>`);
+}
+function readClinicForm() {
+  const p = clinicDraft.prices, v = id => ($("#" + id) || {}).value;
+  const mode = (document.querySelector('input[name="rtMode"]:checked') || {}).value || p.mode;
+  Object.assign(p, { mode, perGram: Pricing.num(v("rtPerGram")), perPack: Pricing.num(v("rtPerPack")), perFormula: Pricing.num(v("rtPerFormula")), formulaTimesPacks: !!($("#rtFxPacks") || {}).checked, prepFee: Pricing.num(v("rtPrep")), rounding: +(v("rtRound") || 0) });
+  if ($("#rtShare")) clinicDraft.sharedWith = parseEmails($("#rtShare").value);
+}
+async function saveRates() {
+  readRatesForm();
+  ratesDraft.clinicFileId = billingState.billing.clinicFileId;   // owned by the connect / disconnect buttons, not the form
+  const b0 = JSON.stringify(Pricing.normalizeBilling({ ...billingState.billing, updatedAt: "" })), b1 = JSON.stringify(Pricing.normalizeBilling({ ...ratesDraft, updatedAt: "" }));
+  if (b0 !== b1) await saveBillingLocal(ratesDraft);
+  if (clinicDraft && clinicDraft.role === "owner") {
+    const c0 = billingState.clinic || {}, p0 = JSON.stringify(Pricing.normalizeHerbPrices({ ...(c0.prices || {}), updatedAt: "" })), p1 = JSON.stringify(Pricing.normalizeHerbPrices({ ...clinicDraft.prices, updatedAt: "" }));
+    const shares = JSON.stringify(c0.sharedWith || []) !== JSON.stringify(clinicDraft.sharedWith || []);
+    if (p0 !== p1 || shares || !c0.fileId) {
+      const prices = p0 !== p1 ? { ...clinicDraft.prices, updatedAt: new Date().toISOString() } : clinicDraft.prices;
+      await saveClinicLocal({ ...clinicDraft, prices, pending: true, pendingShares: shares || !c0.fileId || clinicDraft.pendingShares }, { keepDialog: true });
+    }
+  }
+  $("#ratesDialog").close();
+  toast("Rates saved" + (Cloud.account ? " — syncing to Google Drive" : " on this device"));
+}
+function bindRatesEvents() {
+  $("#ratesMenuBtn").onclick = () => openRates();
+  $("#ratesSaveBtn").onclick = e => { e.preventDefault(); saveRates(); };
+  $("#ratesAddSvc").onclick = () => { readRatesForm(); ratesDraft.services.push({ id: "s" + uid(), name: "New service", price: null }); renderServices(); const i = ratesDraft.services.length - 1; const n = $(`[data-svc-name="${i}"]`); if (n) { n.focus(); n.select(); } };
+  $("#ratesDialog").addEventListener("click", async e => {
+    const t = e.target.closest("button"); if (!t) return;
+    if (t.dataset.svcDel != null) { readRatesForm(); ratesDraft.services.splice(+t.dataset.svcDel, 1); renderServices(); }
+    else if (t.id === "rtPickBtn") connectClinicPicker();
+    else if (t.id === "rtPasteBtn") { if (await connectClinicById($("#rtPasteLink").value)) { clinicDraft = JSON.parse(JSON.stringify(billingState.clinic)); renderClinicSection(); } }
+    else if (t.id === "rtOwnerBtn") { await becomeClinicOwner(); clinicDraft = JSON.parse(JSON.stringify(billingState.clinic)); renderClinicSection(); }
+    else if (t.id === "rtRefreshBtn") { try { rateMsg("Refreshing…"); await clinicFetch(billingState.clinic.fileId); clinicDraft = JSON.parse(JSON.stringify(billingState.clinic)); renderClinicSection(); rateMsg("Up to date ✓"); } catch (err) { rateMsg(err.message, true); } }
+    else if (t.id === "rtDisconnectBtn") { await disconnectClinic(); clinicDraft = billingState.clinic ? JSON.parse(JSON.stringify(billingState.clinic)) : null; renderClinicSection(); }
+  });
+  $("#ratesDialog").addEventListener("change", e => {
+    if (e.target.name === "rtMode") { readClinicForm(); document.querySelectorAll("#ratesClinic [class*='rt-mode-']").forEach(el => { el.hidden = !el.classList.contains("rt-mode-" + clinicDraft.prices.mode); }); }
+  });
+  $("#ratesDialog").addEventListener("input", e => {
+    const t = e.target;
+    if (t.id === "rtOvSearch") { clearTimeout(renderOverrideList._t); renderOverrideList._t = setTimeout(renderOverrideList, 80); }
+    else if (t.dataset.ov != null && clinicDraft) { const n = Pricing.num(t.value); if (n == null) delete clinicDraft.prices.overrides[t.dataset.ov]; else clinicDraft.prices.overrides[t.dataset.ov] = n; const c = $("#rtOvCount"); if (c) c.textContent = `(${Object.keys(clinicDraft.prices.overrides).length} set)`; }
+    else if (t.id === "rtPerGram" && clinicDraft) { clinicDraft.prices.perGram = Pricing.num(t.value); document.querySelectorAll("#rtOvList [data-ov]").forEach(i => i.placeholder = t.value || "per g"); }
+  });
+  // estimate box
+  $("#estBox").addEventListener("toggle", () => lsSet("tcm_est_open", $("#estBox").open ? "1" : "0"));
+  $("#estBox").addEventListener("input", e => { if (e.target.id === "estPacks") { setBillingSession({ packs: Math.max(0, Math.min(365, parseInt(e.target.value, 10) || 0)) }, false); } });
+  $("#estBox").addEventListener("change", e => {
+    if (e.target.id === "estConsult") setBillingSession({ consult: e.target.value });
+    else if (e.target.dataset.estSvc) { const cur = new Set(sessionBilling().services); e.target.checked ? cur.add(e.target.dataset.estSvc) : cur.delete(e.target.dataset.estSvc); setBillingSession({ services: [...cur] }); }
+  });
+}
+
+/* ---------- Estimated charges (Final diagnosis area) ---------- */
+const sessionBilling = (s = state.session) => ({ packs: 7, consult: "auto", services: [], ...((s && s.billing) || {}) });
+function setBillingSession(patch, rerender = true) {
+  state.session.billing = { ...sessionBilling(), ...patch };
+  markDirty();
+  renderEstimate(!rerender);
+}
+function estimateFor(s = state.session) {
+  const sb = sessionBilling(s);
+  const consult = sb.consult === "auto" ? (s && s.patientId ? (priorVisits(s).length ? "followup" : "first") : "first") : sb.consult;
+  return Pricing.computeCharges({ prices: clinicPrices(), billing: billingState.billing, rx: rxChargeInput(s ? s.diagnosis : ""), packs: sb.packs, consult, services: sb.services });
+}
+function renderEstimate(keepInputs) {
+  const box = $("#estBox"); if (!box || !state.session) return;
+  if (!ratesReady()) { box.hidden = true; return; }
+  box.hidden = false;
+  if (box._init !== true) { box.open = lsGet("tcm_est_open") === "1"; box._init = true; }
+  const sb = sessionBilling(), est = estimateFor(), B = billingState.billing, P = clinicPrices();
+  $("#estTotal").textContent = Pricing.fmt(est.total);
+  const autoTxt = state.session.patientId ? (priorVisits().length ? "follow-up" : "first visit") : "first visit";
+  const ctl = `<div class="est-ctl">
+      <label>Packs / days <input type="number" id="estPacks" min="0" max="365" step="1" inputmode="numeric" value="${sb.packs}"></label>
+      <label>Consultation <select id="estConsult"><option value="auto"${sb.consult === "auto" ? " selected" : ""}>Auto (${autoTxt})</option><option value="first"${sb.consult === "first" ? " selected" : ""}>First visit</option><option value="followup"${sb.consult === "followup" ? " selected" : ""}>Follow-up</option><option value="none"${sb.consult === "none" ? " selected" : ""}>None</option></select></label>
+    </div>
+    ${B.services.length ? `<div class="est-svcs">${B.services.map(s => `<label class="est-svc"><input type="checkbox" data-est-svc="${esc(s.id)}"${sb.services.includes(s.id) ? " checked" : ""}> ${esc(s.name)}${s.price != null ? ` <span class="muted">${esc(Pricing.fmt(s.price))}</span>` : ""}</label>`).join("")}</div>` : ""}`;
+  const table = `<table class="est-table">${est.lines.map(l => `<tr><td>${esc(l.label)}${l.detail ? `<div class="est-d">${esc(l.detail)}</div>` : ""}</td><td class="num">${esc(Pricing.fmt(l.amount))}</td></tr>`).join("") || `<tr><td colspan="2" class="muted">Nothing to charge yet — add an Rx or tick a service.</td></tr>`}
+    ${est.rounding ? `<tr class="est-sub"><td>Rounding (nearest ${esc(Pricing.fmt(P.rounding))})</td><td class="num">${esc(Pricing.fmt(est.rounding))}</td></tr>` : ""}
+    <tr class="est-tot"><td>Estimated total</td><td class="num">${esc(Pricing.fmt(est.total))}</td></tr></table>
+    ${est.warnings.length ? `<div class="est-warn">${est.warnings.slice(0, 6).map(w => esc(w)).join("<br>")}${est.warnings.length > 6 ? `<br>+${est.warnings.length - 6} more` : ""}</div>` : ""}
+    <div class="est-note">${P ? `Herb prices: clinic list${billingState.clinic && billingState.clinic.ownerName ? ` (${esc(billingState.clinic.ownerName)})` : ""}` : "No clinic herb price list connected"} · estimate only — not a receipt</div>`;
+  if ($("#estBody").contains(document.activeElement) && document.activeElement !== document.body) keepInputs = true;   // don't steal focus from the packs / consult inputs
+  if (keepInputs && $("#estLines")) { setHTML($("#estLines"), table); return; }
+  setHTML($("#estBody"), ctl + `<div id="estLines">${table}</div>`);
+}
+
+/* =====================================================================
    GOOGLE SIGN-IN + GOOGLE DRIVE STORAGE (optional)
    - Dormant while GOOGLE_CLIENT_ID (config block at the top of the file) is "".
    - Google Identity Services token model, browser only, no client secret.
@@ -6223,6 +6805,8 @@ function mergeDocs(a, b) {
   for (const [k, t] of Object.entries(deleted)) if (t < cutoff) delete deleted[k];
   const sa = a.settings, sb = b.settings;
   out.settings = !sa ? (sb || null) : !sb ? sa : ((sb.updatedAt || "") > (sa.updatedAt || "") ? sb : sa);
+  const ba = a.billing, bb = b.billing;   // v16: the doctor's own Rates (receipt info, fees, services…) — last write wins
+  out.billing = !ba ? (bb || null) : !bb ? ba : ((bb.updatedAt || "") > (ba.updatedAt || "") ? bb : ba);
   return out;
 }
 function docSignature(d) {
@@ -6231,11 +6815,13 @@ function docSignature(d) {
   for (const kind of ["patients", "visits"]) for (const r of d[kind] || []) parts.push(kind + "/" + r.id + "@" + recTime(r));
   for (const [k, t] of Object.entries(d.deleted || {})) parts.push("x:" + k + "@" + t);
   parts.push("s@" + ((d.settings && d.settings.updatedAt) || ""));
+  parts.push("b@" + ((d.billing && d.billing.updatedAt) || ""));
   return parts.sort().join("|");
 }
 async function localDoc() {
   const s = await DB.get("meta", "settings");
-  return { patients: await DB.all("patients"), visits: await DB.all("visits"), deleted: await getTombstones(), settings: (s && s.data) || null };
+  const bl = await DB.get("meta", "billing");
+  return { patients: await DB.all("patients"), visits: await DB.all("visits"), deleted: await getTombstones(), settings: (s && s.data) || null, billing: (bl && bl.data && bl.data.updatedAt) ? bl.data : null };
 }
 // write the merged result into the local cache, never overwriting a newer local edit
 async function applyToLocal(merged) {
@@ -6255,6 +6841,8 @@ async function applyToLocal(merged) {
   await DB.put("meta", { id: "tombstones", map: { ...lt, ...merged.deleted } });
   const ls = await DB.get("meta", "settings");
   if (merged.settings && (!ls || !ls.data || (merged.settings.updatedAt || "") > (ls.data.updatedAt || ""))) { await DB.put("meta", { id: "settings", data: merged.settings }); applySettings(merged.settings); }
+  const lb = await DB.get("meta", "billing");
+  if (merged.billing && (!lb || !lb.data || (merged.billing.updatedAt || "") > (lb.data.updatedAt || ""))) await saveBillingLocal(merged.billing, { fromSync: true, updatedAt: merged.billing.updatedAt });
   if (changed) {
     await loadData();
     if (state.selectedPatientId && !patientById(state.selectedPatientId)) state.selectedPatientId = null;
@@ -6284,10 +6872,13 @@ function syncNow() {
       if (!remote || docSignature(merged) !== docSignature(remote)) {
         const doc = { app: GAUTH.appId, format: 2, updatedAt: new Date().toISOString(), owner: acc.email,
           note: "Created by TCM Consult Assistant in your own Google Drive. Contains patient records — keep private. The xAI API key is never stored here.",
-          patients: merged.patients, visits: merged.visits, deleted: merged.deleted, settings: merged.settings };
+          patients: merged.patients, visits: merged.visits, deleted: merged.deleted, settings: merged.settings, ...(merged.billing ? { billing: merged.billing } : {}) };
         if (fileId) await driveUpdate(fileId, doc);
         else { folderId = await driveEnsureFolder(); const f = await driveCreateDataFile(folderId, doc); fileId = f.id; }
       }
+      if (Cloud.account !== acc) return;
+      try { await syncClinicPrices(acc, folderId); }   // v16: clinic herb price list (own file, or a file shared by the clinic owner)
+      catch (e) { if (e.status === 401 || AUTH_ERRORS.test(e.message || "")) throw e; console.warn("Clinic price list:", e); if (billingState.clinic) billingState.clinic.error = "Could not sync the clinic price list" + (e.status ? ` (Google Drive ${e.status})` : ""); }
       if (Cloud.account !== acc) return;
       Object.assign(meta, { fileId, folderId, lastSyncAt: new Date().toISOString() });
       await DB.put("meta", meta);
@@ -6528,9 +7119,11 @@ async function cloudAfterBoot() {
 async function loadData() {
   state.patients = await DB.all("patients");
   state.visits = await DB.all("visits");
+  await loadBilling();
 }
 function bindEvents() {
   bindAIEvents();
+  bindRatesEvents();
   $("#micBtn").onclick = () => state.listening ? stopListening() : startListening();
   $("#langSel").onchange = () => {
     state.session.lang = $("#langSel").value;
@@ -6700,7 +7293,7 @@ async function init() {
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>
