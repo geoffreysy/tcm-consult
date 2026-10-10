@@ -6428,14 +6428,18 @@ async function syncClinicPrices(acc, folderId) {
     await saveClinicLocal(c, { noSync: true });
     return;
   }
-  if (c.role === "owner") {
+  if (c.role === "owner" && !c.pending) {   // v18: prices are edited only in pricing.html — the doctor app just reads its own file
+    if (c.fileId) await clinicFetch(c.fileId, { quiet: true });
+    return;
+  }
+  if (c.role === "owner") {   // legacy: flush edits made in the old in-app owner mode that were never uploaded (no data loss)
     if (c.ownerSub && c.ownerSub !== acc.sub) return;
     let remote = null;
     if (c.fileId) { try { remote = await driveDownload(c.fileId); } catch (e) { if (e.status === 404) c = { ...c, fileId: null }; else throw e; } }
     if (Cloud.account !== acc) return;
     const remoteNewer = remote && remote.prices && (remote.prices.updatedAt || "") > (c.prices.updatedAt || "");
     if (remoteNewer) { c = { ...c, prices: Pricing.normalizeHerbPrices(remote.prices), sharedWith: remote.sharedWith || c.sharedWith || [] }; }
-    const doc = { ...clinicDoc(c), sharedWith: c.sharedWith || [] };
+    const doc = { ...(remote && typeof remote === "object" ? remote : {}), ...clinicDoc(c), sharedWith: c.sharedWith || [] };   // keep fields written by pricing.html (audit…)
     if (!c.fileId) { const fid = folderId || await driveEnsureFolder(); const f = await clinicCreateFile(fid, doc); c = { ...c, fileId: f.id, modifiedTime: f.modifiedTime }; }
     else if (!remoteNewer && (!remote || JSON.stringify(remote.prices) !== JSON.stringify(doc.prices) || JSON.stringify(remote.sharedWith || []) !== JSON.stringify(doc.sharedWith))) { const f = await driveUpdate(c.fileId, doc); c = { ...c, modifiedTime: f.modifiedTime }; }
     if (c.pendingShares || c.pending) c = { ...c, shareStatus: await clinicSyncShares(c.fileId, c.sharedWith || [], acc.email), pendingShares: false };
@@ -6508,13 +6512,6 @@ async function connectClinicPicker() {
     picker.setVisible(true);
   } catch (e) { rateMsg("Google Picker failed: " + (e.message || e) + " — paste the shared link instead.", true); }
 }
-async function becomeClinicOwner() {
-  if (billingState.clinic && billingState.clinic.role === "reader" && !confirm("Replace the connected clinic price list with your own (you become the owner/admin)?")) return;
-  const acc = Cloud.account;
-  if (billingState.billing.clinicFileId) await saveBillingLocal({ ...billingState.billing, clinicFileId: "" });
-  await saveClinicLocal({ prices: { ...Pricing.defaultHerbPrices(), updatedAt: new Date().toISOString() }, fileId: null, role: "owner", ownerName: acc ? acc.name : "", ownerEmail: acc ? acc.email : "", ownerSub: acc ? acc.sub : "", sharedWith: [], pending: true, fetchedAt: "" });
-  rateMsg(acc ? "Clinic price list created — set prices, add the doctors' / front desk e-mails, then Save." : "Created locally — sign in with Google to store it in your Drive and share it.");
-}
 async function disconnectClinic() {
   const c = billingState.clinic; if (!c) return;
   if (!confirm(c.role === "owner" ? "Stop using your clinic price list on this device? (The file stays in your Drive; it is found again after signing in.)" : "Disconnect the clinic herb price list on this device?")) return;
@@ -6564,10 +6561,10 @@ function readRatesForm() {
   b.services.forEach((s, i) => { const n = $(`[data-svc-name="${i}"]`), p = $(`[data-svc-price="${i}"]`); if (n) s.name = n.value; if (p) s.price = Pricing.num(p.value); });
   b.payments.forEach((p, i) => { const c = $(`[data-pay="${i}"]`); if (c) p.on = c.checked; });
   b.frontDeskEmail = v("rtFrontEmail").trim();
-  if (clinicDraft && clinicDraft.role === "owner") readClinicForm();
   return b;
 }
 const fmtWhen = iso => iso ? fmtDateTime(iso) : "—";
+const clinicAdminNote = () => `<p class="hint rt-admin-note">Prices are managed by the clinic admin — <a href="pricing.html" target="_blank" rel="noopener">open the clinic price list page</a>.</p>`;
 function renderClinicSection() {
   const box = $("#ratesClinic"); if (!box) return;
   const c = clinicDraft;
@@ -6580,77 +6577,29 @@ function renderClinicSection() {
         ${pickerAvailable() ? `<div class="hint">Opens Google Drive — choose <b>${esc(CLINIC_PRICES_FILE)}</b> shared with you by the clinic owner.${signed ? "" : " You'll be asked to sign in with Google first."}</div>` : `<div class="hint">Google Picker isn't set up for this site yet (it needs a Picker API key) — paste the link instead.</div>`}
         ${pickerAvailable() ? `<details class="rt-paste-alt"><summary>Picker not working? Paste the shared link instead</summary>${pasteHTML}</details>` : pasteHTML}
         ${signed || pickerAvailable() ? "" : `<div class="hint">Sign in with Google (☁ in the Data menu) to connect the clinic's price list.</div>`}
-        <button type="button" class="link-btn" id="rtOwnerBtn">I'm the clinic owner — create the clinic price list</button>
-      </div>`);
+      </div>${clinicAdminNote()}`);
     return;
   }
   const p = c.prices;
-  if (c.role === "reader") {
+  {   // v18: always read-only here (also for the account that owns the file — it edits in pricing.html)
     const ov = Object.entries(p.overrides || {}).sort((a, b) => a[0].localeCompare(b[0]));
     const modeTxt = p.mode === "gram" ? `Per gram — default ${p.perGram == null ? "not set" : Pricing.fmt(p.perGram) + "/g"}${ov.length ? ` · ${ov.length} herb-specific price${ov.length === 1 ? "" : "s"}` : ""}` : p.mode === "pack" ? `Per pack (day) — ${Pricing.fmt(p.perPack)}` : `Per formula — ${Pricing.fmt(p.perFormula)}${p.formulaTimesPacks ? " × packs" : " flat"}`;
     setHTML(box, `<div class="rt-ro">
-      <div class="rt-owner">📄 <b>${esc(c.ownerName || c.ownerEmail || "Clinic owner")}</b>'s price list${c.ownerEmail ? ` <span class="muted">(${esc(c.ownerEmail)})</span>` : ""} · <span class="rt-ro-tag">read-only</span></div>
+      <div class="rt-owner">📄 <b>${esc(c.role === "owner" ? "Your" : (c.ownerName || c.ownerEmail || "Clinic owner") + "'s")}</b> price list${c.ownerEmail && c.role !== "owner" ? ` <span class="muted">(${esc(c.ownerEmail)})</span>` : ""} · <span class="rt-ro-tag">read-only</span></div>
       <div class="muted">Last updated ${esc(fmtWhen(p.updatedAt || c.modifiedTime))} · checked ${esc(fmtWhen(c.fetchedAt))}</div>
       ${c.error ? `<div class="rt-err">${esc(c.error)}</div>` : ""}
       <ul class="rt-ro-list"><li>${esc(modeTxt)}</li><li>Preparation / decoction fee: ${p.prepFee == null ? "none" : Pricing.fmt(p.prepFee) + " per pack"}</li><li>Rounding: ${p.rounding ? "nearest " + Pricing.fmt(p.rounding) : "none"}</li></ul>
       ${ov.length ? `<details class="rt-ro-ov"><summary>Herb-specific prices (${ov.length})</summary><table class="rt-ovt">${ov.map(([n, v]) => `<tr><td><b>${esc(n)}</b>${zhSpan(n)}</td><td class="num">${esc(Pricing.fmt(v))}/g</td></tr>`).join("")}</table></details>` : ""}
       <div class="rt-btns"><button type="button" class="small" id="rtRefreshBtn">↻ Refresh</button><button type="button" class="small" id="rtDisconnectBtn">Disconnect</button></div>
-    </div>`);
+    </div>${clinicAdminNote()}`);
     return;
   }
-  // owner / admin
-  const ovN = Object.keys(p.overrides || {}).length;
-  setHTML(box, `<div class="rt-admin">
-    <div class="rt-owner">🔑 <b>Admin</b> — you own this clinic price list${c.fileId ? ` <span class="muted">(${esc(CLINIC_PRICES_FILE)} in your Drive)</span>` : signed ? ` <span class="muted">(created in your Drive on Save)</span>` : ` <span class="muted">(local — sign in to store and share it)</span>`}</div>
-    <div class="rt-modes" role="radiogroup" aria-label="Herb pricing mode">
-      <label class="check"><input type="radio" name="rtMode" value="gram"${p.mode === "gram" ? " checked" : ""}> Per gram</label>
-      <label class="check"><input type="radio" name="rtMode" value="pack"${p.mode === "pack" ? " checked" : ""}> Per pack (day)</label>
-      <label class="check"><input type="radio" name="rtMode" value="formula"${p.mode === "formula" ? " checked" : ""}> Per formula (flat)</label>
-    </div>
-    <div class="rt-row rt-mode-gram"${p.mode === "gram" ? "" : " hidden"}><label>Default price per gram${moneyInput("rtPerGram", p.perGram, "e.g. 1.50")}</label></div>
-    <div class="rt-row rt-mode-pack"${p.mode === "pack" ? "" : " hidden"}><label>Price per pack (day)${moneyInput("rtPerPack", p.perPack)}</label></div>
-    <div class="rt-row rt-mode-formula"${p.mode === "formula" ? "" : " hidden"}><label>Price per formula${moneyInput("rtPerFormula", p.perFormula)}</label><label class="check"><input type="checkbox" id="rtFxPacks"${p.formulaTimesPacks ? " checked" : ""}> × number of packs</label></div>
-    <div class="rt-row"><label>Preparation / decoction fee per pack <small>(optional)</small>${moneyInput("rtPrep", p.prepFee)}</label>
-      <label>Round the total<select id="rtRound"><option value="0"${!p.rounding ? " selected" : ""}>No rounding</option><option value="1"${p.rounding === 1 ? " selected" : ""}>Nearest ₱1</option><option value="5"${p.rounding === 5 ? " selected" : ""}>Nearest ₱5</option><option value="10"${p.rounding === 10 ? " selected" : ""}>Nearest ₱10</option></select></label></div>
-    <div class="rt-ov rt-mode-gram"${p.mode === "gram" ? "" : " hidden"}>
-      <div class="rt-sub">Herb-specific price per gram <span class="muted" id="rtOvCount">(${ovN} set)</span></div>
-      <input type="search" id="rtOvSearch" placeholder="Search all ${Object.keys(HERBS).length} herbs — pinyin, 中文, other name…" autocomplete="off" spellcheck="false" enterkeyhint="search">
-      <div class="rt-ov-list" id="rtOvList"></div>
-    </div>
-    <label class="full rt-share">Share READ-ONLY with (doctors + front desk e-mails)<textarea id="rtShare" rows="3" placeholder="dr.cruz@gmail.com, frontdesk@clinic.ph" spellcheck="false">${esc((c.sharedWith || []).join("\n"))}</textarea></label>
-    ${c.shareStatus && Object.keys(c.shareStatus).length ? `<div class="rt-share-st">${Object.entries(c.shareStatus).map(([e, st]) => `<span class="rt-st${/shared/.test(st) ? " ok" : " bad"}">${esc(e)}: ${esc(st)}</span>`).join(" ")}</div>` : ""}
-    <div class="hint">Saving updates the file and the Drive sharing (Google e-mails each new reader once). Doctors then use “Connect clinic price list”. Last updated ${esc(fmtWhen(p.updatedAt))}.</div>
-    <div class="rt-btns"><button type="button" class="small" id="rtDisconnectBtn">Stop using on this device</button></div>
-  </div>`);
-  renderOverrideList();
-}
-function renderOverrideList() {
-  const list = $("#rtOvList"); if (!list || !clinicDraft) return;
-  const p = clinicDraft.prices, q = ($("#rtOvSearch") || {}).value || "";
-  const names = q.trim() ? herbsFiltered(q.trim()).slice(0, 60) : Object.keys(p.overrides).sort((a, b) => a.localeCompare(b));
-  const def = p.perGram == null ? "" : String(p.perGram);
-  setHTML(list, names.length ? names.map(n => `<div class="rt-ovr" data-ov-herb="${esc(n)}"><span class="rt-ovn"><b>${esc(n)}</b>${zhSpan(n)}<small class="muted"> ${esc((HERBS[n] || [])[2] || "")}</small></span><span class="money"><span class="cur">₱</span><input type="number" inputmode="decimal" min="0" step="0.01" data-ov="${esc(n)}" value="${p.overrides[n] == null ? "" : esc(p.overrides[n])}" placeholder="${esc(def || "per g")}" aria-label="Price per gram for ${esc(n)}"></span><span class="muted">/g</span></div>`).join("")
-    : `<div class="muted">${q.trim() ? "No herb matches." : "No herb-specific prices yet — search to set one (e.g. ren shen, 人参)."}</div>`);
-}
-function readClinicForm() {
-  const p = clinicDraft.prices, v = id => ($("#" + id) || {}).value;
-  const mode = (document.querySelector('input[name="rtMode"]:checked') || {}).value || p.mode;
-  Object.assign(p, { mode, perGram: Pricing.num(v("rtPerGram")), perPack: Pricing.num(v("rtPerPack")), perFormula: Pricing.num(v("rtPerFormula")), formulaTimesPacks: !!($("#rtFxPacks") || {}).checked, prepFee: Pricing.num(v("rtPrep")), rounding: +(v("rtRound") || 0) });
-  if ($("#rtShare")) clinicDraft.sharedWith = parseEmails($("#rtShare").value);
 }
 async function saveRates() {
   readRatesForm();
   ratesDraft.clinicFileId = billingState.billing.clinicFileId;   // owned by the connect / disconnect buttons, not the form
   const b0 = JSON.stringify(Pricing.normalizeBilling({ ...billingState.billing, updatedAt: "" })), b1 = JSON.stringify(Pricing.normalizeBilling({ ...ratesDraft, updatedAt: "" }));
   if (b0 !== b1) await saveBillingLocal(ratesDraft);
-  if (clinicDraft && clinicDraft.role === "owner") {
-    const c0 = billingState.clinic || {}, p0 = JSON.stringify(Pricing.normalizeHerbPrices({ ...(c0.prices || {}), updatedAt: "" })), p1 = JSON.stringify(Pricing.normalizeHerbPrices({ ...clinicDraft.prices, updatedAt: "" }));
-    const shares = JSON.stringify(c0.sharedWith || []) !== JSON.stringify(clinicDraft.sharedWith || []);
-    if (p0 !== p1 || shares || !c0.fileId) {
-      const prices = p0 !== p1 ? { ...clinicDraft.prices, updatedAt: new Date().toISOString() } : clinicDraft.prices;
-      await saveClinicLocal({ ...clinicDraft, prices, pending: true, pendingShares: shares || !c0.fileId || clinicDraft.pendingShares }, { keepDialog: true });
-    }
-  }
   $("#ratesDialog").close();
   toast("Rates saved" + (Cloud.account ? " — syncing to Google Drive" : " on this device"));
 }
@@ -6665,18 +6614,15 @@ function bindRatesEvents() {
     if (t.dataset.svcDel != null) { readRatesForm(); ratesDraft.services.splice(+t.dataset.svcDel, 1); renderServices(); }
     else if (t.id === "rtPickBtn") { await connectClinicPicker(); if (billingState.clinic && (!clinicDraft || clinicDraft.fileId !== billingState.clinic.fileId)) { clinicDraft = JSON.parse(JSON.stringify(billingState.clinic)); renderClinicSection(); } }
     else if (t.id === "rtPasteBtn") { if (await connectClinicById($("#rtPasteLink").value)) { clinicDraft = JSON.parse(JSON.stringify(billingState.clinic)); renderClinicSection(); } }
-    else if (t.id === "rtOwnerBtn") { await becomeClinicOwner(); clinicDraft = JSON.parse(JSON.stringify(billingState.clinic)); renderClinicSection(); }
     else if (t.id === "rtRefreshBtn") { try { rateMsg("Refreshing…"); await clinicFetch(billingState.clinic.fileId); clinicDraft = JSON.parse(JSON.stringify(billingState.clinic)); renderClinicSection(); rateMsg("Up to date ✓"); } catch (err) { rateMsg(err.message, true); } }
     else if (t.id === "rtDisconnectBtn") { await disconnectClinic(); clinicDraft = billingState.clinic ? JSON.parse(JSON.stringify(billingState.clinic)) : null; renderClinicSection(); }
   });
   $("#ratesDialog").addEventListener("change", e => {
-    if (e.target.name === "rtMode") { readClinicForm(); document.querySelectorAll("#ratesClinic [class*='rt-mode-']").forEach(el => { el.hidden = !el.classList.contains("rt-mode-" + clinicDraft.prices.mode); }); }
+    // (v18) no price editing in the doctor app
   });
   $("#ratesDialog").addEventListener("input", e => {
     const t = e.target;
-    if (t.id === "rtOvSearch") { clearTimeout(renderOverrideList._t); renderOverrideList._t = setTimeout(renderOverrideList, 80); }
-    else if (t.dataset.ov != null && clinicDraft) { const n = Pricing.num(t.value); if (n == null) delete clinicDraft.prices.overrides[t.dataset.ov]; else clinicDraft.prices.overrides[t.dataset.ov] = n; const c = $("#rtOvCount"); if (c) c.textContent = `(${Object.keys(clinicDraft.prices.overrides).length} set)`; }
-    else if (t.id === "rtPerGram" && clinicDraft) { clinicDraft.prices.perGram = Pricing.num(t.value); document.querySelectorAll("#rtOvList [data-ov]").forEach(i => i.placeholder = t.value || "per g"); }
+    // (v18) price-list editing moved to pricing.html
   });
   // estimate box
   $("#estBox").addEventListener("toggle", () => lsSet("tcm_est_open", $("#estBox").open ? "1" : "0"));

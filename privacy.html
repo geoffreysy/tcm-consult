@@ -12,7 +12,7 @@ h1{font-size:24px;margin-bottom:4px}h2{font-size:17px;margin-top:28px}
 </head>
 <body>
 <h1>Privacy Policy — TCM Consult Assistant</h1>
-<p class="muted">Effective 3 October 2026 (updated: rates, clinic price list, front desk) · App: <a href="https://geoffreysy.github.io/tcm-consult/">https://geoffreysy.github.io/tcm-consult/</a></p>
+<p class="muted">Effective 10 October 2026 (updated: clinic price list page) · App: <a href="https://geoffreysy.github.io/tcm-consult/">https://geoffreysy.github.io/tcm-consult/</a></p>
 
 <p>TCM Consult Assistant is a static web app for Traditional Chinese Medicine practitioners. It runs entirely in your web browser. There is no app server and no developer database: the developer never receives, stores or can see your patient records.</p>
 
@@ -21,7 +21,7 @@ h1{font-size:24px;margin-bottom:4px}h2{font-size:17px;margin-top:28px}
   <li>Patient details you enter (name, date of birth or age, sex, contact, notes).</li>
   <li>Consultation records: typed or transcribed text, detected symptoms, tongue and pulse findings, pattern suggestions, practitioner notes, diagnosis/treatment, and any AI responses you requested.</li>
   <li>App settings such as the speech-recognition language and AI model name.</li>
-  <li>Billing settings (optional): your receipt details, fees, services, payment methods and front desk e-mail; and a clinic herb price list.</li>
+  <li>Billing settings (optional): your receipt details, fees, services, payment methods and front desk e-mail; and a read-only cached copy of the clinic herb price list (edited only by the clinic admin on <code>pricing.html</code>).</li>
   <li>Front desk slips (optional, only when you press <i>Send to front desk</i>): patient name (and phone, if the contact is a phone number), visit date/time, the prescribed herbs and grams, packs, consultation type, services and charges, and the payment status. Slips contain no symptoms, notes, diagnosis, patterns, tongue/pulse findings or history.</li>
 </ul>
 
@@ -34,7 +34,7 @@ h1{font-size:24px;margin-bottom:4px}h2{font-size:17px;margin-top:28px}
 
 <h2>Clinic price list and front desk (optional)</h2>
 <ul>
-  <li><b>Clinic herb price list</b>: the clinic owner can create <code>tcm-clinic-herb-prices.json</code> in their own “TCM Consult Assistant” folder and share it <b>read-only</b> with the doctors and the front desk (using Google Drive sharing; Google e-mails each person once). It contains prices only — no patient data.</li>
+  <li><b>Clinic herb price list</b>: the clinic admin signs in on the price list page (<code>pricing.html</code>, same <code>drive.file</code> permission) and creates or edits <code>tcm-clinic-herb-prices.json</code> in their own “TCM Consult Assistant” folder (with a short change history: date, editing account and what changed), and shares it <b>read-only</b> with the doctors and the front desk (using Google Drive sharing; Google e-mails each person once). It contains prices only — no patient data.</li>
   <li><b>Front desk slips</b>: when a doctor sets a “Front desk e-mail” in Rates, the app creates <code>tcm-frontdesk-slips.json</code> in that doctor's folder and shares it (edit access, so payments can be recorded) with that e-mail only. Changing or clearing the e-mail removes that access. The doctor's records file (<code>tcm-consult-data.json</code>) is never shared.</li>
   <li><b>Front desk page</b> (<code>frontdesk.html</code>): the front desk signs in with her own Google account (same <code>drive.file</code> permission). She connects each doctor's slips file and the clinic price list once with Google Picker (or a pasted link). The page reads and updates only those files, checks a file's name before opening it, and never opens a records file. Her list of connected files is kept in <code>tcm-frontdesk-config.json</code> in her own Drive, and a copy of the slips she can see is cached in her browser for offline viewing; it is removed from that browser when she signs out.</li>
   <li><b>Google Picker</b>: “Connect” opens Google's file picker (a Google-hosted window) so you can choose a file shared with you; choosing it lets the app open just that file.</li>
