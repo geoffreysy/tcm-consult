@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TCM Consult Assistant</title>
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/icon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="icons/icon-48.png" sizes="48x48" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2f7d6d">
 <script>
 /* =====================================================================
    CONFIGURATION — Google sign-in / Drive storage
@@ -52,7 +58,7 @@ h3{font-size:13px;margin:0 0 6px;font-weight:600}
 /* top bar */
 .topbar{display:flex;align-items:center;gap:12px;padding:8px 14px;background:#fff;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .brand{font-weight:700;font-size:16px;color:var(--accent);display:flex;align-items:center;gap:8px;white-space:nowrap}
-.brand .yy{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--accent-2);font-size:16px}
+.brand .yy{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%}.brand .yy img{display:block;width:26px;height:26px}
 .session-info{flex:1;min-width:180px;color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .session-info b{color:var(--ink)}
 .session-info .dirty{color:var(--warn);font-weight:600}
@@ -678,7 +684,7 @@ textarea,input,select,button{font-family:inherit}
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><span class="yy">☯</span>TCM Consult Assistant</div>
+  <div class="brand"><span class="yy"><img src="icons/icon.svg" alt="" width="26" height="26"></span>TCM Consult Assistant</div>
   <div class="session-info" id="sessionInfo">—</div>
   <div class="controls">
     <select id="langSel" title="Speech recognition language">

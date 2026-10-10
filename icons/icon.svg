@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Yin-yang">
+  <title>TCM Consult Assistant</title>
+  <circle cx="50" cy="50" r="47" fill="#ffffff"/>
+  <path d="M50 3a47 47 0 0 1 0 94a23.5 23.5 0 0 1 0-47a23.5 23.5 0 0 0 0-47z" fill="#1f4f45"/>
+  <circle cx="50" cy="26.5" r="7" fill="#1f4f45"/>
+  <circle cx="50" cy="73.5" r="7" fill="#ffffff"/>
+  <circle cx="50" cy="50" r="47" fill="none" stroke="#1f4f45" stroke-width="3"/>
+</svg>

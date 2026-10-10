@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Clinic herb price list — TCM Consult Assistant</title>
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/icon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="icons/icon-48.png" sizes="48x48" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2f7d6d">
 <script>
 /* =====================================================================
    CONFIGURATION — Google sign-in / Drive storage
@@ -45,7 +51,7 @@ a{color:var(--accent)}
 .muted{color:var(--muted)}.hint{font-size:12px;color:var(--muted)}
 .topbar{display:flex;align-items:center;gap:10px;padding:8px 14px;background:#fff;border-bottom:1px solid var(--line);flex-wrap:wrap;position:sticky;top:0;z-index:20}
 .brand{font-weight:700;font-size:16px;color:var(--accent);display:flex;align-items:center;gap:8px;white-space:nowrap;text-decoration:none}
-.brand .yy{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--accent-2);font-size:15px}
+.brand .yy{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%}.brand .yy img{display:block;width:26px;height:26px}
 .spacer{flex:1}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .seg button{border:none;border-radius:0;padding:4px 9px;font-size:12px}.seg button+button{border-left:1px solid var(--line)}
@@ -147,7 +153,7 @@ textarea{width:100%}
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="./" title="Doctor's app"><span class="yy">☯</span><span>Clinic price list</span></a>
+  <a class="brand" href="./" title="Doctor's app"><span class="yy"><img src="icons/icon.svg" alt="" width="26" height="26"></span><span>Clinic price list</span></a>
   <span class="spacer"></span>
   <span class="seg" role="group" aria-label="Herb names"><button type="button" data-hn-mode="py">Pinyin</button><button type="button" data-hn-mode="zh">中文</button><button type="button" data-hn-mode="both">Both</button></span>
   <span class="seg hn-script" role="group" aria-label="Chinese script"><button type="button" data-hn-script="s">简</button><button type="button" data-hn-script="t">繁</button></span>
