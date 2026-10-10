@@ -129,6 +129,9 @@ mark.sym.removed{background:none;border-bottom:1px dotted #bbb;color:inherit}
 .manual textarea{flex:1;resize:vertical;min-height:44px;height:48px}
 .manual .col{display:flex;flex-direction:column;gap:4px}
 .notes{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 12px 12px}
+/* v19: in the fixed-height desktop/tablet panel the notes area (diagnosis + Estimated charges) shrinks and scrolls instead of being cut off by .panel{overflow:hidden} */
+#centerPanel>.notes{flex:0 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding-top:2px}
+#centerPanel>.transcript{flex-shrink:1}
 .notes label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
 .notes textarea{resize:vertical;min-height:54px;height:62px}
 
@@ -576,7 +579,8 @@ details.est .est-ctl label{display:flex;flex-direction:row;align-items:center;ga
 .est-svcs{display:flex;flex-wrap:wrap;gap:4px 12px;margin:0 0 6px}
 details.est .est-svc{display:flex;flex-direction:row;align-items:center;gap:4px;font-size:12px;margin:0;color:inherit}.est-svc input{width:auto;margin:0}
 .est-table{width:100%;border-collapse:collapse}
-.est-table td{padding:3px 2px;border-top:1px solid #eef2f0;vertical-align:top}
+.est-table{table-layout:fixed}.est-table td{padding:3px 2px;border-top:1px solid #eef2f0;vertical-align:top;overflow-wrap:anywhere}.est-table td.num{width:6.5em;overflow-wrap:normal}
+details.est,.est-body,.est-svcs,.est-ctl{min-width:0;max-width:100%}.est-svc{overflow-wrap:break-word}.est-warn,.est-note,.est-d{overflow-wrap:anywhere}
 .est-table .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 .est-d{font-size:11px;color:var(--muted)}
 .est-tot td{font-weight:700;border-top:2px solid var(--line)}
@@ -4641,7 +4645,7 @@ function rxSearchText(id) {
 }
 function rxText(id) {   // plain text used by "Use this formula" and the print summary
   const f = FORMULAS[id]; if (!f) return "";
-  return `${f.name}${f.zh ? " " + formulaZh(id) : ""} (${f.en}): ` + rxHerbs(id).map(h => `${herbLabel(h.name)} ${h.dose}${h.unit === "g" ? " g" : " " + h.unit}`).join(", ") + (f.form && /pill|powder/i.test(f.form) ? ` [decoction doses; ${f.form}]` : "");
+  return `${f.name}${f.zh ? " " + formulaZh(id) : ""} (${f.en}): ` + rxHerbs(id).map(h => `${herbLabel(h.name)} ${h.dose}${h.unit === "g" ? " g" : " " + h.unit}`).join(", ");
 }
 function formulaHTML(id, opt = {}) {
   const f = FORMULAS[id];
@@ -4654,7 +4658,7 @@ function formulaHTML(id, opt = {}) {
   }).join("");
   return `<div class="rx" data-rx="${id}">
     <div class="rx-title"><b>${esc(f.name)}</b>${f.zh ? ` <span class="rx-zh" lang="${zhLang()}">${esc(formulaZh(id))}</span>` : ""} <span class="rx-en">${esc(f.en)}</span></div>
-    <div class="rx-src">${esc(f.src)} · ${esc(f.form || "Decoction")}${f.cat ? ` · <span class="rx-fcat">${esc(f.cat)}</span>` : ""}</div>
+    <div class="rx-src">${[f.src ? esc(f.src) : "", f.cat ? `<span class="rx-fcat">${esc(f.cat)}</span>` : ""].filter(Boolean).join(" · ")}</div>
     <div class="rx-wrap"><table class="rx-table"><thead><tr><th class="rx-addc" title="Add a single herb to the treatment field"><span class="sr-only">Add</span></th><th>Herb (pinyin)</th><th>TCM category</th><th>Dose (g)</th><th>Role</th></tr></thead><tbody>${rows}</tbody></table></div>
     ${f.prep ? `<div class="rx-prep"><b>Preparation:</b> ${esc(f.prep)}</div>` : ""}
     ${f.caution ? `<div class="rx-caution"><b>Cautions:</b> ${esc(f.caution)}</div>` : ""}
@@ -4869,7 +4873,7 @@ function rxPrintHTML(pid) {
   if (!f) return "";
   const flags = rxFlags(id);
   return `<h2>Reference formula for top pattern: ${esc(p.name)}</h2>
-    <p><b>${esc(f.name)}</b>${f.zh ? " " + esc(formulaZh(id)) : ""} — ${esc(f.en)}<br><span class="muted">${esc(f.src)} · ${esc(f.form || "Decoction")}</span></p>
+    <p><b>${esc(f.name)}</b>${f.zh ? " " + esc(formulaZh(id)) : ""} — ${esc(f.en)}${f.src ? `<br><span class="muted">${esc(f.src)}</span>` : ""}</p>
     <table><tr><th>Herb</th><th>TCM category</th><th>Dose (g)</th><th>Role</th></tr>${rxHerbs(id).map(h => `<tr><td>${esc(h.name)}${h.latin ? ` <small><i>${esc(h.latin)}</i></small>` : ""}${h.note ? ` <small>(${esc(h.note)})</small>` : ""}</td><td>${esc(h.cat)}</td><td>${esc(h.dose)}${h.unit !== "g" ? " " + esc(h.unit) : ""}</td><td>${esc(rxRoleName(h.role))}</td></tr>`).join("")}</table>
     ${f.prep ? `<p><b>Preparation:</b> ${esc(f.prep)}</p>` : ""}
     ${f.caution ? `<p><b>Cautions:</b> ${esc(f.caution)}</p>` : ""}
@@ -6625,7 +6629,7 @@ function bindRatesEvents() {
     // (v18) price-list editing moved to pricing.html
   });
   // estimate box
-  $("#estBox").addEventListener("toggle", () => lsSet("tcm_est_open", $("#estBox").open ? "1" : "0"));
+  $("#estBox").addEventListener("toggle", () => { lsSet("tcm_est_open", $("#estBox").open ? "1" : "0"); if ($("#estBox").open) requestAnimationFrame(() => { try { $("#estBox").scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch {} }); });
   $("#estBox").addEventListener("input", e => { if (e.target.id === "estPacks") { setBillingSession({ packs: Math.max(0, Math.min(365, parseInt(e.target.value, 10) || 0)) }, false); } });
   $("#estBox").addEventListener("change", e => {
     if (e.target.id === "estConsult") setBillingSession({ consult: e.target.value });
