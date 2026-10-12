@@ -2934,6 +2934,169 @@ async function createDb() {   // v24: folder + index.json + N shards, all owned 
   if (D.rows.some(r => r.on) || D.frontDesk.length) await saveDbAccess();   // share the new database right away (doctors: folder; front desk: index only)
 }
 // read-modify-verify on the index (doctors write it too)
+/* ---------- v26: OWNER-ONLY one-time import of the owner's own earlier patient records into the shards ----------
+   Sources (read only — never changed or deleted): the owner's personal tcm-consult-data.json, the owner's old clinic
+   databases (tcm-clinic-patients*.json single files and p_<id>.json one-file-per-patient files the owner owns),
+   and patients kept in THIS browser by the doctor app (signed out, or signed in as the owner). Rerun-safe. */
+async function driveListAll(q) {
+  const out = []; let tok = "";
+  for (let i = 0; i < 50; i++) {
+    const r = await gjson(`${PG.drive}/files?q=${encodeURIComponent(q)}&spaces=drive&pageSize=1000${tok ? "&pageToken=" + encodeURIComponent(tok) : ""}&fields=${encodeURIComponent("nextPageToken,files(id,name,mimeType,parents,modifiedTime,appProperties,owners(displayName,emailAddress,me))")}`);
+    out.push(...(r.files || [])); tok = r.nextPageToken || ""; if (!tok) break;
+  }
+  return out;
+}
+function idbRead(name) {   // the doctor app's browser storage for one namespace (read only)
+  return new Promise(res => {
+    let req; try { req = indexedDB.open(name); } catch { return res(null); }
+    req.onupgradeneeded = () => { try { req.transaction.abort(); } catch {} res(null); };   // doesn't exist → don't create it
+    req.onerror = () => res(null);
+    req.onsuccess = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains("patients") || !db.objectStoreNames.contains("visits")) { db.close(); return res(null); }
+      const tx = db.transaction(["patients", "visits"], "readonly"), out = {};
+      for (const k of ["patients", "visits"]) { const r = tx.objectStore(k).getAll(); r.onsuccess = () => { out[k] = r.result || []; }; }
+      tx.oncomplete = () => { db.close(); res(out); }; tx.onerror = () => { db.close(); res(null); };
+    };
+  });
+}
+const recT = r => (r && (r.updatedAt || r.savedAt || r.createdAt)) || "";
+function mergeRecs(into, kind, recs, deleted = {}) {   // newest wins per id; records deleted in their source are skipped
+  for (const r of recs || []) {
+    if (!r || !r.id || r._stub) continue;
+    const t = deleted[kind + "/" + r.id]; if (t && t >= recT(r)) continue;
+    const m = into[kind], cur = m.get(r.id); if (!cur || recT(r) > recT(cur)) m.set(r.id, Object.fromEntries(Object.entries(r).filter(([k]) => k[0] !== "_")));
+  }
+}
+async function collectOwnerRecords() {
+  const all = { patients: new Map(), visits: new Map() }, src = { personal: 0, oldClinic: 0, patientFiles: 0, browser: 0 }, files = new Map();
+  const note = (f, kind) => { const o = (f.owners || [])[0] || {}; files.set(f.id, { id: f.id, name: f.name, kind, mine: !!o.me, owner: o.displayName || o.emailAddress || "another account", parents: f.parents || [] }); };
+  const add = (doc, key) => { if (!doc) return; const del = doc.deleted || {}; mergeRecs(all, "patients", doc.patients, del); mergeRecs(all, "visits", doc.visits, del); src[key] += (doc.patients || []).length; };
+  for (const f of await driveListAll(`name='tcm-consult-data.json' and 'me' in owners and trashed=false`)) { try { add(await driveDownload(f.id), "personal"); note(f, "personal"); } catch {} }
+  for (const f of await driveListAll(`name contains 'tcm-clinic-patients' and trashed=false`)) { try { const d = await driveDownload(f.id); if (d && d.kind === "clinic-patients") { add(d, "oldClinic"); note(f, "old"); } } catch {} }
+  const seen = new Set();
+  for (const q of [`name contains 'p_' and trashed=false`, `name contains 'backup_' and trashed=false`]) for (const f of await driveListAll(q)) {
+    if (seen.has(f.id) || (f.appProperties || {}).tcmConsult !== CDB3.PFILE_TAG) continue; seen.add(f.id);
+    try { const d = await driveDownload(f.id); if (d && d.kind === "clinic-patient") { add(await CDB3.unpackPart(d), "patientFiles"); note(f, "old"); } } catch {}
+  }
+  for (const f of await driveListAll(`name='${qEsc(CDB3.INDEX)}' and trashed=false`)) {   // an older index (one-file-per-patient database)
+    if (f.id === D.fileId || (f.appProperties || {}).tcmConsult !== CDB3.INDEX_TAG) continue;
+    try { const d = await driveDownload(f.id); if (d && d.kind === "clinic-patients-index" && d.format !== 4) note(f, "old"); } catch {}
+  }
+  for (const q of [`name='${qEsc(CDB3.FOLDER)}' and mimeType='application/vnd.google-apps.folder' and 'me' in owners and trashed=false`, `name contains 'Backup before shards' and 'me' in owners and trashed=false`])
+    for (const f of await driveListAll(q)) if (f.id !== D.folderId && f.mimeType === "application/vnd.google-apps.folder") note(f, "folder");
+  const nsList = ["", "g_" + String(P.account.sub).replace(/[^\w.-]/g, "_")].map(ns => ns ? "tcm-consult-assistant::" + ns : "tcm-consult-assistant"), browserDbs = [];
+  for (const name of nsList) { const d = await idbRead(name); if (d && ((d.patients || []).length || (d.visits || []).length)) { add(d, "browser"); browserDbs.push(name); } }
+  return { patients: [...all.patients.values()], visits: [...all.visits.values()], src, files: [...files.values()], browserDbs };
+}
+function idbClear(name) {   // remove patients / visits kept by the doctor app in this browser (settings, drafts stay)
+  return new Promise(res => { let req; try { req = indexedDB.open(name); } catch { return res(false); }
+    req.onupgradeneeded = () => { try { req.transaction.abort(); } catch {} res(false); }; req.onerror = () => res(false);
+    req.onsuccess = () => { const db = req.result; const tx = db.transaction(["patients", "visits"], "readwrite"); tx.objectStore("patients").clear(); tx.objectStore("visits").clear(); tx.oncomplete = () => { db.close(); res(true); }; tx.onerror = () => { db.close(); res(false); }; }; });
+}
+const trashFile = id => gjson(`${PG.drive}/files/${encodeURIComponent(id)}?fields=id`, { method: "PATCH", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify({ trashed: true }) });
+function cleanupPlan() {
+  const f = (D.imp && D.imp.files) || [];
+  return { trash: f.filter(x => x.mine && x.kind === "old"), others: f.filter(x => !x.mine && x.kind === "old"), personal: f.filter(x => x.kind === "personal"), folders: f.filter(x => x.kind === "folder"), browser: (D.imp && D.imp.browserDbs) || [] };
+}
+function renderCleanup() {
+  const el = $("#dbCleanup"); if (!el) return;
+  if (!D.imp || !D.imp.ok) { el.innerHTML = ""; return; }
+  const p = cleanupPlan();
+  el.innerHTML = `<div class="db-clean"><b>Delete old files</b> <span class="hint">(only after a verified import — moved to Google Drive trash, restorable for 30 days)</span>
+    <ul class="hint">${p.trash.map(x => `<li>🗑 ${esc(x.name)}</li>`).join("")}${p.folders.map(x => `<li>🗑 folder “${esc(x.name)}” — only if empty afterwards</li>`).join("")}${p.personal.map(x => `<li>✂ ${esc(x.name)} — patient records removed, settings and Rates kept (not trashed)</li>`).join("")}${p.browser.length ? `<li>✂ patients kept in this browser — removed</li>` : ""}${p.others.map(x => `<li>⛔ ${esc(x.name)} — owned by ${esc(x.owner)}, not deleted</li>`).join("")}</ul>
+    <button type="button" class="small danger" id="dbCleanupBtn"${p.trash.length || p.personal.length || p.browser.length || p.folders.length ? "" : " disabled"}>Delete old files…</button><div class="msg" id="dbCleanupMsg" role="status">${D.imp.cleanMsg || ""}</div></div>`;
+}
+async function cleanupOldFiles() {
+  if (!D.imp || !D.imp.ok) return;
+  const p = cleanupPlan();
+  const list = [...p.trash.map(x => "• move to trash: " + x.name), ...p.folders.map(x => "• move folder to trash if empty: " + x.name), ...p.personal.map(x => "• remove patient records from " + x.name + " (settings and Rates kept)"), ...(p.browser.length ? ["• remove patients kept in this browser"] : []), ...p.others.map(x => "• NOT deleted (owned by " + x.owner + "): " + x.name)];
+  if (!confirm("Delete old patient files?\n\n" + list.join("\n") + "\n\nAll patients were verified in the new clinic database. Trashed files can be restored from Google Drive trash for 30 days.")) return;
+  const m = () => $("#dbCleanupMsg"), out = { trashed: 0, failed: [], personal: 0, browser: 0, folders: 0 };
+  $("#dbCleanupBtn").disabled = true; m().textContent = "Deleting…";
+  for (const x of p.trash) { try { await trashFile(x.id); out.trashed++; } catch (e) { out.failed.push(x.name + " (" + (e.status === 403 ? "not yours" : e.status || "error") + ")"); } }
+  for (const x of p.personal) {   // keep settings + Rates; strip patients / visits / tombstones, then verify
+    try {
+      const cur = await driveDownload(x.id), next = { ...cur }; delete next.patients; delete next.visits; delete next.deleted; next.updatedAt = new Date().toISOString();
+      await driveUpdate(x.id, next); const chk = await driveDownload(x.id);
+      if (chk.patients || chk.visits || JSON.stringify(chk.settings || null) !== JSON.stringify(cur.settings || null)) throw new Error("verify");
+      out.personal++;
+    } catch (e) { out.failed.push(x.name + " (could not remove patient records)"); }
+  }
+  for (const n of p.browser) if (await idbClear(n)) out.browser++;
+  for (const x of p.folders) {
+    try { const kids = await driveListAll(`'${x.id}' in parents and trashed=false`); if (!kids.length) { await trashFile(x.id); out.folders++; } } catch {}
+  }
+  D.imp.files = D.imp.files.filter(x => !(p.trash.some(y => y.id === x.id) && !out.failed.some(f => f.startsWith(x.name))));
+  D.imp.cleanMsg = `✓ ${out.trashed} file${out.trashed === 1 ? "" : "s"} moved to trash${out.folders ? `, ${out.folders} empty folder${out.folders === 1 ? "" : "s"}` : ""}${out.personal ? " · patient records removed from your personal file" : ""}${out.browser ? " · this browser's patients removed" : ""}${p.others.length ? ` · ${p.others.length} file${p.others.length === 1 ? "" : "s"} owned by other doctors not deleted` : ""}${out.failed.length ? ` · ⚠ not done: ${esc(out.failed.join(", "))}` : ""}`;
+  D.imp.files = D.imp.files.filter(x => x.kind !== "personal" && x.kind !== "folder"); D.imp.browserDbs = [];
+  renderCleanup();
+}
+const nmKey = s => String(s || "").toLowerCase().normalize("NFKD").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+const phKey = s => String(s || "").replace(/\D/g, "").slice(-9);
+async function importOwnerPatients() {
+  let m = $("#dbImportMsg"); m.classList.remove("err"); m.textContent = "Reading your earlier records…"; $("#dbImportBtn").disabled = true; D.imp = null;
+  try {
+    const by = { email: P.account.email, name: P.account.name };
+    const got = await collectOwnerRecords();
+    let idx = await driveDownload(D.fileId); if (!idx || idx.format !== 4) throw new Error("the clinic database is not available");
+    const N = (idx.shards || []).length, shardFileOf = n => ((idx.shards || []).find(s => s.n === n) || {}).fileId;
+    const known = new Set(Object.keys(idx.patients || {})), pids = new Set(got.patients.map(p => p.id));
+    const visits = got.visits.filter(v => v.patientId && (pids.has(v.patientId) || known.has(v.patientId)));
+    // likely duplicates: a DIFFERENT id with the same name + DOB or phone (flagged, never merged)
+    const pool = [...Object.values(idx.patients || {}), ...got.patients], flagged = [];
+    for (const p of got.patients) {
+      if (known.has(p.id)) continue;
+      const d = pool.filter(q => q.id !== p.id && nmKey(q.name) && nmKey(q.name) === nmKey(p.name) && ((p.dob && p.dob === q.dob) || (phKey(p.contact) && phKey(p.contact) === phKey(q.contact))));
+      if (d.length) { p.possibleDuplicateOf = [...new Set(d.map(q => q.id))]; flagged.push(p.name); }
+    }
+    const shardOf = pid => { const e = (idx.patients || {})[pid]; return e && typeof e.shard === "number" ? e.shard : CDB3.shardOfId(pid, N); };
+    const groups = {};
+    for (const p of got.patients) (groups[shardOf(p.id)] = groups[shardOf(p.id)] || { patients: [], visits: [] }).patients.push({ ...p, importedBy: p.importedBy || P.account.email });
+    for (const v of visits) (groups[shardOf(v.patientId)] = groups[shardOf(v.patientId)] || { patients: [], visits: [] }).visits.push(v);
+    const entries = {}, ns = Object.keys(groups).map(Number); let done = 0, wrote = 0;
+    const one = async n => {
+      const fid = shardFileOf(n), want = groups[n];
+      for (let attempt = 0; attempt < 6; attempt++) {
+        if (attempt) await new Promise(r => setTimeout(r, 150 + Math.random() * 300 * attempt));
+        const m1 = await dbMeta(fid), cur = await CDB3.unpackShard(await driveDownload(fid));
+        const pm = new Map(cur.patients.map(p => [p.id, p])), vm = new Map(cur.visits.map(v => [v.id, v])); let changed = false;
+        for (const p of want.patients) { const c = pm.get(p.id), t = (cur.deleted || {})["patients/" + p.id]; if (t && t >= recT(p)) continue; if (!c || recT(p) > recT(c)) { pm.set(p.id, c ? { ...p } : p); changed = true; } }
+        for (const v of want.visits) { const c = vm.get(v.id), t = (cur.deleted || {})["visits/" + v.id]; if (t && t >= recT(v)) continue; if (!c || recT(v) > recT(c)) { vm.set(v.id, v); changed = true; } }
+        const part = { patients: [...pm.values()], visits: [...vm.values()], deleted: cur.deleted || {} };
+        const ent = () => { for (const p of want.patients) { if (!pm.has(p.id)) continue; const e = CDB3.entryOf(CDB3.slice(part, p.id), p.id, fid, 0); if (e) entries[p.id] = { ...e, shard: n }; } };
+        if (!changed) { ent(); break; }
+        const m2 = await dbMeta(fid); if (String(m2.version) !== String(m1.version)) continue;
+        await driveUpdate(fid, await CDB3.packShard(part, n, by));
+        const back = await CDB3.unpackShard(await driveDownload(fid)), bp = new Map(back.patients.map(p => [p.id, p])), bv = new Map(back.visits.map(v => [v.id, v]));
+        if (want.patients.every(p => !pm.has(p.id) || (bp.get(p.id) && recT(bp.get(p.id)) >= recT(pm.get(p.id)))) && want.visits.every(v => !vm.has(v.id) || (bv.get(v.id) && recT(bv.get(v.id)) >= recT(vm.get(v.id))))) { ent(); wrote++; break; }
+        if (attempt === 5) throw new Error("data file " + CDB3.shardName(n) + " is busy — run the import again");
+      }
+      m = $("#dbImportMsg") || m; m.textContent = `Writing data files… ${++done} / ${ns.length}`;
+    };
+    const todo = [...ns]; await Promise.all(Array.from({ length: Math.min(6, todo.length) }, async () => { while (todo.length) await one(todo.shift()); }));
+    // index: basic details only (id, name, DOB, phone, data file number, timestamps)
+    if (Object.keys(entries).length) {
+      for (let i = 0; i < 6; i++) {
+        const meta = await dbMeta(D.fileId), cur = await driveDownload(D.fileId), next = { ...CDB3.mergeIndex(cur, { patients: entries }), updatedAt: new Date().toISOString() };
+        const m2 = await dbMeta(D.fileId); if (String(m2.version) !== String(meta.version)) continue;
+        await driveUpdate(D.fileId, next);
+        const chk = await driveDownload(D.fileId); if (Object.keys(entries).every(id => (chk.patients || {})[id])) { idx = chk; break; }
+        if (i === 5) throw new Error("the patient index is busy — run the import again");
+      }
+    }
+    // read-back: every imported patient / visit is in its data file and in the index
+    const missing = [];
+    for (const n of ns) { const back = await CDB3.unpackShard(await driveDownload(shardFileOf(n))), bp = new Set(back.patients.map(p => p.id)), bv = new Set(back.visits.map(v => v.id)); for (const p of groups[n].patients) if (!bp.has(p.id) && !(back.deleted || {})["patients/" + p.id]) missing.push(p.name); for (const v of groups[n].visits) if (!bv.has(v.id) && !(back.deleted || {})["visits/" + v.id]) missing.push("visit " + v.id); }
+    idx = await driveDownload(D.fileId); for (const p of got.patients) if (!(idx.patients || {})[p.id] && !(idx.deleted || {})["patients/" + p.id]) missing.push(p.name + " (index)");
+    if (missing.length) throw new Error("verification failed for " + missing.slice(0, 5).join(", "));
+    const newP = got.patients.filter(p => !known.has(p.id)).length;
+    D.imp = { ok: true, files: got.files, browserDbs: got.browserDbs, cleanMsg: "" };
+    D.imp.html = `✓ Imported and verified: <b>${got.patients.length} patients</b> (${newP} new, ${got.patients.length - newP} already there) and <b>${visits.length} visits</b> · from your personal file (${got.src.personal}), old clinic database (${got.src.oldClinic}), old patient files (${got.src.patientFiles}), this browser (${got.src.browser}) · ${wrote} data file${wrote === 1 ? "" : "s"} updated${flagged.length ? ` · <b>${flagged.length} likely duplicate${flagged.length === 1 ? "" : "s"} flagged</b> (not merged): ${esc(flagged.slice(0, 8).join(", "))}` : ""}. Your original files were not changed.`;
+    await loadDb();
+  } catch (e) { D.imp = { ok: false, html: "", err: "Import failed: " + e.message + " (nothing was deleted; you can run it again)" }; }
+  finally { renderDb(); }
+}
 async function updateIndex(fn) {
   for (let i = 0; i < 6; i++) {
     const meta = await dbMeta(D.fileId), doc = await driveDownload(D.fileId), next = fn(JSON.parse(JSON.stringify(doc)));
@@ -3069,7 +3232,10 @@ function renderDb() {
   if (D.layout === 4) {
     const ns = (d.shards || []).length;
     $("#dbInfo").innerHTML = `<b>${esc(CDB3.FOLDER)}</b> · ${nRec(d.patients)} patients · ${ns} data files · index ${sz(D.size)} · total ${sz(D.total)} · all files owned by you · <a href="https://drive.google.com/drive/folders/${esc(D.folderId)}" target="_blank" rel="noopener">open in Drive</a>${D.size > 1048576 ? `<div class="db-warn">⚠ The index is over 1 MB — it is loaded on every sync.</div>` : ""}
+      <div class="db-upg" id="dbImportBox"><b>Import my existing patients</b> <span class="hint">(clinic owner only — safe to run again)</span><div class="hint">Copies <b>your own</b> earlier patients and visits into this database: from your personal file, your old clinic database files and this browser. Same patient id → newest copy wins; same name + DOB/phone with a different id is flagged, not merged. Nothing is removed until you choose “Delete old files” after a verified import.</div><button type="button" class="small primary" id="dbImportBtn">Import my existing patients</button><div class="msg" id="dbImportMsg" role="status"></div><div id="dbCleanup"></div></div>
       <div class="db-upg"><label>Data files (shards) <input type="number" id="dbShardCount" min="${ns}" max="200" value="${ns}" style="width:5.5em"></label> <button type="button" class="small" id="dbAddShardsBtn">Add data files</button><div class="hint">More files = smaller downloads per save. Existing patients never move; new patients go to the emptiest files. Doctors' apps ask once to allow new files.</div></div>`;
+    const im = $("#dbImportMsg"); if (D.imp) { im.innerHTML = D.imp.ok ? D.imp.html : esc(D.imp.err || ""); im.classList.toggle("err", !D.imp.ok); }
+    renderCleanup();
   }
 }
 async function loadList() {
@@ -3283,7 +3449,7 @@ function bind() {
   $("#dbAddBtn").onclick = () => dbAdd();
   $("#dbAddEmail").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); dbAdd(); } });
   $("#dbSaveBtn").onclick = () => saveDbAccess();
-  $("#dbInfo").addEventListener("click", e => { if (e.target.id === "dbAddShardsBtn") addShards(); });
+  $("#dbInfo").addEventListener("click", e => { if (e.target.id === "dbAddShardsBtn") addShards(); if (e.target.id === "dbImportBtn") importOwnerPatients(); if (e.target.id === "dbCleanupBtn") cleanupOldFiles(); });
   $("#dbList").addEventListener("click", e => { const b = e.target.closest("[data-db-rm]"); if (!b) return; readDbForm(); const r = D.rows.find(x => x.email === b.dataset.dbRm); if (r) r.on = false; D.rows = D.rows.filter(x => x !== r); D.removed = (D.removed || []).concat(b.dataset.dbRm); renderDbList(); $("#dbMsg").textContent = "Removed — press “Save access” to take away access."; });
   $("#dbList").addEventListener("change", e => { if (e.target.dataset.dbOn) { readDbForm(); $("#dbMsg").textContent = "Press “Save access” to apply."; } });
   $("#signInBtn").onclick = () => signIn();
@@ -3322,7 +3488,7 @@ function init() {
   if (P.account) requestToken("silent").then(() => loadList()).then(() => loadDb()).catch(e => { console.warn("silent sign-in", e); P.account = null; renderAll(); });
   window.__prReady = true;
 }
-window.PRICING = { addShards, CDB3, D, loadDb, createDb, saveDbAccess, syncWriters, P, HN, Pricing, buildCSV, importCSV, parseCSV, findHerb, searchHerbs, changeSummary, save, openFile, loadList, createFile, pickerAvailable, PICKER_APP_ID, signIn };
+window.PRICING = { importOwnerPatients, collectOwnerRecords, cleanupOldFiles, addShards, CDB3, D, loadDb, createDb, saveDbAccess, syncWriters, P, HN, Pricing, buildCSV, importCSV, parseCSV, findHerb, searchHerbs, changeSummary, save, openFile, loadList, createFile, pickerAvailable, PICKER_APP_ID, signIn };
 init();
 </script>
 </body>

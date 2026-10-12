@@ -725,8 +725,6 @@ textarea,input,select,button{font-family:inherit}
         <button id="formulasMenuBtn" data-open-formulas>📜 Formulas — all formulas A–Z (use / add herbs)</button>
         <button id="ratesMenuBtn">₱ Rates — clinic info, fees, services &amp; herb prices…</button>
         <button id="aiSettingsBtn">⚙ AI settings (Copy for AI / optional Grok)…</button>
-        <button id="exportBtn">⬇ Export all data (JSON backup)</button>
-        <button id="importBtn">⬆ Import data from JSON…</button>
         <button id="accountMenuBtn">☁ Google account &amp; Drive sync…</button>
         <a class="menu-link" href="frontdesk.html" target="_blank" rel="noopener" id="frontdeskLink">🧾 Front desk page (queue, billing &amp; receipts)</a>
         <a class="menu-link" href="privacy.html" target="_blank" rel="noopener">🔒 Privacy policy</a>
@@ -991,7 +989,7 @@ textarea,input,select,button{font-family:inherit}
   </div>
 </dialog>
 
-<input type="file" id="importFile" accept="application/json,.json" hidden>
+
 <div id="printArea"></div>
 <div class="toast" id="toast"></div>
 <script>
@@ -5917,32 +5915,6 @@ function buildHistorySummary(session, a, n = 2) {
 }
 
 /* ---------- export / import / print ---------- */
-async function exportAll() {
-  const data = { app: "tcm-consult-assistant", version: 1, exportedAt: new Date().toISOString(), patients: await DB.all("patients"), visits: await DB.all("visits"), ...(billingState.billing.updatedAt ? { billing: billingState.billing } : {}) };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `tcm-backup-${new Date().toISOString().slice(0, 10)}.json`;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  toast(`Exported ${data.patients.length} patients, ${data.visits.length} visits`);
-}
-async function importData(text) {
-  let data;
-  try { data = JSON.parse(text); } catch { alert("That file is not valid JSON."); return; }
-  if (!data || !Array.isArray(data.patients) || !Array.isArray(data.visits)) { alert("Unrecognised file: expected { patients: [...], visits: [...] }."); return; }
-  if ((data.patients.length || data.visits.length) && !canSavePatients()) { renderNoClinicBanner(); alert(NO_CLINIC_MSG + " — connect the clinic patient database first (Account)."); return; }
-  if (!confirm(`Import ${data.patients.length} patients and ${data.visits.length} visits?\nRecords with the same ID will be overwritten; others are kept.`)) return;
-  let np = 0, nv = 0;
-  const now = new Date().toISOString();   // an explicit import overrides older copies (also in Google Drive)
-  for (const p of data.patients) if (p && p.id && p.name) { await DB.put("patients", { ...p, updatedAt: now }); np++; }
-  for (const v of data.visits) if (v && v.id && v.patientId) { await DB.put("visits", { ...v, updatedAt: now }); nv++; }
-  if (data.billing && typeof data.billing === "object") await saveBillingLocal(data.billing);   // the doctor's own Rates (no clinic herb prices)
-  markDataChanged();
-  await loadData();
-  renderAll();
-  toast(`Imported ${np} patients, ${nv} visits`);
-}
 function printVisit() {
   const s = state.session, a = analyzeSession(s), p = patientById(s.patientId);
   const catOrder = Object.keys(CATEGORIES);
@@ -7170,7 +7142,7 @@ async function driveUpdate(id, doc) {
 const recTime = r => (r && (r.updatedAt || r.savedAt || r.createdAt)) || "";
 async function getTombstones(store = DB) { const t = await store.get("meta", "tombstones"); return (t && t.map) || {}; }
 // v25: when signed in with Google, the clinic patient database is the ONLY place patients / visits are saved
-const canSavePatients = () => !Cloud.account || clinicActive();
+const canSavePatients = () => clinicActive();   // v26: no browser-only patient storage either
 const NO_CLINIC_MSG = "Not connected to clinic database — patients can't be saved";
 function noClinicError() { renderNoClinicBanner(); const e = new Error(NO_CLINIC_MSG + " (Account → Clinic patient database)."); e.code = "noClinic"; return e; }
 async function dataPut(kind, rec) {
@@ -7482,13 +7454,13 @@ async function clinicUploadDraft() {
 }
 // “Not connected to clinic database — patients can't be saved”
 function renderNoClinicBanner() {
-  const show = !!Cloud.account && !clinicActive();
+  const show = !clinicActive();
   let b = document.getElementById("noClinicBanner");
   if (!show) { if (b) b.remove(); return; }
   if (!b) { b = document.createElement("div"); b.id = "noClinicBanner"; b.setAttribute("role", "alert"); b.style.cssText = "position:sticky;top:0;z-index:70;background:#fde8e8;color:#7a1010;border-bottom:1px solid #e3a0a0;padding:8px 12px;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;font-size:14px"; document.body.prepend(b); }
   const c = clinicDbState.conf;
   b.innerHTML = `<span>⚠️ <b>${NO_CLINIC_MSG}</b>${c && c.revoked ? " (access was removed by the clinic admin)" : ""}. Anything typed in the current visit stays on this device.</span><button type="button" class="small primary" id="noClinicConnect">Connect…</button>`;
-  b.querySelector("#noClinicConnect").onclick = () => { const o = $("#authArea [data-acct-open]"); if (o) o.click(); };
+  b.querySelector("#noClinicConnect").onclick = () => { const o = $("#authArea [data-acct-open]"); if (o) o.click(); else if (typeof openAccountDialog === "function") openAccountDialog(); else { renderAccountDialog(); $("#accountDialog").showModal(); } };
 }
 
 /* =====================================================================
@@ -7958,14 +7930,14 @@ function updateStorageStatus(mode = DB.mode) {
 }
 function renderAccountDialog() {
   const b = $("#accountBody");
-  const perm = `<div class="acct-note">Your records are saved in <b>your own Google Drive</b>, in a folder named “${esc(GAUTH.folderName)}” (one file, <code>${esc(GAUTH.fileName)}</code>). The app asks only for the <b>drive.file</b> permission, so it can see <b>only the files it created</b> — not the rest of your Drive. Nothing is sent to the app developer. The xAI API key stays on this device. <a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></div>`;
+  const perm = `<div class="acct-note">Your settings and Rates are saved in <b>your own Google Drive</b>, in a folder named “${esc(GAUTH.folderName)}” (one file, <code>${esc(GAUTH.fileName)}</code>); patients and visits only in the clinic patient database. The app asks only for the <b>drive.file</b> permission, so it can see <b>only the files it created</b> — not the rest of your Drive. Nothing is sent to the app developer. The xAI API key stays on this device. <a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></div>`;
   if (!Cloud.configured) {
-    b.innerHTML = Cloud.fileCopy ? `<p><b>Google sign-in is not available in a copy opened from a file.</b></p><p>This page was opened from your device (file://). Google only allows sign-in from the app's web address: <a href="https://geoffreysy.github.io/tcm-consult/" target="_blank" rel="noopener">geoffreysy.github.io/tcm-consult</a>. Here the app works in <b>local-only mode</b> (records in this browser; export regularly).</p>` : `<p><b>Google sign-in not configured yet.</b></p><p>The app is working in <b>local-only mode</b>: records are stored in this browser (IndexedDB). Use <i>Export all data</i> regularly as a backup.</p>
-      <div class="acct-note">When the developer adds a Google OAuth client ID, each practitioner will be able to sign in with their own Google account and keep their records in their own Google Drive.</div>`;
+    b.innerHTML = Cloud.fileCopy ? `<p><b>Google sign-in is not available in a copy opened from a file.</b></p><p>This page was opened from your device (file://). Google only allows sign-in from the app's web address: <a href="https://geoffreysy.github.io/tcm-consult/" target="_blank" rel="noopener">geoffreysy.github.io/tcm-consult</a>. Here the consult tools work, but <b>patients can't be saved</b>.</p>` : `<p><b>Google sign-in not configured yet.</b></p><p>The consult tools work, but <b>patients can't be saved</b> until you sign in and connect the clinic patient database.</p>
+      <div class="acct-note">When the developer adds a Google OAuth client ID, each practitioner will be able to sign in and connect the clinic patient database.</div>`;
   } else if (!Cloud.account) {
-    b.innerHTML = `<p>Sign in with <b>your own Google account</b> to keep your patient records in your Google Drive and open them on any device. Each practitioner signs in separately and sees only their own records.</p>${perm}
+    b.innerHTML = `<p>Sign in with <b>your own Google account</b>, then connect your clinic's patient database. <b>Patients and visits are saved only in the clinic patient database</b> — never in this browser alone or in your own Drive.</p>${perm}
       <div class="acct-actions"><button class="gbtn" data-signin>${G_LOGO}<span>Sign in with Google</span></button><button id="useLocalBtn">Use without signing in</button></div>
-      <p class="muted" style="font-size:12px;margin-top:10px">Without signing in, records stay only in this browser (export regularly).</p>`;
+      <p class="muted" style="font-size:12px;margin-top:10px">Without signing in you can still listen, take notes and work out / copy a diagnosis, but patients and visits can't be saved (only the visit you are typing is kept on this device until you connect).</p>`;
   } else {
     const a = Cloud.account;
     b.innerHTML = `<div class="acct-card">${avatarHTML(a, true)}<div><div class="nm">${esc(a.name)}</div><div class="em">${esc(a.email)}</div></div></div>
@@ -7985,7 +7957,7 @@ function bindCloudEvents() {
     if (t.hasAttribute("data-signin")) { e.preventDefault(); signIn(); }
     else if (t.hasAttribute("data-reconnect")) { e.preventDefault(); signIn(); }
     else if (t.hasAttribute("data-acct-open")) openAccountDialog();
-    else if (t.id === "useLocalBtn") { lsSet(LS_CHOICE, "local"); $("#accountDialog").close(); setSync("local"); toast("Using local-only mode — records stay in this browser."); }
+    else if (t.id === "useLocalBtn") { lsSet(LS_CHOICE, "local"); $("#accountDialog").close(); setSync("local"); toast("Not signed in — consult tools work, but patients can't be saved until you connect the clinic patient database.", 5000); }
     else if (t.id === "syncNowBtn") syncNow();
     else if (t.id === "signOutBtn") { $("#accountDialog").close(); openSignOut(); }
     else if (t.id === "cdbPickBtn") connectClinicDbPicker();
@@ -8030,7 +8002,7 @@ async function cloudAfterBoot() {
    ===================================================================== */
 async function loadData() {
   // v25: signed in → patients come ONLY from the clinic database (personal Drive / cache is never read for patients)
-  const none = Cloud.account && !clinicActive();
+  const none = !clinicActive();   // v26: browser-only / personal patient records are left in place but never shown or used
   state.patients = none ? [] : await DB.all("patients");
   state.visits = none ? [] : await DB.all("visits");
   await loadBilling();
@@ -8083,9 +8055,6 @@ function bindEvents() {
   $("#diagnosisInput").addEventListener("focus", () => ensureDxDate());
   renderHnUI();
   $("#herbAZ").addEventListener("click", e => { const b = e.target.closest("button[data-az]"); if (b && !b.disabled) herbJump(b.dataset.az); });
-  $("#exportBtn").onclick = exportAll;
-  $("#importBtn").onclick = () => $("#importFile").click();
-  $("#importFile").onchange = async e => { const f = e.target.files[0]; if (f) await importData(await f.text()); e.target.value = ""; };
 
   $("#addPatientBtn").onclick = () => openPatientDialog(null);
   $("#patientSearch").oninput = e => { state.search = e.target.value; renderPatients(); };
