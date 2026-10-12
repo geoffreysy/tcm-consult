@@ -95,6 +95,11 @@ h3{font-size:13px;margin:0 0 6px;font-weight:600}
 .patient-list li.active{background:var(--accent-2);box-shadow:inset 3px 0 0 var(--accent)}
 .patient-list .pname{font-weight:600}
 .patient-list .pmeta{font-size:12px;color:var(--muted)}
+/* v22 same-name warning */
+.dup-list{list-style:none;margin:8px 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.dup-list li{border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+.dup-list .dup-info{flex:1 1 220px;min-width:0}.dup-list .dup-meta{font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
+.dup-list .dup-src{font-size:11px;color:#8a5a00}
 .empty{color:var(--muted);font-size:13px;padding:8px;text-align:center}
 .profile{border-top:1px solid var(--line);padding:10px 12px;overflow:auto;flex:1;min-height:0}
 .profile .name{font-size:17px;font-weight:700;margin-bottom:2px}
@@ -823,6 +828,11 @@ textarea,input,select,button{font-family:inherit}
   <div class="dlg-head"><h3>Google account &amp; Drive storage</h3><button type="button" class="link" data-close>✕</button></div>
   <div class="dlg-body" id="accountBody"></div>
   <div class="dlg-foot"><button type="button" data-close>Close</button></div>
+</dialog>
+<dialog id="dupDialog">
+  <div class="dlg-head"><h3>A patient with this name already exists</h3><button type="button" class="link" data-close>✕</button></div>
+  <div class="dlg-body" id="dupBody"></div>
+  <div class="dlg-foot"><button type="button" data-close>Back to the form</button><button type="button" class="primary" id="dupNewBtn">Create as a new, different patient</button></div>
 </dialog>
 <dialog id="cdbMigDialog">
   <div class="dlg-head"><h3>Move my records into the clinic database</h3><button type="button" class="link" data-close>✕</button></div>
@@ -4471,6 +4481,9 @@ function sessionHasContent(s) {
   return s && (s.entries.length || s.tongue.length || s.pulse.length || s.notes.trim() || stripDateLines(s.diagnosis).trim() || Object.keys(s.overrides).length || s.ai);
 }
 function patientById(id) { return state.patients.find(p => p.id === id); }
+// v22: what tells same-name patients apart — DOB (or age if only age is known) and phone
+const fmtDob = d => { if (!/^\d{4}-\d{2}-\d{2}$/.test(d || "")) return d || ""; const x = new Date(d + "T00:00:00"); return isNaN(x) ? d : x.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }); };
+function ptIdParts(p) { const out = []; if (p.dob) out.push("DOB " + fmtDob(p.dob)); else { const a = ageOf(p); if (a !== "") out.push(a + " y"); } if (p.contact) out.push("☎ " + p.contact); return out; }
 function ageOf(p) {
   if (p.dob) { const d = new Date(p.dob), n = new Date(); let a = n.getFullYear() - d.getFullYear(); if (n.getMonth() < d.getMonth() || (n.getMonth() === d.getMonth() && n.getDate() < d.getDate())) a--; return isNaN(a) ? "" : a; }
   return p.age ?? "";
@@ -4554,7 +4567,7 @@ function renderPatients() {
   ul.innerHTML = list.map(p => {
     const n = state.visits.filter(v => v.patientId === p.id).length;
     const age = ageOf(p);
-    return `<li data-id="${p.id}" class="${p.id === state.selectedPatientId ? "active" : ""}"><div><div class="pname">${esc(p.name)}</div><div class="pmeta">${[age !== "" ? age + " y" : "", p.sex].filter(Boolean).map(esc).join(" · ") || "&nbsp;"}</div></div><div class="pmeta">${n} visit${n === 1 ? "" : "s"}</div></li>`;
+    return `<li data-id="${p.id}" class="${p.id === state.selectedPatientId ? "active" : ""}"><div><div class="pname">${esc(p.name)}</div><div class="pmeta">${[...ptIdParts(p), p.sex].filter(Boolean).map(esc).join(" · ") || "&nbsp;"}</div></div><div class="pmeta">${n} visit${n === 1 ? "" : "s"}</div></li>`;
   }).join("");
 }
 
@@ -5419,13 +5432,49 @@ function openPatientDialog(p) {
   $("#patientDialog").showModal();
   setTimeout(() => f.elements.name.focus(), 30);
 }
-async function savePatientFromForm() {
+const nameKey = s => foldTxt(s).replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+async function sameNamePatients(name, exceptId) {
+  const k = nameKey(name); if (!k) return [];
+  const lastOf = (vs, id) => vs.filter(v => v.patientId === id).sort((a, b) => (b.startedAt || "").localeCompare(a.startedAt || ""))[0] || null;
+  const out = state.patients.filter(p => p.id !== exceptId && nameKey(p.name) === k).map(p => ({ p, last: lastOf(state.visits, p.id), active: true, src: clinicActive() ? "clinic" : "" }));
+  if (clinicActive()) {   // personal records are hidden while the clinic database is active — still worth a warning
+    try { const pv = await DB.raw_all("visits"); for (const p of await DB.raw_all("patients")) if (p.id !== exceptId && nameKey(p.name) === k && !out.some(x => x.p.id === p.id)) out.push({ p, last: lastOf(pv, p.id), active: false, src: "personal" }); } catch {}
+  }
+  return out;
+}
+function openDupDialog(matches, ctx) {
+  const rename = !!ctx.editingId;
+  $("#dupBody").innerHTML = `<p>${rename ? "The new name matches" : "This name matches"} <b>${matches.length} existing patient${matches.length === 1 ? "" : "s"}</b>. Is it the same person?</p>
+    <ul class="dup-list">${matches.map(m => { const v = m.last, d = v && v.doctor;
+      const meta = [...ptIdParts(m.p), m.p.sex, v ? `last visit ${fmtDate(v.startedAt)}${d ? " · " + (d.name || d.email) : ""}` : "no visits yet"].filter(Boolean).join(" · ");
+      return `<li><div class="dup-info"><b>${esc(m.p.name)}</b>${m.src === "personal" ? ` <span class="dup-src">in your personal file (not in the clinic database)</span>` : ""}<div class="dup-meta">${esc(meta)}</div></div>${m.active ? `<button type="button" class="small primary" data-dup-use="${esc(m.p.id)}">Use this existing patient</button>` : ""}</li>`; }).join("")}</ul>
+    <p class="muted" style="font-size:12.5px">${rename ? "“Use this existing patient” keeps this patient's old name and opens the existing one instead." : "“Use this existing patient” links this session to them (nothing new is created)."}</p>`;
+  const dlg = $("#dupDialog");
+  $("#dupNewBtn").onclick = async () => { dlg.close(); if (await savePatientFromForm({ dupOk: true })) $("#patientDialog").close(); };
+  $("#dupBody").onclick = e => {
+    const b = e.target.closest("[data-dup-use]"); if (!b) return;
+    dlg.close(); $("#patientDialog").close();
+    const id = b.dataset.dupUse;
+    if (rename) selectPatient(id);
+    else if (!state.session.patientId || state.ptLinkPending || !sessionHasContent(state.session)) linkPatient(id); else selectPatient(id);
+    if (!rename && state.session.patientId !== id) linkPatient(id);
+    state.ptLinkPending = false;
+    toast(`Using the existing patient ${patientById(id).name}`);
+  };
+  dlg.showModal();
+}
+async function savePatientFromForm(opt = {}) {
   const f = $("#patientForm");
   const data = Object.fromEntries(["name", "dob", "age", "sex", "contact", "notes"].map(k => [k, f.elements[k].value.trim()]));
   if (!data.name) { f.elements.name.focus(); return false; }
   data.age = data.age === "" ? "" : Number(data.age);
   const now = new Date().toISOString();
   let p = editingPatientId ? patientById(editingPatientId) : null;
+  // v22: same-name warning for a new patient or a rename (never blocks)
+  if (!opt.dupOk && (!p || nameKey(p.name) !== nameKey(data.name))) {
+    const matches = await sameNamePatients(data.name, p && p.id);
+    if (matches.length) { openDupDialog(matches, { editingId: p && p.id }); return false; }
+  }
   p = p ? { ...p, ...data, updatedAt: now } : { id: uid(), ...data, createdAt: now, updatedAt: now };
   await dataPut("patients", p);
   const i = state.patients.findIndex(x => x.id === p.id);
@@ -5567,7 +5616,7 @@ function renderPtLink() {
   if (!linked) return;
   if (p && !state.ptChanging) {
     const prior = priorVisits(s), age = ageOf(p);
-    const meta = [age !== "" ? age + " y" : "", p.sex].filter(Boolean).join(" · ");
+    const meta = [...ptIdParts(p), p.sex].filter(Boolean).join(" · ");
     setHTML(linked, `<span class="pt-ico" aria-hidden="true">👤</span><span class="pt-main"><b>${esc(p.name)}</b><span class="pt-meta">${esc(meta)}${meta ? " · " : ""}${prior.length ? `${prior.length} previous visit${prior.length === 1 ? "" : "s"} · last ${esc(relAgo(prior[0].startedAt, s.startedAt))}` : "first visit"}</span></span>`
       + (prior.length ? `<button type="button" class="small" data-hist-jump title="Show the last visit and progress">Last visit ↓</button>` : "")
       + `<button type="button" class="small" data-pt-change title="Link this session to a different patient">Change</button>`);
@@ -5584,7 +5633,7 @@ function renderPtResults() {
   const raw = q.trim();
   let html = res.map((x, i) => {
     const age = ageOf(x.p), n = patientVisits(x.p.id).length;
-    const meta = [age !== "" ? age + " y" : "", x.p.sex, x.p.contact, n ? `${n} visit${n === 1 ? "" : "s"} · last ${relAgo(x.last)}` : "no visits yet"].filter(Boolean).join(" · ");
+    const meta = [...ptIdParts(x.p), x.p.sex, n ? `${n} visit${n === 1 ? "" : "s"} · last ${relAgo(x.last)}` : "no visits yet"].filter(Boolean).join(" · ");
     return `<li role="option" data-link-pt="${x.p.id}" class="${i === 0 ? "sel" : ""}"><div class="pr-name">${esc(x.p.name)}</div><div class="pr-meta">${esc(meta)}</div></li>`;
   }).join("");
   if (!res.length) html = `<li class="pr-empty">${state.patients.length ? `No patient matches “${esc(raw)}”.` : "No patients yet."}</li>`;
@@ -7758,7 +7807,7 @@ async function init() {
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { deleteVisit, clinicDbState, clinicActive, connectClinicDb, disconnectClinicDb, syncClinicDb, openClinicMigration, cdbContains, CLINIC_PATIENTS_FILE, __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Slips, fdState, buildSlip, sendToFrontdesk, syncSlips, renderSendRow, FRONTDESK_SLIPS_FILE, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { openPatientDialog, selectPatient, sameNamePatients, nameKey, ptIdParts, savePatientFromForm, deleteVisit, clinicDbState, clinicActive, connectClinicDb, disconnectClinicDb, syncClinicDb, openClinicMigration, cdbContains, CLINIC_PATIENTS_FILE, __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Slips, fdState, buildSlip, sendToFrontdesk, syncSlips, renderSendRow, FRONTDESK_SLIPS_FILE, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>
