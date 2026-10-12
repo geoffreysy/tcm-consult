@@ -155,7 +155,13 @@ textarea{width:100%}
 .dbr{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"cb em x" "cb st x";align-items:center;column-gap:10px;row-gap:2px;padding:7px 10px;border-bottom:1px solid #eef2f0}
 .dbr .st{grid-area:st;min-width:0;overflow-wrap:anywhere;font-size:12.5px;justify-self:start}.dbr button{grid-area:x;align-self:center}.dbr input[type=checkbox]{grid-area:cb;align-self:center}
 .db-add .check{flex:1 1 200px}
-.dbr:last-child{border-bottom:0}.dbr .em{grid-area:em;min-width:0;overflow-wrap:anywhere;word-break:normal;font-size:13.5px}
+.dbr:last-child{border-bottom:0}
+.dbr .sched{grid-column:2/-1;grid-row:3;margin-top:4px;min-width:0}
+.sched summary{cursor:pointer;font-size:12.5px;color:#4a5a55;list-style:none;padding:3px 0;overflow-wrap:anywhere}.sched summary::-webkit-details-marker{display:none}
+.sched summary::before{content:"▸ ";color:#8a9a95}.sched[open] summary::before{content:"▾ "}
+.sched-grid{border-collapse:collapse;margin:4px 0 2px;font-size:13px}.sched-grid th,.sched-grid td{padding:0;text-align:center}
+.sched-grid thead th{font-weight:600;font-size:11.5px;color:#6a7a75;padding:2px 6px}.sched-grid tbody th{text-align:left;padding-right:10px;font-weight:600}
+.sched-cell{display:flex;align-items:center;justify-content:center;min-width:72px;min-height:36px;cursor:pointer}.sched-cell input{width:20px;height:20px}.dbr .em{grid-area:em;min-width:0;overflow-wrap:anywhere;word-break:normal;font-size:13.5px}
 .dbr input[type=checkbox]{width:18px;height:18px}
 .db-add input:not([type=checkbox]){width:100%}
 .db-add .check{display:flex;align-items:center;gap:6px}
@@ -208,6 +214,8 @@ document.addEventListener("DOMContentLoaded",function(){new MutationObserver(chk
     <div class="row db-add"><label style="flex:1 1 220px">Add a doctor's Google e-mail<input type="email" id="dbAddEmail" placeholder="dr.cruz@gmail.com" autocomplete="off" spellcheck="false"></label><button type="button" class="small" id="dbAddBtn">Add</button></div>
     <h2 style="margin-top:16px">🧾 Front desk</h2>
     <label class="hint" style="display:block">Front desk Google e-mail(s) — get the herb price list (read-only) and the clinic <b>patient list with basic details only</b> (name, date of birth, phone — they can add and edit these). <b>Never</b> visits, diagnoses, notes or prescriptions<textarea id="dbFrontDesk" rows="2" spellcheck="false" placeholder="frontdesk@clinic.ph"></textarea></label>
+    <h2 style="margin-top:16px">🗓 Scheduler access</h2>
+    <label class="hint" style="display:block">Scheduler Google e-mail(s) — use <code>scheduler.html</code> to book patients (name, optional phone / time / note) into the doctors' scheduled sessions. They get the clinic schedule (read-only) and <b>edit</b> access to the appointments list only — <b>never</b> patient records, slips or prices. An e-mail may also be on the front desk list.<textarea id="dbScheduler" rows="2" placeholder="scheduler@gmail.com" spellcheck="false"></textarea></label>
     <div class="actions"><button type="button" class="primary" id="dbSaveBtn">Save access</button><span class="msg" id="dbMsg" role="status"></span></div>
   </section>
   <div id="editor" hidden>
@@ -2872,13 +2880,14 @@ function signOut() {
 }
 /* ---------- load / create / reuse ---------- */
 /* ---------- v21: clinic patient database (owner side: create + doctors' WRITER access) ---------- */
+var C = { apptId: null, fileId: null, schedule: {}, loaded: false, open: new Set() };
 const D = { fileId: null, doc: null, size: 0, perms: [], rows: [], frontDesk: [], loaded: false, status: {} };
 const FD_HINT = /front.?desk|reception|cashier/i;
 const dbMeta = id => gjson(`${PG.drive}/files/${encodeURIComponent(id)}?fields=${encodeURIComponent("id,name,version,modifiedTime,size,parents,appProperties,owners(displayName,emailAddress,me)")}`);
 const nRec = x => Array.isArray(x) ? x.length : Object.keys(x || {}).length;
 const permTarget = () => D.folderId;   // doctors get WRITER on the FOLDER (+ every file in it)
 async function loadDb() {   // v25: only the sharded database (format 4); older clinic databases are ignored and left untouched (no migration)
-  D.loaded = true;
+  D.loaded = true; if (!C.loaded) { C.loaded = true; loadClinicConfig(); }
   const cands = (await driveList(`name='${qEsc(CDB3.INDEX)}' and 'me' in owners and trashed=false`)).filter(x => (x.appProperties || {}).tcmConsult === CDB3.INDEX_TAG);
   let old = null; const docs = [];
   for (const c of cands) { const doc = await driveDownload(c.id).catch(() => null); if (doc && doc.kind === "clinic-patients-index") docs.push({ c, doc }); }
@@ -2901,6 +2910,7 @@ function readAccess(doc) {
   const acc = doc.access || {};
   D.rows = (acc.doctors || []).map(d => ({ email: normEmail(d.email), on: d.on !== false }));
   D.frontDesk = (acc.frontDesk || []).map(normEmail);
+  D.scheduler = Array.isArray(acc.scheduler) ? acc.scheduler.map(normEmail) : null;   // v31: null = never saved → pre-filled with the front desk e-mails
 }
 async function loadDbPerms() {
   try { D.perms = (await gjson(`${PG.drive}/files/${encodeURIComponent(permTarget())}/permissions?fields=${encodeURIComponent("permissions(id,emailAddress,role,type)")}`)).permissions || []; } catch { D.perms = []; }
@@ -3199,7 +3209,7 @@ async function addShards() {
 }
 // drive.file: let the owner's app open files it didn't create (patient files added by doctors in the old layout)
 function readDbForm() {
-  D.frontDesk = parseEmails($("#dbFrontDesk").value); D.rows = D.rows.filter(r => !D.frontDesk.includes(r.email));
+  D.frontDesk = parseEmails($("#dbFrontDesk").value); if ($("#dbScheduler") && (D.scheduler || $("#dbScheduler").value.trim())) D.scheduler = parseEmails($("#dbScheduler").value); D.rows = D.rows.filter(r => !D.frontDesk.includes(r.email));
   document.querySelectorAll("[data-db-on]").forEach(x => { const r = D.rows.find(y => y.email === x.dataset.dbOn); if (r) r.on = x.checked; });
 }
 function dbAdd() {
@@ -3232,6 +3242,60 @@ async function syncWriters(fileId, emails, role = "writer", opt = {}) {
   }
   return status;
 }
+// v30: clinic schedule per doctor (informational only — never restricts access). Stored in the owner's own
+// tcm-clinic-config.json (TCM Consult Assistant folder), shared READ-ONLY with ticked doctors + front desk; never in the patient index / data files.
+const CLINIC_CONFIG_FILE = "tcm-clinic-config.json", SCHED_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+async function loadClinicConfig() {
+  try {
+    const f = (await driveList(`name='${qEsc(CLINIC_CONFIG_FILE)}' and 'me' in owners and trashed=false`))[0];
+    if (f) { const d = await driveDownload(f.id); C.fileId = f.id; C.schedule = (d && d.schedule) || {}; C.apptId = (d && d.appointmentsFileId) || C.apptId || null; }
+  } catch (e) { console.warn("clinic config:", e); }
+  C.loaded = true; renderDbList();
+}
+// v31: appointments (scheduler.html) — owner-owned tcm-clinic-appointments.json: WRITER for scheduler e-mails,
+// READ-ONLY for ticked doctors + front desk. Free-text bookings only; no patient records.
+const APPTS_FILE = "tcm-clinic-appointments.json";
+async function ensureApptsFile() {
+  if (C.apptId) return C.apptId;
+  const f = (await driveList(`name='${qEsc(APPTS_FILE)}' and 'me' in owners and trashed=false`))[0];
+  if (f) return (C.apptId = f.id);
+  const n = await createIn(await ensureFolder(), APPTS_FILE, { app: "tcm-consult-assistant", kind: "clinic-appointments", format: 1, note: "Clinic appointments booked on scheduler.html (free-text names, optional phone / time / note). Not patient records.", appts: {}, updatedAt: new Date().toISOString() }, { tcmConsult: "clinic-appointments" }, "TCM Consult Assistant — clinic appointments (scheduler).");
+  return (C.apptId = n.id);
+}
+async function syncRoles(fileId, roles) {   // email → "writer" | "reader"; anyone else (not the owner) loses access
+  const base = `${PG.drive}/files/${encodeURIComponent(fileId)}/permissions`, me = normEmail(P.account.email), status = {};
+  const cur = (await gjson(`${base}?fields=${encodeURIComponent("permissions(id,emailAddress,role,type)")}`)).permissions || [];
+  for (const [e, role] of Object.entries(roles)) {
+    if (!e || e === me) continue; const has = cur.find(p => normEmail(p.emailAddress) === e);
+    try {
+      if (has && has.role === role) status[e] = role;
+      else if (has && has.role !== "owner") { await gjson(`${base}/${encodeURIComponent(has.id)}?fields=id`, { method: "PATCH", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify({ role }) }); status[e] = role; }
+      else if (!has) { await gjson(`${base}?sendNotificationEmail=true&fields=id`, { method: "POST", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify({ type: "user", role, emailAddress: e }) }); status[e] = role; }
+    } catch (err) { status[e] = "error " + (err.status || ""); }
+  }
+  for (const p of cur) if (p.type === "user" && p.role !== "owner" && !(normEmail(p.emailAddress) in roles)) { try { await gfetch(`${base}/${encodeURIComponent(p.id)}`, { method: "DELETE" }); } catch { status[normEmail(p.emailAddress)] = "remove failed"; } }
+  return status;
+}
+async function saveClinicConfig() {
+  const now = new Date().toISOString(), schedule = {};
+  for (const r of D.rows) { const x = C.schedule[r.email]; if (x && Object.values(x).some(d => d && (d.am || d.pm))) schedule[r.email] = x; }
+  if (!C.fileId) { const f = await createIn(await ensureFolder(), CLINIC_CONFIG_FILE, { app: "tcm-consult-assistant", kind: "clinic-config", format: 1, schedule: {}, updatedAt: now }, { tcmConsult: "clinic-config" }, "TCM Consult Assistant — clinic schedule (reference only). Shared read-only with doctors and front desk."); C.fileId = f.id; }
+  const cur = await driveDownload(C.fileId), doc = { ...cur, ...(C.apptId ? { appointmentsFileId: C.apptId } : {}), app: "tcm-consult-assistant", kind: "clinic-config", format: 1, note: "Clinic schedule for reference (doctor e-mails + days). No patient data. Shared read-only with the clinic's doctors and front desk.", schedule, updatedAt: now, updatedBy: P.account.email };
+  await driveUpdate(C.fileId, doc);
+  const chk = await driveDownload(C.fileId); if (JSON.stringify(chk.schedule || {}) !== JSON.stringify(schedule)) throw new Error("schedule could not be verified");
+  C.schedule = schedule;
+}
+function schedSummary(x) {
+  const parts = SCHED_DAYS.map(d => { const v = (x || {})[d] || {}; return v.am && v.pm ? d + " AM/PM" : v.am ? d + " AM" : v.pm ? d + " PM" : ""; }).filter(Boolean);
+  return parts.length ? parts.join(", ") : "No schedule set";
+}
+function schedHTML(email) {
+  const x = C.schedule[email] || {}, e = esc(email), open = C.open.has(email) ? " open" : "";
+  return `<details class="sched" data-sched-for="${e}"${open}><summary><span class="sched-ic">🗓</span> <span class="sched-sum">${esc(schedSummary(x))}</span></summary>
+    <table class="sched-grid" role="grid" aria-label="Clinic schedule for ${e}"><thead><tr><th></th><th>Morning</th><th>Afternoon</th></tr></thead><tbody>
+    ${SCHED_DAYS.map(d => `<tr><th scope="row">${d}</th>${["am", "pm"].map(h => `<td><label class="sched-cell"><input type="checkbox" data-sched="${e}" data-day="${d}" data-half="${h}"${(x[d] || {})[h] ? " checked" : ""} aria-label="${d} ${h === "am" ? "morning" : "afternoon"}"></label></td>`).join("")}</tr>`).join("")}
+    </tbody></table><div class="hint">For information only — it does not limit access. Saved with <b>Save access</b>.</div></details>`;
+}
 async function saveDbAccess() {   // ONE save: patient database (writer on folder + files) AND price list (reader) for ticked doctors; front desk: price list only
   readDbForm();
   const m = $("#dbMsg"); m.classList.remove("err");
@@ -3243,7 +3307,7 @@ async function saveDbAccess() {   // ONE save: patient database (writer on folde
   if (lose.length && !confirm(`${lose.map(r => r.email).join(", ")} ${lose.length === 1 ? "has" : "have"} the price list only (older setting). Unticked doctors lose price list access on Save. Continue?`)) return;
   m.textContent = "Saving…"; $("#dbSaveBtn").disabled = true;
   try {
-    const now = new Date().toISOString(), access = { doctors: D.rows.map(r => ({ email: r.email, on: r.on })), frontDesk: D.frontDesk, updatedAt: now, updatedBy: P.account.email };
+    const now = new Date().toISOString(), access = { doctors: D.rows.map(r => ({ email: r.email, on: r.on })), frontDesk: D.frontDesk, scheduler: D.scheduler || D.frontDesk, updatedAt: now, updatedBy: P.account.email };
     const want = D.rows.filter(r => r.on).map(r => r.email), st = {};
     if (D.fileId) {
       let ok = false;
@@ -3261,9 +3325,21 @@ async function saveDbAccess() {   // ONE save: patient database (writer on folde
       const ids = [...(D.doc.shards || []).map(s => s.fileId)];
       await Promise.all(Array.from({ length: 8 }, async () => { while (ids.length) { const id = ids.shift(); try { Object.assign(st, Object.fromEntries(Object.entries(await syncWriters(id, want, "writer", { removeOnly: true })).filter(([, v]) => /failed/.test(v)))); } catch {} } }));   // no direct permission on the index / data files
     }
+    // v30: the schedule file (doctor e-mails + schedule only) — read-only for ticked doctors + front desk
+    try {
+      const sched = D.scheduler || D.frontDesk; D.scheduler = sched;
+      if (sched.length || C.apptId) await ensureApptsFile();
+      await saveClinicConfig();
+      const me0 = normEmail(P.account.email), rd = [...new Set([...want, ...D.frontDesk, ...sched])].filter(e => e && e !== me0);
+      for (const [e, v] of Object.entries(await syncShares(C.fileId, rd))) if (/error|fail/.test(v)) st[e] = "schedule: " + v;
+      if (C.apptId) {
+        const roles = {}; for (const e of [...want, ...D.frontDesk]) roles[e] = "reader"; for (const e of sched) roles[e] = "writer";
+        for (const [e, v] of Object.entries(await syncRoles(C.apptId, roles))) if (/error|fail/.test(v)) st[e] = "appointments: " + v;
+      }
+    } catch (e) { st["(schedule)"] = "schedule error: " + e.message; }
     if (P.fileId) {   // price list: read-only for ticked doctors + front desk; unticked doctors lose it
       const me = normEmail(P.account.email), readers = [...new Set([...want, ...D.frontDesk])].filter(e => e && e !== me);
-      const cur = await driveDownload(P.fileId), doc = { ...cur, sharedWith: readers, access };
+      const cur = await driveDownload(P.fileId), doc = { ...cur, sharedWith: readers, access, ...(C.fileId ? { scheduleFileId: C.fileId } : {}) };
       await driveUpdate(P.fileId, doc);
       P.shareStatus = await syncShares(P.fileId, readers);
       P.remote = { ...P.remote, sharedWith: readers, access, updatedAt: doc.updatedAt }; if (P.draft) P.draft.sharedWith = [...readers];
@@ -3277,14 +3353,15 @@ async function saveDbAccess() {   // ONE save: patient database (writer on folde
     for (const r of blocked) D.status[r.email] = "blocked — front desk";
     renderAll();
     const n = want.length;
-    m.textContent = `Saved ✓ — ${n} doctor${n === 1 ? "" : "s"} with access${D.fileId ? " to patients" : ""}${P.fileId ? (D.fileId ? " and" : "") + " to the price list" : ""}${D.frontDesk.length && P.fileId ? ` · front desk: price list only` : ""}.`;
+    if (st["(schedule)"]) throw new Error(st["(schedule)"]);
+    m.textContent = `Saved ✓ (with schedules) — ${n} doctor${n === 1 ? "" : "s"} with access${D.fileId ? " to patients" : ""}${P.fileId ? (D.fileId ? " and" : "") + " to the price list" : ""}${D.frontDesk.length && P.fileId ? ` · front desk: price list only` : ""}.`;
   } catch (e) { m.textContent = "Could not save: " + e.message; m.classList.add("err"); }
   finally { $("#dbSaveBtn").disabled = false; }
 }
 function renderDbList() {
   D.rows = D.rows.filter(r => !D.frontDesk.includes(r.email));   // v27: a front desk e-mail is never a doctor (it keeps its own access)
   $("#dbList").innerHTML = D.rows.length ? D.rows.map(r => { const st0 = D.status[r.email] || (r.on ? "access on Save" : "no access"), st = !r.on && st0 === "no access" && D.oldPrice && D.oldPrice.has(r.email) && P.fileId ? "old price-list access" : st0, fd = D.frontDesk.includes(r.email);
-    return `<div class="dbr"><input type="checkbox" data-db-on="${esc(r.email)}"${r.on ? " checked" : ""} aria-label="Access for ${esc(r.email)}"><span class="em">${esc(r.email)}</span><span class="st ${/^has access/.test(st) ? "ok" : /error|fail|blocked|removed/.test(st) ? "bad" : "wait"}">${esc(fd ? "blocked — front desk" : st)}</span><button type="button" class="small" data-db-rm="${esc(r.email)}" title="Remove from the list (access is removed on Save)">✕</button></div>`; }).join("")
+    return `<div class="dbr"><input type="checkbox" data-db-on="${esc(r.email)}"${r.on ? " checked" : ""} aria-label="Access for ${esc(r.email)}"><span class="em">${esc(r.email)}</span><span class="st ${/^has access/.test(st) ? "ok" : /error|fail|blocked|removed/.test(st) ? "bad" : "wait"}">${esc(fd ? "blocked — front desk" : st)}</span><button type="button" class="small" data-db-rm="${esc(r.email)}" title="Remove from the list (access is removed on Save)">✕</button>${schedHTML(r.email)}</div>`; }).join("")
     : `<div class="hint" style="padding:10px">No doctors yet — add their Google e-mails below.</div>`;
 }
 // v25: ONE list of doctors for both the patient database and the price list. Older price-list-only e-mails are brought into it once.
@@ -3305,6 +3382,7 @@ function renderDb() {
   absorbPriceShares();
   renderDbList();
   if (document.activeElement !== $("#dbFrontDesk")) $("#dbFrontDesk").value = D.frontDesk.join("\n");
+  if ($("#dbScheduler") && document.activeElement !== $("#dbScheduler")) $("#dbScheduler").value = (D.scheduler || D.frontDesk).join("\n");
   $("#dbNone").hidden = !!D.fileId; $("#dbOn").hidden = !D.fileId;
   if (!D.fileId) return;
   const d = D.doc || {}, sz = b => b >= 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB";
@@ -3542,7 +3620,15 @@ function bind() {
   $("#dbSaveBtn").onclick = () => saveDbAccess();
   $("#dbInfo").addEventListener("click", e => { if (e.target.id === "dbAddShardsBtn") addShards(); if (e.target.id === "dbRebuildBtn") rebuildDb(); if (e.target.id === "dbImportBtn") importOwnerPatients(); if (e.target.id === "dbCleanupBtn") cleanupOldFiles(); });
   $("#dbList").addEventListener("click", e => { const b = e.target.closest("[data-db-rm]"); if (!b) return; readDbForm(); const r = D.rows.find(x => x.email === b.dataset.dbRm); if (r) r.on = false; D.rows = D.rows.filter(x => x !== r); D.removed = (D.removed || []).concat(b.dataset.dbRm); renderDbList(); $("#dbMsg").textContent = "Removed — press “Save access” to take away access."; });
-  $("#dbList").addEventListener("change", e => { if (e.target.dataset.dbOn) { readDbForm(); $("#dbMsg").textContent = "Press “Save access” to apply."; } });
+  $("#dbList").addEventListener("toggle", e => { const d = e.target.closest && e.target.closest("details[data-sched-for]"); if (d) d.open ? C.open.add(d.dataset.schedFor) : C.open.delete(d.dataset.schedFor); }, true);
+  $("#dbList").addEventListener("change", e => {
+    const t = e.target; if (t.dataset && t.dataset.sched) {
+      const x = C.schedule[t.dataset.sched] = C.schedule[t.dataset.sched] || {}, d = x[t.dataset.day] = { ...(x[t.dataset.day] || {}) };
+      d[t.dataset.half] = t.checked; if (!d.am && !d.pm) delete x[t.dataset.day];
+      const sum = t.closest("details").querySelector(".sched-sum"); if (sum) sum.textContent = schedSummary(x);
+      $("#dbMsg").textContent = "Press “Save access” to save the schedule."; return;
+    }
+    if (e.target.dataset.dbOn) { readDbForm(); $("#dbMsg").textContent = "Press “Save access” to apply."; } });
   $("#signInBtn").onclick = () => signIn();
   $("#authArea").addEventListener("click", e => { if (e.target.id === "signOutBtn") signOut(); });
   document.addEventListener("click", e => { const m = e.target.closest("[data-hn-mode]"), s = e.target.closest("[data-hn-script]"); if (m) setHN(m.dataset.hnMode); else if (s) setHN(null, s.dataset.hnScript); });
@@ -3581,7 +3667,7 @@ function init() {
   if (P.account) requestToken("silent").then(() => loadList()).then(() => loadDb()).catch(e => { console.warn("silent sign-in", e); P.account = null; renderAll(); });
   window.__prReady = true;
 }
-window.PRICING = { rebuildDb, importOwnerPatients, collectOwnerRecords, cleanupOldFiles, addShards, CDB3, D, loadDb, createDb, saveDbAccess, syncWriters, P, HN, Pricing, buildCSV, importCSV, parseCSV, findHerb, searchHerbs, changeSummary, save, openFile, loadList, createFile, pickerAvailable, PICKER_APP_ID, signIn };
+window.PRICING = { C, loadClinicConfig, schedSummary, rebuildDb, importOwnerPatients, collectOwnerRecords, cleanupOldFiles, addShards, CDB3, D, loadDb, createDb, saveDbAccess, syncWriters, P, HN, Pricing, buildCSV, importCSV, parseCSV, findHerb, searchHerbs, changeSummary, save, openFile, loadList, createFile, pickerAvailable, PICKER_APP_ID, signIn };
 init();
 </script>
 </body>

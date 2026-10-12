@@ -145,6 +145,12 @@ a{color:var(--accent)}
   .pr .sheet-break{page-break-after:always}
 }
 </style>
+<style>.sched-today{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:6px 0}.sched-today>div{background:#f4f8f6;border-radius:8px;padding:8px 10px;min-width:0;overflow-wrap:anywhere}
+.sched-week summary{cursor:pointer;font-weight:600;font-size:13px;padding:4px 0}.sched-wrap{overflow-x:auto}
+.sched-grid{border-collapse:collapse;font-size:12.5px;width:100%}.sched-grid th,.sched-grid td{border:1px solid #e3ebe8;padding:4px 5px;text-align:center}.sched-grid tbody th{text-align:left;white-space:nowrap}
+.sched-grid .today{background:#fff4dc}
+.appts-today{margin-top:8px}.appts-today ul{margin:4px 0 0;padding-left:18px}.appts-today li{overflow-wrap:anywhere}
+</style>
 <style>/* v27: Google Picker always on top of the app (sticky banners, bottom bars, dialogs) */
 .picker-dialog-bg{z-index:2147482999!important}.picker-dialog,.picker.picker-dialog{z-index:2147483000!important}
 body.picker-open #noClinicBanner,body.picker-open .no-clinic,body.picker-open header,body.picker-open .sticky,body.picker-open .bottom-bar,body.picker-open #cdbNeed{visibility:hidden!important}
@@ -195,6 +201,7 @@ document.addEventListener("DOMContentLoaded",function(){new MutationObserver(chk
       </details>
       <div class="msg" id="setupMsg" role="status"></div>
     </section>
+    <section class="card" id="schedCard" hidden></section>
     <section class="card" id="ptCard" hidden>
       <div class="detail-head"><h2 style="flex:1">👥 Patients <span class="muted" id="ptCount"></span></h2><button type="button" class="small primary" id="ptAddBtn">＋ Add patient</button></div>
       <p class="hint" style="margin:2px 0 8px">Basic details only — name, date of birth, phone. Visits and clinical notes are only visible to the doctors.</p>
@@ -2876,7 +2883,7 @@ async function loadConfig() {
   if (id) { try { remote = await driveDownload(id); } catch (e) { if (e.status === 404) id = null; else throw e; } }
   if (!id) { const f = (await driveList(`name='${qEsc(FDG.configName)}' and 'me' in owners and trashed=false`))[0]; if (f) { id = f.id; remote = await driveDownload(id); } }
   FD.configFileId = id;
-  if (remote && remote.kind === "frontdesk-config" && (remote.updatedAt || "") > (FD.config.updatedAt || "")) FD.config = { doctors: remote.doctors || [], clinicFileId: remote.clinicFileId || "", indexId: remote.indexId || "", updatedAt: remote.updatedAt };
+  if (remote && remote.kind === "frontdesk-config" && (remote.updatedAt || "") > (FD.config.updatedAt || "")) FD.config = { doctors: remote.doctors || [], clinicFileId: remote.clinicFileId || "", indexId: remote.indexId || "", scheduleId: remote.scheduleId || "", apptsId: remote.apptsId || "", updatedAt: remote.updatedAt };
   else if ((FD.config.updatedAt || "") > ((remote && remote.updatedAt) || "")) await saveConfig(false);
   saveCache();
 }
@@ -3003,6 +3010,53 @@ async function connectDoctor(input) {
     setMsg(`Connected ✓ — ${FD.config.doctors[FD.config.doctors.length - 1].name}`); return true;
   } catch (e) { setMsg(e.message, true); return false; }
 }
+// v30: clinic schedule (reference only — owner's tcm-clinic-config.json, shared read-only; doctor e-mails + schedule, no patient data)
+const CLINIC_CONFIG_FILE = "tcm-clinic-config.json", SCHED_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+async function connectSchedule(input, quiet) {
+  const id = parseDriveFileId(input); if (!id) return false;
+  try {
+    const doc = await driveDownload(id);
+    if (!doc || doc.kind !== "clinic-config") throw new Error("That is not the clinic schedule (" + CLINIC_CONFIG_FILE + ").");
+    FD.sched = { doc, error: "" }; FD.config.scheduleId = id; await saveConfig(); renderAll();
+    if (!quiet) setMsg("Clinic schedule connected ✓");
+    if (doc.appointmentsFileId && !FD.config.apptsId) await connectAppts(doc.appointmentsFileId, true);
+    return true;
+  } catch (e) { if (!quiet) setMsg(e.status === 404 || e.status === 403 ? "This account can't open the clinic schedule yet — select it with “Connect schedule”." : e.message, true); return false; }
+}
+// v31: today's appointments (read-only here; booked on scheduler.html)
+const APPTS_FILE = "tcm-clinic-appointments.json";
+async function connectAppts(input, quiet) {
+  const id = parseDriveFileId(input); if (!id) return false;
+  try { const doc = await driveDownload(id); if (!doc || doc.kind !== "clinic-appointments") throw new Error("That is not the clinic appointments list (" + APPTS_FILE + ").");
+    FD.appts = { doc, error: "" }; FD.config.apptsId = id; await saveConfig(); renderAll(); if (!quiet) setMsg("Appointments connected ✓"); return true; }
+  catch (e) { if (!quiet) setMsg(e.status === 404 || e.status === 403 ? "This account can't open the appointments list yet." : e.message, true); return false; }
+}
+async function loadSchedule() {
+  if (FD.config.apptsId) { try { const doc = await driveDownload(FD.config.apptsId); if (doc && doc.kind === "clinic-appointments") FD.appts = { doc, error: "" }; } catch (e) { FD.appts = { ...(FD.appts || {}), error: "could not refresh" }; } }
+  if (!FD.config.scheduleId) return;
+  try { const doc = await driveDownload(FD.config.scheduleId); if (doc && doc.kind === "clinic-config") FD.sched = { doc, error: "" }; }
+  catch (e) { FD.sched = { ...(FD.sched || {}), error: "could not refresh (" + (e.status || "offline") + ")" }; }
+}
+const manilaDay = (d = new Date()) => new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "Asia/Manila" }).format(d).slice(0, 3);
+function schedName(email) { const d = FD.config.doctors.find(x => (x.email || "").toLowerCase() === email.toLowerCase()); const n = ((FD.sched && FD.sched.doc && FD.sched.doc.names) || {})[email]; return (d && d.name) || n || email.split("@")[0]; }
+function renderSchedule() {
+  const el = $("#schedCard"); if (!el) return;
+  el.hidden = !FD.account;
+  const sc = (FD.sched && FD.sched.doc && FD.sched.doc.schedule) || null;
+  if (!FD.config.scheduleId || !sc) { el.innerHTML = `<h2>🗓 Doctors in today</h2><p class="hint">Reference only. Connect the clinic schedule once (the clinic owner shares <code>${CLINIC_CONFIG_FILE}</code> with you).</p><button type="button" id="connectSchedBtn">📂 Connect schedule</button>`; return; }
+  const ymd = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const ap = Object.values(((FD.appts || {}).doc || {}).appts || {}).filter(a => !a.deleted && a.date === ymd).sort((a, b) => (a.half + (a.time || "")).localeCompare(b.half + (b.time || "")));
+  const apHTML = !FD.config.apptsId ? ((FD.sched.doc || {}).appointmentsFileId ? `<button type="button" class="small" id="connectApptsBtn">📂 Connect appointments</button>` : "")
+    : `<div class="appts-today" id="apptsToday"><b>Appointments today (${ap.length})</b>${ap.length ? `<ul>${ap.map(a => `<li>${a.half === "am" ? "AM" : "PM"}${a.time ? " " + esc(a.time) : ""} · <b>${esc(a.name)}</b> → ${esc(schedName(a.doctor))}${a.phone ? " · ☎ " + esc(a.phone) : ""}${a.note ? ` <span class="muted">(${esc(a.note)})</span>` : ""} <span class="muted booked-by">· Booked by ${esc(a.createdBy || "unknown")}</span></li>`).join("")}</ul>` : `<div class="muted">None booked</div>`}</div>`;
+  const today = manilaDay(), who = h => Object.keys(sc).filter(e => ((sc[e] || {})[today] || {})[h]).map(schedName);
+  const am = who("am"), pm = who("pm"), list = a => a.length ? a.map(esc).join(", ") : `<span class="muted">—</span>`;
+  const emails = Object.keys(sc).sort((a, b) => schedName(a).localeCompare(schedName(b)));
+  el.innerHTML = `<h2>🗓 Doctors in today <span class="muted" style="font-weight:400">· ${esc(today)}</span></h2>
+    <div class="sched-today"><div><b>Morning</b><div id="schedAm">${list(am)}</div></div><div><b>Afternoon</b><div id="schedPm">${list(pm)}</div></div></div>
+    <details class="sched-week" id="schedWeek"><summary>Full week</summary><div class="sched-wrap"><table class="sched-grid"><thead><tr><th></th>${SCHED_DAYS.map(d => `<th${d === today ? ' class="today"' : ""}>${d}</th>`).join("")}</tr></thead><tbody>
+      ${emails.map(e => `<tr><th scope="row">${esc(schedName(e))}</th>${SCHED_DAYS.map(d => { const v = (sc[e] || {})[d] || {}; return `<td${d === today ? ' class="today"' : ""}>${v.am && v.pm ? "AM/PM" : v.am ? "AM" : v.pm ? "PM" : ""}</td>`; }).join("")}</tr>`).join("")}
+    </tbody></table></div></details>${apHTML}<p class="hint">Reference only — set by the clinic owner.${FD.sched.error ? " ⚠ " + esc(FD.sched.error) : ""}</p>`;
+}
 async function connectClinic(input) {
   const id = parseDriveFileId(input); if (!id) { setMsg("Paste the share link of the clinic price list or its file ID.", true); return false; }
   setMsg("Connecting…");
@@ -3011,7 +3065,9 @@ async function connectClinic(input) {
     const owner = (meta.owners || [])[0] || {};
     FD.clinic = { prices: Pricing.normalizeHerbPrices(doc.prices), fileId: id, ownerName: owner.displayName || (doc.owner || {}).name || "", ownerEmail: owner.emailAddress || "", modifiedTime: meta.modifiedTime, error: "" };
     FD.config.clinicFileId = id; await saveConfig(); renderAll();
-    setMsg("Clinic price list connected ✓"); return true;
+    setMsg("Clinic price list connected ✓");
+    if (doc.scheduleFileId && !FD.config.scheduleId) await connectSchedule(doc.scheduleFileId, true);   // usually needs one Picker pick (drive.file)
+    return true;
   } catch (e) { setMsg(e.message, true); return false; }
 }
 let pickerLoad = null;
@@ -3028,12 +3084,12 @@ async function openPicker(kind) {
   setMsg("Opening Google Drive…");
   try {
     const tok = await ensureToken(); await loadPicker();
-    const name = kind === "slips" ? FRONTDESK_SLIPS_FILE : kind === "index" ? CDB3.INDEX : CLINIC_PRICES_FILE;
+    const name = kind === "slips" ? FRONTDESK_SLIPS_FILE : kind === "index" ? CDB3.INDEX : kind === "schedule" ? CLINIC_CONFIG_FILE : kind === "appts" ? APPTS_FILE : CLINIC_PRICES_FILE;
     const view = new google.picker.DocsView(google.picker.ViewId.DOCS).setMimeTypes("application/json").setQuery(name).setOwnedByMe(false);
     let b = new google.picker.PickerBuilder().setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID).addView(view)
-      .setTitle(kind === "slips" ? "Select the doctors' front desk slips files (" + name + ")" : kind === "index" ? "Select the clinic patient list (" + CDB3.FOLDER + " / " + name + ")" : "Select the clinic herb price list (" + name + ")")
+      .setTitle(kind === "appts" ? "Select the clinic appointments (" + name + ")" : kind === "schedule" ? "Select the clinic schedule (" + name + ")" : kind === "slips" ? "Select the doctors' front desk slips files (" + name + ")" : kind === "index" ? "Select the clinic patient list (" + CDB3.FOLDER + " / " + name + ")" : "Select the clinic herb price list (" + name + ")")
       .setCallback(async d => {
-        if (d.action === google.picker.Action.PICKED) { for (const doc of d.docs || []) { if (kind === "slips") await connectDoctor(doc.id); else if (kind === "index") await connectPatients(doc.id); else await connectClinic(doc.id); } }
+        if (d.action === google.picker.Action.PICKED) { for (const doc of d.docs || []) { if (kind === "slips") await connectDoctor(doc.id); else if (kind === "index") await connectPatients(doc.id); else if (kind === "schedule") await connectSchedule(doc.id); else if (kind === "appts") await connectAppts(doc.id); else await connectClinic(doc.id); } }
         else if (d.action === google.picker.Action.CANCEL) setMsg("");
       });
     if (kind === "slips" && google.picker.Feature && google.picker.Feature.MULTISELECT_ENABLED) b = b.enableFeature(google.picker.Feature.MULTISELECT_ENABLED);
@@ -3056,7 +3112,7 @@ async function refreshAll(quiet) {
       try { const doc = await driveDownload(d.fileId); if (doc && doc.kind === "frontdesk-slips") { FD.docs[d.fileId] = { ...(FD.docs[d.fileId] || {}), doc, loadedAt: new Date().toISOString(), error: "" }; if (doc.doctor && doc.doctor.name && doc.doctor.name !== d.name) d.name = doc.doctor.name; } }
       catch (e) { FD.docs[d.fileId] = { ...(FD.docs[d.fileId] || {}), error: e.status === 404 || e.status === 403 ? "no access (unshared?)" : "offline / error " + (e.status || "") }; }
     }));
-    await loadPatients();
+    await loadPatients(); await loadSchedule();
     if (FD.config.clinicFileId) {
       try { const doc = await driveDownload(FD.config.clinicFileId); if (doc && doc.kind === "clinic-herb-prices") FD.clinic = { ...(FD.clinic || {}), prices: Pricing.normalizeHerbPrices(doc.prices), fileId: FD.config.clinicFileId, error: "" }; if (FD.clinic && !FD.clinic.ownerName) { const m = await driveMeta(FD.config.clinicFileId); const o = (m.owners || [])[0] || {}; FD.clinic.ownerName = o.displayName || ""; FD.clinic.ownerEmail = o.emailAddress || ""; } }
       catch (e) { if (FD.clinic) FD.clinic.error = "could not refresh (" + (e.status || "offline") + ")"; }
@@ -3290,7 +3346,7 @@ function renderSetup() {
   if (!renderSetup._auto && nd && c && c.prices) { renderSetup._auto = true; if (!renderSetup._touched) $("#setupDetails").open = false; }
 }
 function renderAll() {
-  renderAuth();
+  renderAuth(); renderSchedule();
   const on = !!FD.account;
   $("#welcome").hidden = on; $("#app").hidden = !on;
   if (!on) return;
@@ -3304,6 +3360,7 @@ function bind() {
   $("#setupDetails").addEventListener("toggle", () => { renderSetup._touched = true; });
   $("#connectDoctorBtn").onclick = () => openPicker("slips");
   $("#connectClinicBtn").onclick = () => openPicker("clinic");
+  document.addEventListener("click", e => { if (e.target.id === "connectSchedBtn") openPicker("schedule"); if (e.target.id === "connectApptsBtn") openPicker("appts"); });
   $("#connectPtBtn").onclick = () => openPicker("index");
   $("#pastePtBtn").onclick = async () => { if (await connectPatients($("#pastePtInput").value)) $("#pastePtInput").value = ""; };
   $("#ptSearch").addEventListener("input", () => renderPatients());
@@ -3349,7 +3406,7 @@ function init() {
   else renderAll();
   window.__fdReady = true;
 }
-window.FDESK = { ptDupes, connectPatients, savePatientFD, loadPatients, renderPatients, FD, HN, Slips, Pricing, connectDoctor, connectClinic, refreshAll, markPaid, toggleDispensed, undoPaid, writeFd, buildCSV, receiptHTML, sheetHTML, selected, queueItems, allItems, billFor, renderAll, checkedOpen, parseDriveFileId, pickerAvailable, PICKER_APP_ID, setPrintSize, signIn };
+window.FDESK = { connectAppts, connectSchedule, renderSchedule, manilaDay, ptDupes, connectPatients, savePatientFD, loadPatients, renderPatients, FD, HN, Slips, Pricing, connectDoctor, connectClinic, refreshAll, markPaid, toggleDispensed, undoPaid, writeFd, buildCSV, receiptHTML, sheetHTML, selected, queueItems, allItems, billFor, renderAll, checkedOpen, parseDriveFileId, pickerAvailable, PICKER_APP_ID, setPrintSize, signIn };
 init();
 </script>
 </body>

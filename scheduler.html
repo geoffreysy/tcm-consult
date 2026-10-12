@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scheduler — TCM Consult Assistant</title>
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#2f7d6d">
+<script>
+/* =====================================================================
+   CONFIGURATION — Google sign-in / Drive storage
+   ---------------------------------------------------------------------
+   GOOGLE_CLIENT_ID: OAuth 2.0 "Web application" client ID from Google Cloud
+   Console (APIs & Services → Credentials), e.g.
+     "1234567890-abc123.apps.googleusercontent.com"
+   It is NOT a secret (no client secret is used). Add the site origin
+   (https://geoffreysy.github.io) to "Authorised JavaScript origins" and
+   enable the Google Drive API. Leave "" to keep the app in local-only mode.
+   ===================================================================== */
+const GOOGLE_CLIENT_ID = "416895917493-3j5kk308fk420kcc2rjnfuoap45hep2s.apps.googleusercontent.com";
+/* GOOGLE_PICKER_API_KEY: browser API key from the same Cloud project, restricted to the Google
+   Picker API (website restrictions: this site + https://docs.google.com/*). Needed only for
+   "Connect clinic herb price list" with Google Picker. Leave "" → doctors connect by pasting the
+   shared file link instead. The Picker App ID is the Cloud project number = the digits before "-"
+   in GOOGLE_CLIENT_ID (derived automatically). */
+const GOOGLE_PICKER_API_KEY = "AIzaSyAwoxJwp1HPBfx8ZN1L-TNW06nmTwylges";   // "TCM Consult Picker" (project tcm-consult-assistant): referrer-restricted to this site, Picker API only — safe in client code
+</script>
+<style>
+:root{--accent:#2f7d6d;--line:#dfe7e4;--muted:#6a7a75;--warn:#8a5a00}
+*{box-sizing:border-box}body{margin:0;font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",sans-serif;background:#f3f6f5;color:#1d2b27}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;background:#fff;border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{margin:0;font-size:19px;color:var(--accent)}main{max-width:760px;margin:0 auto;padding:12px}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:12px}
+.card h2{margin:0 0 8px;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:#4a5a55}
+button{font:inherit;border:1px solid #cfd9d5;background:#fff;border-radius:8px;padding:8px 12px;cursor:pointer;min-height:40px}button.primary{background:var(--accent);border-color:var(--accent);color:#fff}button.small{padding:4px 10px;min-height:32px;font-size:13px}button.danger{color:#a12}
+input,select,textarea{font:inherit;padding:8px;border:1px solid #cfd9d5;border-radius:8px;min-width:0;width:100%}
+.hint{color:var(--muted);font-size:12.5px}.msg{font-size:13px;margin-top:6px}.msg.err{color:#a12}
+.daynav{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.daynav input{width:auto;flex:1 1 150px}
+.week{display:flex;gap:4px;overflow-x:auto;margin-top:8px}.week button{flex:1 0 auto;min-width:44px;padding:4px 6px;font-size:12.5px}.week button.on{background:var(--accent);color:#fff;border-color:var(--accent)}.week button .n{display:block;font-size:11px;opacity:.8}
+.sess{border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:10px}.sess h3{margin:0 0 6px;font-size:15px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.appts{list-style:none;margin:0;padding:0}.appts li{display:flex;gap:8px;align-items:center;justify-content:space-between;border-top:1px solid #eef2f0;padding:7px 0}.appts .a{min-width:0;overflow-wrap:anywhere}
+.aform{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}.aform .full{grid-column:1/-1}.aform label{display:grid;gap:2px;font-size:12.5px;color:var(--muted)}
+.empty{color:var(--muted);font-size:13px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#23312d;color:#fff;padding:8px 14px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:100}.toast.show{opacity:1}
+.picker-dialog-bg{z-index:2147482999!important}.picker-dialog{z-index:2147483000!important}
+</style>
+</head>
+<body>
+<header><h1>🗓 Clinic scheduler</h1><div id="authArea"></div></header>
+<main>
+  <section class="card" id="welcome"><h2>Sign in</h2><p>Book patients into the doctors' clinic sessions. This page sees <b>only</b> the clinic schedule (read-only) and the appointments list — never patient records, slips or prices.</p>
+    <button class="primary" id="signInBtn">Sign in with Google</button><div class="msg" id="welcomeMsg"></div></section>
+  <div id="app" hidden>
+    <section class="card" id="setupCard"><h2>Clinic files</h2><div id="setupBody"></div>
+      <button type="button" id="connectBtn">📂 Connect schedule + appointments</button>
+      <div class="hint">In Google Drive, select <code>tcm-clinic-config.json</code> and <code>tcm-clinic-appointments.json</code> (shared with you by the clinic owner).</div><div class="msg" id="setupMsg" role="status"></div></section>
+    <section class="card" id="dayCard"><h2>Day</h2>
+      <div class="daynav"><button type="button" class="small" id="prevDay" aria-label="Previous day">◀</button><input type="date" id="dayInput"><button type="button" class="small" id="nextDay" aria-label="Next day">▶</button><button type="button" class="small" id="todayBtn">Today</button></div>
+      <div class="week" id="week"></div>
+      <div id="sessions"></div>
+    </section>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+<script>
+"use strict";
+/* =====================================================================
+   SCHEDULER PAGE (v31)
+   Opens ONLY two files the clinic owner shares: tcm-clinic-config.json (doctor schedule, READ-ONLY) and
+   tcm-clinic-appointments.json (WRITER). Never lists or opens patient records, the patient index / data
+   files, slips or prices. Appointments are free text (name, optional phone / time / note) and can only be
+   booked into a doctor's scheduled morning / afternoon session. Saves: re-read → merge (per appointment,
+   newest wins, deletions kept) → write → verify, up to 6 tries.
+   ===================================================================== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function lsGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
+function lsSet(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} }
+function toast(msg, ms = 2800) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), ms); }
+const G = { scope: "https://www.googleapis.com/auth/drive.file openid email profile", drive: "https://www.googleapis.com/drive/v3", upload: "https://www.googleapis.com/upload/drive/v3",
+  userinfo: "https://www.googleapis.com/oauth2/v3/userinfo", gisUrl: "https://accounts.google.com/gsi/client" };
+const PICKER_APP_ID = (String(typeof GOOGLE_CLIENT_ID === "string" ? GOOGLE_CLIENT_ID : "").match(/^(\d+)-/) || [])[1] || "";
+const pickerAvailable = () => typeof GOOGLE_PICKER_API_KEY === "string" && GOOGLE_PICKER_API_KEY.trim() !== "" && !!PICKER_APP_ID;
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], HALF = { am: "Morning", pm: "Afternoon" };
+const LS_ACC = "tcm_sc_account";
+const SC = { account: null, token: null, tokenExp: 0, tc: null, gis: null, _cb: null, _err: null, cfgId: "", apptId: "", cfg: null, appts: null, day: "", edit: null };
+const manilaYmd = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+const dayOf = ymd => new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "Asia/Manila" }).format(new Date(ymd + "T12:00:00+08:00")).slice(0, 3);
+const addDays = (ymd, n) => manilaYmd(new Date(new Date(ymd + "T12:00:00+08:00").getTime() + n * 86400000));
+const docName = e => (((SC.cfg || {}).names || {})[e]) || e.split("@")[0];
+
+/* ---------- Google sign-in (same as the other pages) ---------- */
+function loadGIS() {
+  if (window.google && google.accounts && google.accounts.oauth2) return Promise.resolve();
+  if (SC.gis) return SC.gis;
+  SC.gis = new Promise((res, rej) => { const sc = document.createElement("script"); sc.src = G.gisUrl; sc.async = true;
+    sc.onload = () => { const t0 = Date.now(); (function chk() { if (window.google && google.accounts && google.accounts.oauth2) res(); else if (Date.now() - t0 > 5000) rej(new Error("gis_unavailable")); else setTimeout(chk, 50); })(); };
+    sc.onerror = () => rej(new Error("gis_load_failed")); document.head.appendChild(sc); }).catch(e => { SC.gis = null; throw e; });
+  return SC.gis;
+}
+async function requestToken(mode) {
+  await loadGIS();
+  if (!SC.tc) SC.tc = google.accounts.oauth2.initTokenClient({ client_id: GOOGLE_CLIENT_ID.trim(), scope: G.scope, callback: r => SC._cb && SC._cb(r), error_callback: e => SC._err && SC._err(e) });
+  return new Promise((resolve, reject) => {
+    const done = () => { clearTimeout(t); SC._cb = SC._err = null; };
+    const t = setTimeout(() => { done(); reject(new Error("token_timeout")); }, mode === "silent" ? 20000 : 180000);
+    SC._cb = r => { done(); if (!r || !r.access_token) return reject(new Error((r && r.error) || "no_token")); SC.token = r.access_token; SC.tokenExp = Date.now() + (Math.max(120, +r.expires_in || 3600) - 90) * 1000; resolve(r.access_token); };
+    SC._err = e => { done(); reject(new Error((e && e.type) || "popup_error")); };
+    const opt = { prompt: mode === "select" ? "select_account" : "" }; if (mode !== "select" && SC.account) opt.login_hint = SC.account.email;
+    try { SC.tc.requestAccessToken(opt); } catch (e) { done(); reject(e); }
+  });
+}
+async function ensureToken() { if (SC.token && Date.now() < SC.tokenExp) return SC.token; SC.token = null; return requestToken("silent"); }
+async function gfetch(url, opt = {}, retried = false) {
+  const tok = await ensureToken();
+  const res = await fetch(url, { ...opt, headers: { ...(opt.headers || {}), Authorization: "Bearer " + tok } });
+  if (res.status === 401 && !retried) { SC.token = null; return gfetch(url, opt, true); }
+  if (!res.ok) { const e = new Error(`Google API ${res.status}`); e.status = res.status; throw e; }
+  return res;
+}
+const gjson = async (u, o) => (await gfetch(u, o)).json();
+const driveMeta = id => gjson(`${G.drive}/files/${encodeURIComponent(id)}?fields=${encodeURIComponent("id,name,version,modifiedTime,capabilities(canEdit)")}`);
+const driveDownload = async id => (await gfetch(`${G.drive}/files/${encodeURIComponent(id)}?alt=media`)).json();
+const driveUpdate = (id, doc) => gjson(`${G.upload}/files/${encodeURIComponent(id)}?uploadType=media&fields=id,modifiedTime`, { method: "PATCH", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify(doc) });
+const accKey = () => "tcm_sc_files_" + (SC.account ? SC.account.sub : "");
+
+async function signIn() {
+  $("#welcomeMsg").textContent = "";
+  try {
+    const tok = await requestToken(SC.account ? "" : "select");
+    const r = await fetch(G.userinfo, { headers: { Authorization: "Bearer " + tok } }); if (!r.ok) throw new Error("userinfo " + r.status);
+    const u = await r.json(); SC.account = { sub: String(u.sub), email: u.email || "", name: u.name || u.email || "" }; lsSet(LS_ACC, JSON.stringify(SC.account));
+    try { const f = JSON.parse(lsGet(accKey()) || "{}"); SC.cfgId = f.cfgId || ""; SC.apptId = f.apptId || ""; } catch {}
+    renderAll(); await refresh();
+  } catch (e) { $("#welcomeMsg").textContent = "Sign-in did not complete (" + e.message + ")."; renderAll(); }
+}
+function signOut() { SC.account = null; SC.token = null; SC.cfg = SC.appts = null; lsSet(LS_ACC, null); renderAll(); }
+
+/* ---------- files ---------- */
+async function connect(ids) {
+  const m = $("#setupMsg"); m.textContent = "Connecting…"; m.classList.remove("err");
+  for (const id of ids) {
+    try {
+      const d = await driveDownload(id);
+      if (d && d.kind === "clinic-config") SC.cfgId = id;
+      else if (d && d.kind === "clinic-appointments") { const meta = await driveMeta(id); if (!(meta.capabilities || {}).canEdit) throw new Error("You can view but not edit the appointments — ask the clinic owner to add you under Scheduler access."); SC.apptId = id; }
+      else throw new Error("That file is not the clinic schedule or appointments list.");
+    } catch (e) { m.textContent = e.status === 404 || e.status === 403 ? "This account can't open that file — ask the clinic owner to add you under Scheduler access." : e.message; m.classList.add("err"); }
+  }
+  lsSet(accKey(), JSON.stringify({ cfgId: SC.cfgId, apptId: SC.apptId }));
+  await refresh(); if (SC.cfg && SC.appts) m.textContent = "Connected ✓";
+}
+async function refresh() {
+  try { if (SC.cfgId) { const d = await driveDownload(SC.cfgId); if (d && d.kind === "clinic-config") SC.cfg = d; } } catch (e) { SC.cfg = null; }
+  try { if (SC.apptId) { const d = await driveDownload(SC.apptId); if (d && d.kind === "clinic-appointments") SC.appts = d; } } catch (e) { SC.appts = null; }
+  renderAll();
+}
+let pickerLoad = null;
+function loadPicker() {
+  if (window.google && google.picker) return Promise.resolve(); if (pickerLoad) return pickerLoad;
+  pickerLoad = new Promise((res, rej) => { const sc = document.createElement("script"); sc.src = "https://apis.google.com/js/api.js"; sc.async = true;
+    sc.onload = () => { try { gapi.load("picker", { callback: res, onerror: () => rej(new Error("picker_load_failed")) }); } catch (e) { rej(e); } };
+    sc.onerror = () => rej(new Error("picker_load_failed")); document.head.appendChild(sc); }).catch(e => { pickerLoad = null; throw e; });
+  return pickerLoad;
+}
+async function openPicker() {
+  if (!pickerAvailable()) { $("#setupMsg").textContent = "Google Picker isn't configured on this site."; return; }
+  try {
+    const tok = await ensureToken(); await loadPicker();
+    const P = google.picker, view = new P.DocsView(P.ViewId.DOCS).setMimeTypes("application/json").setQuery("tcm-clinic-").setOwnedByMe(false);
+    new P.PickerBuilder().setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID).addView(view).enableFeature(P.Feature.MULTISELECT_ENABLED)
+      .setTitle("Select the clinic schedule + appointments").setCallback(d => { if (d.action === P.Action.PICKED) connect((d.docs || []).map(x => x.id)); }).build().setVisible(true);
+  } catch (e) { $("#setupMsg").textContent = "Google Picker failed: " + (e.message || e); }
+}
+
+/* ---------- appointments: merge + verified save ---------- */
+const aT = a => a.updatedAt || "";
+function mergeAppts(a, b) {
+  const out = { ...((a || {}).appts || {}) };
+  for (const [id, x] of Object.entries((b || {}).appts || {})) if (!out[id] || aT(x) > aT(out[id])) out[id] = x;
+  return out;
+}
+async function saveAppt(rec) {
+  for (let i = 0; i < 6; i++) {
+    if (i) await sleep(150 + Math.random() * 300 * i);
+    const m1 = await driveMeta(SC.apptId), cur = await driveDownload(SC.apptId);
+    const appts = mergeAppts(cur, { appts: { [rec.id]: rec } });
+    const m2 = await driveMeta(SC.apptId); if (String(m2.version) !== String(m1.version)) continue;
+    await driveUpdate(SC.apptId, { ...cur, kind: "clinic-appointments", format: 1, appts, updatedAt: new Date().toISOString(), updatedBy: SC.account.email });
+    const chk = await driveDownload(SC.apptId), got = ((chk || {}).appts || {})[rec.id];
+    if (got && aT(got) >= aT(rec)) { SC.appts = chk; return true; }
+  }
+  throw new Error("The appointments list is busy — try again");
+}
+const sessionOn = (email, ymd, half) => !!((((SC.cfg || {}).schedule || {})[email] || {})[dayOf(ymd)] || {})[half];
+async function submitForm(form) {
+  const f = new FormData(form), name = String(f.get("name") || "").trim(), email = form.dataset.doctor, half = form.dataset.half, date = SC.day;
+  if (!name) { toast("Type the patient's name"); return; }
+  if (!sessionOn(email, date, half)) { toast(`${docName(email)} has no ${HALF[half].toLowerCase()} session on ${dayOf(date)} — booking not allowed`, 5000); return; }
+  const prev = SC.edit && SC.edit.id ? (SC.appts.appts || {})[SC.edit.id] : null;
+  const rec = { ...(prev || {}), id: prev ? prev.id : uid(), date, half, doctor: email, name, phone: String(f.get("phone") || "").trim(), time: String(f.get("time") || "").trim(), note: String(f.get("note") || "").trim(),
+    createdAt: prev ? prev.createdAt : new Date().toISOString(), createdBy: prev ? prev.createdBy : SC.account.email, updatedAt: new Date().toISOString(), updatedBy: SC.account.email };
+  if (prev) { rec.lastEditedBy = SC.account.email; rec.lastEditedAt = rec.updatedAt; }   // automatic from sign-in, never typed
+  delete rec.deleted;
+  try { await saveAppt(rec); SC.edit = null; toast(prev ? "Appointment updated" : "Appointment booked"); renderAll(); } catch (e) { toast(e.message, 5000); }
+}
+async function deleteAppt(id) {
+  const a = (SC.appts.appts || {})[id]; if (!a || !confirm(`Delete the appointment for ${a.name}?`)) return;
+  try { await saveAppt({ ...a, deleted: true, updatedAt: new Date().toISOString(), updatedBy: SC.account.email }); toast("Appointment deleted"); renderAll(); } catch (e) { toast(e.message, 5000); }
+}
+
+/* ---------- render ---------- */
+function renderAll() {
+  const on = !!SC.account;
+  $("#welcome").hidden = on; $("#app").hidden = !on;
+  $("#authArea").innerHTML = on ? `<span class="hint">${esc(SC.account.email)}</span> <button class="small" id="signOutBtn">Sign out</button>` : "";
+  if (!on) return;
+  $("#setupBody").innerHTML = `<div class="hint">Schedule: ${SC.cfg ? "✓ connected" : "not connected"} · Appointments: ${SC.appts ? "✓ connected" : "not connected"}</div>`;
+  $("#setupCard").hidden = !!(SC.cfg && SC.appts) && !SC.showSetup;
+  $("#dayCard").hidden = !(SC.cfg && SC.appts);
+  if (!(SC.cfg && SC.appts)) return;
+  if (!SC.day) SC.day = manilaYmd();
+  $("#dayInput").value = SC.day;
+  const start = addDays(SC.day, -((DAYS.indexOf(dayOf(SC.day)) + 7) % 7));
+  $("#week").innerHTML = DAYS.map((d, i) => { const y = addDays(start, i); return `<button type="button" data-day="${y}" class="${y === SC.day ? "on" : ""}">${d}<span class="n">${y.slice(8)}</span></button>`; }).join("");
+  const sch = SC.cfg.schedule || {}, wd = dayOf(SC.day), list = Object.values(SC.appts.appts || {}).filter(a => !a.deleted && a.date === SC.day);
+  const sess = [];
+  for (const e of Object.keys(sch).sort((a, b) => docName(a).localeCompare(docName(b)))) for (const h of ["am", "pm"]) if (((sch[e] || {})[wd] || {})[h]) sess.push({ e, h });
+  $("#sessions").innerHTML = sess.length ? sess.sort((a, b) => a.h.localeCompare(b.h)).map(({ e, h }) => {
+    const items = list.filter(a => a.doctor === e && a.half === h).sort((a, b) => (a.time || "").localeCompare(b.time || "") || aT(a).localeCompare(aT(b)));
+    const editing = SC.edit && SC.edit.doctor === e && SC.edit.half === h, cur = editing && SC.edit.id ? SC.appts.appts[SC.edit.id] : {};
+    return `<div class="sess" data-sess="${esc(e)}|${h}"><h3><span>${esc(docName(e))} · ${HALF[h]}</span><span class="hint">${items.length} booked</span></h3>
+      <ul class="appts">${items.map(a => `<li><div class="a"><b>${esc(a.name)}</b>${a.time ? ` · ${esc(a.time)}` : ""}${a.phone ? ` · ☎ ${esc(a.phone)}` : ""}${a.note ? `<div class="hint">${esc(a.note)}</div>` : ""}<div class="hint booked-by">Booked by ${esc(a.createdBy || "unknown")}${a.lastEditedBy ? ` · edited by ${esc(a.lastEditedBy)}` : ""}</div></div><div><button type="button" class="small" data-edit="${a.id}">Edit</button> <button type="button" class="small danger" data-del="${a.id}" aria-label="Delete">✕</button></div></li>`).join("") || `<li class="empty">No appointments yet</li>`}</ul>
+      ${editing ? `<form class="aform" data-doctor="${esc(e)}" data-half="${h}"><label class="full">Patient name<input name="name" required value="${esc(cur.name || "")}" autocomplete="off"></label><label>Phone (optional)<input name="phone" inputmode="tel" value="${esc(cur.phone || "")}"></label><label>Time (optional)<input name="time" type="time" value="${esc(cur.time || "")}"></label><label class="full">Note (optional)<input name="note" value="${esc(cur.note || "")}"></label><div class="full"><button class="primary" type="submit">${cur.id ? "Save changes" : "Book"}</button> <button type="button" data-cancel>Cancel</button></div></form>`
+        : `<button type="button" class="small primary" data-add="${esc(e)}|${h}">+ Add appointment</button>`}</div>`; }).join("")
+    : `<p class="empty">No doctor is scheduled on ${esc(wd)} ${esc(SC.day)} — appointments can only be booked into scheduled sessions.</p>`;
+}
+document.addEventListener("click", e => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.id === "signInBtn") signIn(); else if (t.id === "signOutBtn") signOut(); else if (t.id === "connectBtn") openPicker();
+  else if (t.id === "prevDay") { SC.day = addDays(SC.day, -1); SC.edit = null; renderAll(); } else if (t.id === "nextDay") { SC.day = addDays(SC.day, 1); SC.edit = null; renderAll(); }
+  else if (t.id === "todayBtn") { SC.day = manilaYmd(); SC.edit = null; renderAll(); }
+  else if (t.dataset.day) { SC.day = t.dataset.day; SC.edit = null; renderAll(); }
+  else if (t.dataset.add) { const [doctor, half] = t.dataset.add.split("|"); SC.edit = { doctor, half }; renderAll(); const i = document.querySelector(".aform [name=name]"); i && i.focus(); }
+  else if (t.dataset.edit) { const a = SC.appts.appts[t.dataset.edit]; SC.edit = { doctor: a.doctor, half: a.half, id: a.id }; renderAll(); }
+  else if (t.dataset.del) deleteAppt(t.dataset.del);
+  else if (t.hasAttribute("data-cancel")) { SC.edit = null; renderAll(); }
+});
+document.addEventListener("submit", e => { if (e.target.matches(".aform")) { e.preventDefault(); submitForm(e.target); } });
+document.addEventListener("change", e => { if (e.target.id === "dayInput" && e.target.value) { SC.day = e.target.value; SC.edit = null; renderAll(); } });
+(function init() {
+  try { SC.account = JSON.parse(lsGet(LS_ACC) || "null"); } catch {}
+  renderAll(); if (SC.account) signIn();
+  window.__scReady = true;
+})();
+window.SCHED = { SC, mergeAppts, sessionOn, dayOf, manilaYmd, connect, refresh, saveAppt };
+</script>
+</body>
+</html>
