@@ -2658,7 +2658,32 @@ const CDB3 = (() => {
     out.parts = by; out.visitDeleted = Object.fromEntries(Object.entries(del).filter(([k]) => k.startsWith("visits/")));
     return out;
   }
-  return { hash, partHash, stable, FOLDER, INDEX, FOLDER_TAG, INDEX_TAG, PFILE_TAG, pName, T, gz, gunzip, canGz, packVisit, unpackVisit, unpackPart, packDoc, partTime, entryOf, mergeIndex, indexContains, sameEntry, emptyIndex, splitLegacy };
+  // v24: fixed shards owned by the clinic owner — shard_00.json … shard_NN.json; each patient's shard number is kept in its index entry
+  const SHARD_TAG = "clinic-shard", DEFAULT_SHARDS = 100;
+  const shardName = n => "shard_" + String(n).padStart(3, "0") + ".json";
+  const hashInt = str => { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); } return h >>> 0; };
+  const shardOfId = (pid, n) => hashInt(String(pid)) % Math.max(1, n);
+  function emptyShard(n) { return { app: "tcm-consult-assistant", kind: "clinic-shard", format: 4, shard: n, patients: [], visits: [], deleted: {}, updatedAt: new Date().toISOString() }; }
+  async function packShard(part, n, by) {
+    return { ...emptyShard(n), patients: [...part.patients].sort((a, b) => String(a.id).localeCompare(String(b.id))),
+      visits: await Promise.all([...part.visits].sort((a, b) => String(a.id).localeCompare(String(b.id))).map(packVisit)), deleted: part.deleted || {}, updatedBy: by || null };
+  }
+  async function unpackShard(doc) { doc = doc || {}; return { patients: [...(doc.patients || [])], visits: await Promise.all((doc.visits || []).map(unpackVisit)), deleted: { ...(doc.deleted || {}) } }; }
+  // one patient's slice of a shard (records + its tombstones); vp = visit id → patient id for visit tombstones
+  function slice(part, pid, vp = {}) {
+    const vs = part.visits.filter(v => v.patientId === pid), ids = new Set(vs.map(v => v.id));
+    const deleted = {}; for (const [k, t] of Object.entries(part.deleted || {})) { const [kind, id] = k.split("/"); if ((kind === "patients" && id === pid) || (kind === "visits" && (ids.has(id) || vp[id] === pid))) deleted[k] = t; }
+    return { patients: part.patients.filter(p => p.id === pid), visits: vs, deleted };
+  }
+  // least-full shard (by index entries + pending local assignments)
+  function pickShard(index, extra = {}) {
+    const shards = (index.shards || []).map(s => s.n); if (!shards.length) return 0;
+    const cnt = Object.fromEntries(shards.map(n => [n, 0]));
+    for (const e of Object.values(index.patients || {})) if (e.shard in cnt) cnt[e.shard]++;
+    for (const n of Object.values(extra)) if (n in cnt) cnt[n]++;
+    return shards.reduce((best, n) => cnt[n] < cnt[best] || (cnt[n] === cnt[best] && n > best) ? n : best, shards[0]);   // ties → the newest shard
+  }
+  return { SHARD_TAG, DEFAULT_SHARDS, shardName, hashInt, shardOfId, emptyShard, packShard, unpackShard, slice, pickShard, hash, partHash, stable, FOLDER, INDEX, FOLDER_TAG, INDEX_TAG, PFILE_TAG, pName, T, gz, gunzip, canGz, packVisit, unpackVisit, unpackPart, packDoc, partTime, entryOf, mergeIndex, indexContains, sameEntry, emptyIndex, splitLegacy };
 })();
 </script>
 <script>

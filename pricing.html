@@ -184,8 +184,8 @@ textarea{width:100%}
   <section class="card" id="dbCard" hidden>
     <h2>🏥 Clinic patient database</h2>
     <div id="dbNone" hidden>
-      <p class="hint">One shared patient database for the whole clinic: a <code>TCM Clinic Patients</code> folder in this account's “TCM Consult Assistant” folder, with a small <code>index.json</code> and one file per patient. Doctors you tick below can open, add and edit all patients and visits from their app (each visit shows which doctor saw it). The front desk never gets access.</p>
-      <div class="actions"><button type="button" class="primary" id="dbCreateBtn">Create clinic patient database</button></div>
+      <p class="hint">One shared patient database for the whole clinic: a <code>TCM Clinic Patients</code> folder in this account's “TCM Consult Assistant” folder, with a small <code>index.json</code> and a fixed set of data files (<code>shard_000.json</code>…), all owned by this account. Doctors you tick below can open, add and edit all patients and visits from their app (each visit shows which doctor saw it). The front desk never gets access.</p>
+      <div class="actions"><label class="hint">Data files <input type="number" id="dbNewShards" min="1" max="500" value="100" style="width:5em"></label><button type="button" class="primary" id="dbCreateBtn">Create clinic patient database</button></div>
     </div>
     <div id="dbOn" hidden>
       <div class="hint" id="dbInfo"></div>
@@ -2695,7 +2695,32 @@ const CDB3 = (() => {
     out.parts = by; out.visitDeleted = Object.fromEntries(Object.entries(del).filter(([k]) => k.startsWith("visits/")));
     return out;
   }
-  return { hash, partHash, stable, FOLDER, INDEX, FOLDER_TAG, INDEX_TAG, PFILE_TAG, pName, T, gz, gunzip, canGz, packVisit, unpackVisit, unpackPart, packDoc, partTime, entryOf, mergeIndex, indexContains, sameEntry, emptyIndex, splitLegacy };
+  // v24: fixed shards owned by the clinic owner — shard_00.json … shard_NN.json; each patient's shard number is kept in its index entry
+  const SHARD_TAG = "clinic-shard", DEFAULT_SHARDS = 100;
+  const shardName = n => "shard_" + String(n).padStart(3, "0") + ".json";
+  const hashInt = str => { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); } return h >>> 0; };
+  const shardOfId = (pid, n) => hashInt(String(pid)) % Math.max(1, n);
+  function emptyShard(n) { return { app: "tcm-consult-assistant", kind: "clinic-shard", format: 4, shard: n, patients: [], visits: [], deleted: {}, updatedAt: new Date().toISOString() }; }
+  async function packShard(part, n, by) {
+    return { ...emptyShard(n), patients: [...part.patients].sort((a, b) => String(a.id).localeCompare(String(b.id))),
+      visits: await Promise.all([...part.visits].sort((a, b) => String(a.id).localeCompare(String(b.id))).map(packVisit)), deleted: part.deleted || {}, updatedBy: by || null };
+  }
+  async function unpackShard(doc) { doc = doc || {}; return { patients: [...(doc.patients || [])], visits: await Promise.all((doc.visits || []).map(unpackVisit)), deleted: { ...(doc.deleted || {}) } }; }
+  // one patient's slice of a shard (records + its tombstones); vp = visit id → patient id for visit tombstones
+  function slice(part, pid, vp = {}) {
+    const vs = part.visits.filter(v => v.patientId === pid), ids = new Set(vs.map(v => v.id));
+    const deleted = {}; for (const [k, t] of Object.entries(part.deleted || {})) { const [kind, id] = k.split("/"); if ((kind === "patients" && id === pid) || (kind === "visits" && (ids.has(id) || vp[id] === pid))) deleted[k] = t; }
+    return { patients: part.patients.filter(p => p.id === pid), visits: vs, deleted };
+  }
+  // least-full shard (by index entries + pending local assignments)
+  function pickShard(index, extra = {}) {
+    const shards = (index.shards || []).map(s => s.n); if (!shards.length) return 0;
+    const cnt = Object.fromEntries(shards.map(n => [n, 0]));
+    for (const e of Object.values(index.patients || {})) if (e.shard in cnt) cnt[e.shard]++;
+    for (const n of Object.values(extra)) if (n in cnt) cnt[n]++;
+    return shards.reduce((best, n) => cnt[n] < cnt[best] || (cnt[n] === cnt[best] && n > best) ? n : best, shards[0]);   // ties → the newest shard
+  }
+  return { SHARD_TAG, DEFAULT_SHARDS, shardName, hashInt, shardOfId, emptyShard, packShard, unpackShard, slice, pickShard, hash, partHash, stable, FOLDER, INDEX, FOLDER_TAG, INDEX_TAG, PFILE_TAG, pName, T, gz, gunzip, canGz, packVisit, unpackVisit, unpackPart, packDoc, partTime, entryOf, mergeIndex, indexContains, sameEntry, emptyIndex, splitLegacy };
 })();
 </script>
 <script>
@@ -2824,17 +2849,18 @@ const D = { fileId: null, doc: null, size: 0, perms: [], rows: [], frontDesk: []
 const FD_HINT = /front.?desk|reception|cashier/i;
 const dbMeta = id => gjson(`${PG.drive}/files/${encodeURIComponent(id)}?fields=${encodeURIComponent("id,name,version,modifiedTime,size,parents,appProperties,owners(displayName,emailAddress,me)")}`);
 const nRec = x => Array.isArray(x) ? x.length : Object.keys(x || {}).length;
-const permTarget = () => D.layout === 3 ? D.folderId : D.fileId;   // v23: doctors get WRITER on the FOLDER (new patient files inherit it)
+const permTarget = () => D.layout === 2 ? D.fileId : D.folderId;   // v23+: doctors get WRITER on the FOLDER
 async function loadDb() {
   D.loaded = true;
-  // v23 layout first: TCM Clinic Patients/index.json
   const idx = (await driveList(`name='${qEsc(CDB3.INDEX)}' and 'me' in owners and trashed=false`)).find(x => (x.appProperties || {}).tcmConsult === CDB3.INDEX_TAG);
   if (idx) {
     const meta = await dbMeta(idx.id), doc = await driveDownload(idx.id);
     if (doc && doc.kind === "clinic-patients-index") {
-      const total = (+meta.size || 0) + Object.values(doc.patients || {}).reduce((s, e) => s + (+e.size || 0), 0);
-      Object.assign(D, { layout: 3, fileId: idx.id, folderId: doc.folderId || (meta.parents || [])[0], doc, size: +meta.size || 0, total });
-      readAccess(doc); await loadDbPerms(); renderDb(); return;
+      Object.assign(D, { layout: doc.format === 4 ? 4 : 3, fileId: idx.id, folderId: doc.folderId || (meta.parents || [])[0], doc, size: +meta.size || 0, total: +meta.size || 0, idxMeta: meta });
+      if (D.layout === 4) { const sizes = await Promise.all((doc.shards || []).map(s => dbMeta(s.fileId).then(m => +m.size || 0).catch(() => 0))); D.total = D.size + sizes.reduce((a, b) => a + b, 0); }
+      readAccess(doc); await loadDbPerms(); renderDb();
+      if (D.layout === 3 && !D.migrating) setTimeout(() => migrateToShards().catch(e => console.warn(e)), 0);   // v24: automatic
+      return;
     }
   }
   const files = await driveList(`name='${qEsc(CLINIC_PATIENTS_FILE)}' and 'me' in owners and trashed=false`);
@@ -2844,6 +2870,7 @@ async function loadDb() {
   if (!doc || doc.kind !== "clinic-patients") { D.fileId = null; renderDb(); return; }
   Object.assign(D, { layout: 2, fileId: f.id, folderId: null, doc, size: +meta.size || 0, total: +meta.size || 0 });
   readAccess(doc); await loadDbPerms(); renderDb();
+  if (!D.migrating) setTimeout(() => migrateToShards().catch(e => console.warn(e)), 0);   // v24: automatic
 }
 function readAccess(doc) {
   const acc = doc.access || {};
@@ -2861,61 +2888,154 @@ async function createIn(parent, name, doc, appProperties, description) {
   return gjson(`${PG.upload}/files?uploadType=multipart&fields=id`, { method: "POST", headers: { "Content-Type": `multipart/related; boundary=${bd}` }, body });
 }
 const createFolderIn = async (parent, name, appProperties) => (await gjson(`${PG.drive}/files?fields=id`, { method: "POST", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify({ name, mimeType: "application/vnd.google-apps.folder", parents: [parent], appProperties }) })).id;
-const patchMeta = (id, m) => gjson(`${PG.drive}/files/${encodeURIComponent(id)}?fields=id`, { method: "PATCH", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify(m) });
+const patchMeta = (id, m, q = "") => gjson(`${PG.drive}/files/${encodeURIComponent(id)}?fields=id${q}`, { method: "PATCH", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify(m) });
 const ownerOf = () => ({ name: P.account.name, email: P.account.email });
-async function createDb() {   // v23: a folder with index.json; patient files are added by the doctors' apps
-  const now = new Date().toISOString();
-  const folderId = await createFolderIn(await ensureFolder(), CDB3.FOLDER, { tcmConsult: CDB3.FOLDER_TAG });
-  const idx = { ...CDB3.emptyIndex(ownerOf(), folderId), createdBy: { email: P.account.email, name: P.account.name },
-    note: "Clinic patient database from TCM Consult Assistant (one file per patient in this folder). Contains patient records — shared only with the clinic's doctors (editor access set on the Clinic admin page). Keep private.",
-    access: { doctors: [], frontDesk: [], updatedAt: now, updatedBy: P.account.email } };
-  await createIn(folderId, CDB3.INDEX, idx, { tcmConsult: CDB3.INDEX_TAG }, "TCM Consult Assistant — clinic patient index. Managed on the Clinic admin page.");
-  await loadDb(); toast("Clinic patient database created");
+const shardCountInput = (id = "#dbShardCount") => Math.max(1, Math.min(500, Math.round(+(($(id) || {}).value) || CDB3.DEFAULT_SHARDS)));
+const IDX_DESC = "TCM Consult Assistant — clinic patient index. Managed on the Clinic admin page.", SHARD_DESC = "TCM Consult Assistant — clinic patient data (shard). Do not edit by hand.";
+// create shard files n0..n1-1 in the folder, filled from `parts` (shard number → {patients, visits, deleted}); every file is round-trip checked
+async function writeShards(folderId, n0, n1, parts = {}, progress) {
+  const out = [], by = { email: P.account.email, name: P.account.name }, todo = [];
+  for (let n = n0; n < n1; n++) todo.push(n);
+  let done = 0;
+  const one = async n => {
+    const part = parts[n] || { patients: [], visits: [], deleted: {} };
+    const doc = await CDB3.packShard(part, n, by), f = await createIn(folderId, CDB3.shardName(n), doc, { tcmConsult: CDB3.SHARD_TAG, shard: String(n) }, SHARD_DESC);
+    if (part.patients.length || part.visits.length) {
+      const back = await CDB3.unpackShard(await driveDownload(f.id)), key = x => CDB3.stable([[...x.patients].sort((a, b) => String(a.id).localeCompare(String(b.id))), [...x.visits].sort((a, b) => String(a.id).localeCompare(String(b.id)))]);
+      if (key(back) !== key(part)) throw new Error("verification failed for " + CDB3.shardName(n));
+    }
+    out.push({ n, fileId: f.id });
+    if (progress) progress(++done, n1 - n0);
+  };
+  // a few files at a time (100 shards ≈ seconds, not minutes) without tripping Drive's rate limits
+  await Promise.all(Array.from({ length: Math.min(8, todo.length) }, async () => { while (todo.length) await one(todo.shift()); }));
+  out.sort((a, b) => a.n - b.n);
+  return out;
 }
-// v23: convert tcm-clinic-patients.json → TCM Clinic Patients/ (index.json + p_<id>.json); the old file is kept, renamed, as a backup
-async function upgradeDb() {
-  if (D.layout !== 2 || !D.fileId) return;
-  if (!confirm("Upgrade the clinic patient database to one file per patient?\n\n• Doctors can't save to it for the minute this takes (their apps keep changes and save them afterwards).\n• The old file is kept, renamed as a backup.\n• Each doctor then presses “Open the upgraded database” once in their app.")) return;
-  const legacyId = D.fileId, m = $("#dbMsg"); m.classList.remove("err");
-  const doctors = D.rows.filter(r => r.on && !D.frontDesk.includes(r.email)).map(r => r.email);
-  const lmeta = await dbMeta(legacyId);
-  $("#dbUpgradeBtn") && ($("#dbUpgradeBtn").disabled = true);
-  m.textContent = "Upgrading… (locking the old file)";
+async function createDb() {   // v24: folder + index.json + N shards, all owned by this (owner) account
+  const now = new Date().toISOString(), N = shardCountInput("#dbNewShards");
+  const folderId = await createFolderIn(await ensureFolder(), CDB3.FOLDER, { tcmConsult: CDB3.FOLDER_TAG });
+  const shards = await writeShards(folderId, 0, N, {}, (i, n) => { $("#dbMsg") && ($("#dbMsg").textContent = `Creating data files… ${i} / ${n}`); });
+  const idx = { ...CDB3.emptyIndex(ownerOf(), folderId), format: 4, shards, createdBy: { email: P.account.email, name: P.account.name },
+    note: "Clinic patient database from TCM Consult Assistant (index + fixed shard files in this folder, all owned by the clinic owner). Contains patient records — shared only with the clinic's doctors. Keep private.",
+    access: { doctors: [], frontDesk: [], updatedAt: now, updatedBy: P.account.email } };
+  await createIn(folderId, CDB3.INDEX, idx, { tcmConsult: CDB3.INDEX_TAG }, IDX_DESC);
+  await loadDb(); toast("Clinic patient database created"); $("#dbMsg") && ($("#dbMsg").textContent = "");
+}
+// read-modify-verify on the index (doctors write it too)
+async function updateIndex(fn) {
+  for (let i = 0; i < 6; i++) {
+    const meta = await dbMeta(D.fileId), doc = await driveDownload(D.fileId), next = fn(JSON.parse(JSON.stringify(doc)));
+    const m2 = await dbMeta(D.fileId); if (String(m2.version) !== String(meta.version)) continue;
+    await driveUpdate(D.fileId, next);
+    const chk = await driveDownload(D.fileId);
+    if (nRec(chk.patients) >= nRec(doc.patients) && CDB3.stable(chk.shards) === CDB3.stable(next.shards) && CDB3.stable(chk.access) === CDB3.stable(next.access)) return chk;
+  }
+  throw new Error("the database was busy — try again");
+}
+// more shards: new empty files only — existing patients keep their shard (it is stored in their index entry)
+async function addShards() {
+  const cur = (D.doc.shards || []).length, want = shardCountInput(), m = $("#dbMsg"); m.classList.remove("err");
+  if (want <= cur) { m.textContent = `The database already has ${cur} data files — the number can only grow (existing data never moves).`; return; }
+  m.textContent = "Adding data files…";
+  try {
+    const add = await writeShards(D.folderId, cur, want, {}, (i, n) => { m.textContent = `Adding data files… ${i} / ${n}`; });
+    await updateIndex(doc => ({ ...doc, shards: [...(doc.shards || []), ...add.filter(a => !(doc.shards || []).some(s => s.n === a.n))], updatedAt: new Date().toISOString() }));
+    await loadDb();
+    m.textContent = `Added ${add.length} data files (now ${want}). New patients go to the emptiest files; doctors' apps ask once to allow the new files.`;
+  } catch (e) { m.textContent = "Could not add data files: " + e.message; m.classList.add("err"); }
+}
+// drive.file: let the owner's app open files it didn't create (patient files added by doctors in the old layout)
+function pickFiles(folderId, ids, title) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const tok = await ensureToken(); await loadPicker();
+      const v = new google.picker.DocsView(google.picker.ViewId.DOCS).setIncludeFolders(true).setOwnedByMe(false);
+      if (v.setParent) v.setParent(folderId); if (ids.length && v.setFileIds) v.setFileIds(ids.join(","));
+      new google.picker.PickerBuilder().setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID).addView(v).enableFeature(google.picker.Feature.MULTISELECT_ENABLED).setTitle(title)
+        .setCallback(d => { if (d.action === google.picker.Action.PICKED) resolve(d.docs || []); else if (d.action === google.picker.Action.CANCEL) resolve([]); }).build().setVisible(true);
+    } catch (e) { reject(e); }
+  });
+}
+async function moveToBackup(fileIds, backupId, folderId) {   // keep old files: move into the backup subfolder (or rename in place)
+  let moved = 0, renamed = 0;
+  for (const id of fileIds) {
+    try { await patchMeta(id, { appProperties: { tcmConsult: "clinic-backup" } }, `&addParents=${encodeURIComponent(backupId)}&removeParents=${encodeURIComponent(folderId)}`); moved++; }
+    catch { try { const m = await dbMeta(id); await patchMeta(id, { name: "backup_" + m.name, appProperties: { tcmConsult: "clinic-backup" } }); renamed++; } catch {} }
+  }
+  return { moved, renamed };
+}
+// v24: automatic migration to shards — from one-file-per-patient (v23) or from the single tcm-clinic-patients.json (v21); old files are kept
+async function migrateToShards() {
+  if (D.migrating || !(D.layout === 2 || D.layout === 3)) return;
+  D.migrating = true;
+  const m = $("#dbMsg"); m.classList.remove("err"); m.textContent = "Upgrading the clinic database to shared data files (automatic)…";
+  const doctors = D.rows.filter(r => r.on && !D.frontDesk.includes(r.email)).map(r => r.email), N = CDB3.DEFAULT_SHARDS, day = new Date().toISOString().slice(0, 10);
+  const legacyId = D.layout === 2 ? D.fileId : null, idxId = D.layout === 3 ? D.fileId : null;
   let locked = false;
   try {
-    // 1. lock: marker + doctors read-only, so nothing is written to the old file while it is converted
-    await patchMeta(legacyId, { appProperties: { tcmConsult: "clinic-patients-upgrading" } }); locked = true;
-    await syncWriters(legacyId, doctors, "reader");
-    const doc = await driveDownload(legacyId);   // final content
-    // 2. folder + one file per patient (round-trip checked) + index
-    const folderId = await createFolderIn((lmeta.parents || [])[0] || await ensureFolder(), CDB3.FOLDER, { tcmConsult: CDB3.FOLDER_TAG });
-    const sp = CDB3.splitLegacy(doc), idx = { ...CDB3.emptyIndex(doc.owner || ownerOf(), folderId), access: doc.access || { doctors: [], frontDesk: [] }, deleted: { ...sp.patientDeleted, ...sp.visitDeleted }, orphans: {},
-      migratedFrom: { fileId: legacyId, at: new Date().toISOString(), patients: nRec(doc.patients), visits: nRec(doc.visits) }, createdBy: { email: P.account.email, name: P.account.name } };
-    const by = { email: P.account.email, name: P.account.name };
-    let n = 0;
-    for (const [pid, part] of Object.entries(sp.parts)) {
-      const fdoc = await CDB3.packDoc(part, pid, by), f = await createIn(folderId, CDB3.pName(pid), fdoc, { tcmConsult: CDB3.PFILE_TAG, patientId: String(pid) });
-      const back = await CDB3.unpackPart(await driveDownload(f.id));
-      const sig = x => CDB3.stable([x.patients, [...x.visits].sort((a, b) => String(a.id).localeCompare(String(b.id)))]);
-      if (sig(back) !== sig({ patients: part.patients, visits: part.visits })) throw new Error("verification failed for patient file " + pid);
-      const e = CDB3.entryOf(part, pid, f.id, JSON.stringify(fdoc).length);
-      if (e) idx.patients[pid] = e; else idx.orphans[pid] = f.id;   // visits of a deleted/missing patient are kept too
-      if (++n % 10 === 0) m.textContent = `Upgrading… ${n} / ${nRec(sp.parts)} patient files`;
+    // 1. lock: doctors' apps see the marker and keep their changes locally until this is done
+    if (legacyId) { await patchMeta(legacyId, { appProperties: { tcmConsult: "clinic-patients-upgrading" } }); await syncWriters(legacyId, doctors, "reader"); }
+    else await patchMeta(idxId, { appProperties: { phase: "upgrading" } });
+    locked = true;
+    // 2. collect everything (newest wins, tombstones respected)
+    let all = { patients: [], visits: [], deleted: {} }; const oldFiles = [];
+    const add = part => { const x = mergeAll(all, part); all = x; };
+    let folderId = D.folderId, idx0 = null;
+    if (legacyId) add(await driveDownload(legacyId));
+    else {
+      idx0 = await driveDownload(idxId);
+      const ids = [...Object.values(idx0.patients || {}).map(e => e.fileId), ...Object.values(idx0.orphans || {})].filter(Boolean);
+      const missing = [];
+      for (const id of ids) { try { await dbMeta(id); } catch { missing.push(id); } }
+      if (missing.length) {
+        m.textContent = `${missing.length} patient file(s) were created by doctors — select them in Google Picker so this page may read them…`;
+        await pickFiles(folderId, missing, `Allow the upgrade to read ${missing.length} patient file${missing.length === 1 ? "" : "s"}: select all shown, then Select`);
+        const still = []; for (const id of missing) { try { await dbMeta(id); } catch { still.push(id); } }
+        if (still.length) throw new Error(`${still.length} patient file(s) could not be opened — run the upgrade again and select all files`);
+      }
+      for (const id of ids) { add(await CDB3.unpackPart(await driveDownload(id))); oldFiles.push(id); }
+      add({ patients: [], visits: [], deleted: idx0.deleted || {} });
+      // an older single-file backup of this clinic (renamed by the v23 upgrade) is merged too
+      for (const b of await driveList(`name contains 'tcm-clinic-patients.backup' and 'me' in owners and trashed=false`)) { try { const d = await driveDownload(b.id); if (d && d.kind === "clinic-patients") add(d); } catch {} }
     }
-    const ix = await createIn(folderId, CDB3.INDEX, idx, { tcmConsult: CDB3.INDEX_TAG }, "TCM Consult Assistant — clinic patient index. Managed on the Clinic admin page.");
-    // 3. doctors: WRITER on the folder
+    // 3. shards (owner-created) + index
+    const parts = {}, entries = {};
+    for (const p of all.patients) { const n = CDB3.shardOfId(p.id, N); (parts[n] = parts[n] || { patients: [], visits: [], deleted: {} }).patients.push(p); }
+    for (const v of all.visits) { const n = CDB3.shardOfId(v.patientId || v.id, N); (parts[n] = parts[n] || { patients: [], visits: [], deleted: {} }).visits.push(v); }
+    for (const [k, t] of Object.entries(all.deleted)) { const [kind, id] = k.split("/"); const owner = kind === "visits" ? ((all.visits.find(v => v.id === id) || {}).patientId || id) : id; const n = CDB3.shardOfId(owner, N); (parts[n] = parts[n] || { patients: [], visits: [], deleted: {} }).deleted[k] = t; }
+    if (legacyId) folderId = await createFolderIn((((await dbMeta(legacyId)).parents) || [])[0] || await ensureFolder(), CDB3.FOLDER, { tcmConsult: CDB3.FOLDER_TAG });
+    const shards = await writeShards(folderId, 0, N, parts, (i, n) => { m.textContent = `Upgrading… data file ${i} / ${n}`; });
+    for (const s of shards) { const part = parts[s.n]; if (!part) continue; for (const p of part.patients) { const e = CDB3.entryOf(CDB3.slice(part, p.id), p.id, s.fileId, 0); if (e) entries[p.id] = { ...e, shard: s.n }; } }
+    const pDel = Object.fromEntries(Object.entries(all.deleted).filter(([k]) => k.startsWith("patients/")));
+    const base = legacyId ? { ...CDB3.emptyIndex((await driveDownload(legacyId)).owner || ownerOf(), folderId), access: D.doc.access || { doctors: [], frontDesk: [] } } : idx0;
+    const idx = { ...base, format: 4, folderId, shards, patients: entries, deleted: pDel, orphans: undefined, updatedAt: new Date().toISOString(),
+      migratedFrom: { layout: legacyId ? "single file" : "one file per patient", at: new Date().toISOString(), patients: all.patients.length, visits: all.visits.length } };
+    let indexId = idxId;
+    if (legacyId) indexId = (await createIn(folderId, CDB3.INDEX, idx, { tcmConsult: CDB3.INDEX_TAG }, IDX_DESC)).id;
+    else await driveUpdate(idxId, idx);   // in place: doctors already have this file open
+    // 4. keep the old files as a backup
+    let bk = { moved: 0, renamed: 0 };
+    if (oldFiles.length) { const bid = await createFolderIn(folderId, `Backup before shards ${day}`, { tcmConsult: "clinic-backup-folder" }); bk = await moveToBackup(oldFiles, bid, folderId); }
     await syncWriters(folderId, doctors);
-    // 4. old file → backup, pointing to the new index (doctor apps follow it)
-    const day = new Date().toISOString().slice(0, 10);
-    await patchMeta(legacyId, { name: `tcm-clinic-patients.backup-${day}.json`, appProperties: { tcmConsult: "clinic-patients-backup", upgradedTo: ix.id, upgradedFolder: folderId } });
+    if (legacyId) await patchMeta(legacyId, { name: `tcm-clinic-patients.backup-${day}.json`, appProperties: { tcmConsult: "clinic-patients-backup", upgradedTo: indexId, upgradedFolder: folderId } });
+    else await patchMeta(idxId, { appProperties: { phase: "" } });
+    locked = false;
+    D.migrating = false;
     await loadDb();
-    m.textContent = `Upgraded ✓ — ${nRec(idx.patients)} patient files + index.json in “${CDB3.FOLDER}”; the old file is kept as tcm-clinic-patients.backup-${day}.json.`;
-    toast("Database upgraded to one file per patient");
+    m.textContent = `Upgraded ✓ — ${all.patients.length} patients and ${all.visits.length} visits now in ${N} data files (all owned by this account).` + (oldFiles.length ? ` The ${oldFiles.length} old patient files were kept in “Backup before shards ${day}”${bk.renamed ? ` (${bk.renamed} renamed “backup_…” in place)` : ""}.` : legacyId ? ` The old file is kept as tcm-clinic-patients.backup-${day}.json.` : "");
+    toast("Clinic database upgraded");
   } catch (e) {
     console.warn("upgrade", e);
-    if (locked) { try { await patchMeta(legacyId, { appProperties: { tcmConsult: "clinic-patients" } }); await syncWriters(legacyId, doctors); } catch {} }
-    m.textContent = "Upgrade failed — nothing was changed in the old database (" + e.message + ")."; m.classList.add("err");
-  } finally { $("#dbUpgradeBtn") && ($("#dbUpgradeBtn").disabled = false); }
+    if (locked) { try { if (legacyId) { await patchMeta(legacyId, { appProperties: { tcmConsult: "clinic-patients" } }); await syncWriters(legacyId, doctors); } else await patchMeta(idxId, { appProperties: { phase: "" } }); } catch {} }
+    m.textContent = "Upgrade failed — nothing was changed in the existing database (" + e.message + "). Reload the page to try again."; m.classList.add("err");
+  } finally { D.migrating = false; }
+}
+function mergeAll(a, b) {   // newest wins per record; tombstones win over older records
+  b = b || {}; const del = { ...(a.deleted || {}) }; for (const [k, t] of Object.entries(b.deleted || {})) if (!del[k] || t > del[k]) del[k] = t;
+  const T = CDB3.T, out = { deleted: del };
+  for (const kind of ["patients", "visits"]) { const mm = new Map(); for (const r of [...(a[kind] || []), ...(b[kind] || [])]) { if (!r || !r.id) continue; const c = mm.get(r.id); if (!c || T(r) > T(c)) mm.set(r.id, r); } out[kind] = [...mm.values()].filter(r => !(del[kind + "/" + r.id] >= T(r))); }
+  return out;
 }
 function readDbForm() {
   D.frontDesk = parseEmails($("#dbFrontDesk").value);
@@ -2936,11 +3056,11 @@ function dbAdd() {
   $("#dbAddEmail").value = ""; renderDbList();
   m.classList.remove("err"); m.textContent = notes.join(" · ") || "Added — press “Save access” to give access.";
 }
-async function syncWriters(fileId, emails, role = "writer") {
+async function syncWriters(fileId, emails, role = "writer", opt = {}) {
   const base = `${PG.drive}/files/${encodeURIComponent(fileId)}/permissions`;
   const cur = (await gjson(`${base}?fields=${encodeURIComponent("permissions(id,emailAddress,role,type)")}`)).permissions || [];
   const want = new Set(emails), status = {};
-  for (const e of want) {
+  if (!opt.removeOnly) for (const e of want) {
     const has = cur.find(p => normEmail(p.emailAddress) === e);
     try {
       if (has && has.role === role) status[e] = "has access";
@@ -2970,7 +3090,9 @@ async function saveDbAccess() {
       const chk = await driveDownload(D.fileId); ok = !!(chk.access && chk.access.updatedAt === now && nRec(chk.patients) >= nRec(doc.patients));
     }
     if (!ok) throw new Error("the database was busy — try again");
-    const st = await syncWriters(permTarget(), D.rows.filter(r => r.on).map(r => r.email));
+    const want = D.rows.filter(r => r.on).map(r => r.email);
+    const st = await syncWriters(permTarget(), want);
+    if (D.layout === 4) { const ids = [D.fileId, ...(D.doc.shards || []).map(s => s.fileId)]; await Promise.all(Array.from({ length: 8 }, async () => { while (ids.length) { const id = ids.shift(); try { Object.assign(st, Object.fromEntries(Object.entries(await syncWriters(id, want, "writer", { removeOnly: true })).filter(([, v]) => /failed/.test(v)))); } catch {} } })); }   // v24: also any direct permission on the index / data files
     await loadDb();
     for (const [e, v] of Object.entries(st)) if (/error|failed/.test(v)) D.status[e] = v;
     for (const r of blocked) D.status[r.email] = "blocked — front desk";
@@ -2990,12 +3112,16 @@ function renderDb() {
   $("#dbNone").hidden = !!D.fileId; $("#dbOn").hidden = !D.fileId;
   if (!D.fileId) return;
   const d = D.doc || {}, sz = b => b >= 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB";
-  if (D.layout === 3) {
+  if (D.layout === 4) {
+    const nv = Object.values(d.patients || {}).reduce((s, e) => s + (+e.nVisits || 0), 0), ns = (d.shards || []).length;
+    $("#dbInfo").innerHTML = `<b>${esc(CDB3.FOLDER)}</b> · ${nRec(d.patients)} patients · ${nv} visits · ${ns} data files · index ${sz(D.size)} · total ${sz(D.total)} · all files owned by you · <a href="https://drive.google.com/drive/folders/${esc(D.folderId)}" target="_blank" rel="noopener">open in Drive</a>${D.size > 1048576 ? `<div class="db-warn">⚠ The index is over 1 MB — it is loaded on every sync.</div>` : ""}
+      <div class="db-upg"><label>Data files (shards) <input type="number" id="dbShardCount" min="${ns}" max="200" value="${ns}" style="width:5.5em"></label> <button type="button" class="small" id="dbAddShardsBtn">Add data files</button><div class="hint">More files = smaller downloads per save. Existing patients never move; new patients go to the emptiest files. Doctors' apps ask once to allow new files.</div></div>`;
+  } else if (D.layout === 3) {
     const nv = Object.values(d.patients || {}).reduce((s, e) => s + (+e.nVisits || 0), 0);
-    $("#dbInfo").innerHTML = `<b>${esc(CDB3.FOLDER)}</b> (one file per patient) · ${nRec(d.patients)} patients · ${nv} visits · index ${sz(D.size)} · total ${sz(D.total)} · <a href="https://drive.google.com/drive/folders/${esc(D.folderId)}" target="_blank" rel="noopener">open in Drive</a>${D.size > 1048576 ? `<div class="db-warn">⚠ The index is over 1 MB — it is loaded on every sync.</div>` : ""}`;
+    $("#dbInfo").innerHTML = `<b>${esc(CDB3.FOLDER)}</b> (one file per patient — being upgraded to data files) · ${nRec(d.patients)} patients · ${nv} visits · index ${sz(D.size)} · total ${sz(D.total)} · <a href="https://drive.google.com/drive/folders/${esc(D.folderId)}" target="_blank" rel="noopener">open in Drive</a>${D.size > 1048576 ? `<div class="db-warn">⚠ The index is over 1 MB — it is loaded on every sync.</div>` : ""}`;
   } else {
     $("#dbInfo").innerHTML = `<b>${esc(CLINIC_PATIENTS_FILE)}</b> · ${nRec(d.patients)} patients · ${nRec(d.visits)} visits · ${sz(D.size)} · <a href="https://drive.google.com/file/d/${esc(D.fileId)}/view" target="_blank" rel="noopener">open in Drive</a>${D.size > 5 * 1048576 ? `<div class="db-warn">⚠ Over 5 MB — syncing slows down for every doctor. Upgrade below.</div>` : ""}
-      <div class="db-upg"><b>Upgrade available:</b> store one file per patient (faster sync, smaller downloads; transcripts compressed). The old file is kept as a backup. <button type="button" class="small primary" id="dbUpgradeBtn">Upgrade database to one file per patient</button></div>`;
+      <div class="db-upg"><b>Upgrade:</b> this database is converted automatically to shared data files (the old file is kept as a backup). <button type="button" class="small primary" id="dbUpgradeBtn">Upgrade now</button></div>`;
   }
   renderDbList();
   if (document.activeElement !== $("#dbFrontDesk")) $("#dbFrontDesk").value = D.frontDesk.join("\n");
@@ -3211,7 +3337,7 @@ function bind() {
   $("#dbAddBtn").onclick = () => dbAdd();
   $("#dbAddEmail").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); dbAdd(); } });
   $("#dbSaveBtn").onclick = () => saveDbAccess();
-  $("#dbInfo").addEventListener("click", e => { if (e.target.id === "dbUpgradeBtn") upgradeDb(); });
+  $("#dbInfo").addEventListener("click", e => { if (e.target.id === "dbUpgradeBtn") migrateToShards(); if (e.target.id === "dbAddShardsBtn") addShards(); });
   $("#dbList").addEventListener("click", e => { const b = e.target.closest("[data-db-rm]"); if (!b) return; readDbForm(); const r = D.rows.find(x => x.email === b.dataset.dbRm); if (r) r.on = false; D.rows = D.rows.filter(x => x !== r); D.removed = (D.removed || []).concat(b.dataset.dbRm); renderDbList(); $("#dbMsg").textContent = "Removed — press “Save access” to take away access."; });
   $("#dbList").addEventListener("change", e => { if (e.target.dataset.dbOn) { readDbForm(); $("#dbMsg").textContent = "Press “Save access” to apply."; } });
   $("#signInBtn").onclick = () => signIn();
@@ -3250,7 +3376,7 @@ function init() {
   if (P.account) requestToken("silent").then(() => loadList()).then(() => loadDb()).catch(e => { console.warn("silent sign-in", e); P.account = null; renderAll(); });
   window.__prReady = true;
 }
-window.PRICING = { upgradeDb, CDB3, D, loadDb, createDb, saveDbAccess, syncWriters, P, HN, Pricing, buildCSV, importCSV, parseCSV, findHerb, searchHerbs, changeSummary, save, openFile, loadList, createFile, pickerAvailable, PICKER_APP_ID, signIn };
+window.PRICING = { migrateToShards, addShards, CDB3, D, loadDb, createDb, saveDbAccess, syncWriters, P, HN, Pricing, buildCSV, importCSV, parseCSV, findHerb, searchHerbs, changeSummary, save, openFile, loadList, createFile, pickerAvailable, PICKER_APP_ID, signIn };
 init();
 </script>
 </body>
