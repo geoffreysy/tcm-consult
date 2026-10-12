@@ -706,6 +706,14 @@ body.picker-open #noClinicBanner,body.picker-open .no-clinic,body.picker-open he
 (function(){function on(){return [].some.call(document.querySelectorAll(".picker-dialog"),function(e){return e.offsetParent!==null||getComputedStyle(e).display!=="none"&&getComputedStyle(e).visibility!=="hidden";});}
 function chk(){var o=on();if(o&&!document.body.classList.contains("picker-open")){[].forEach.call(document.querySelectorAll("dialog[open]"),function(d){try{d.close();}catch(e){}});}document.body.classList.toggle("picker-open",o);}
 document.addEventListener("DOMContentLoaded",function(){new MutationObserver(chk).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:["style","class"]});});})();</script>
+<style>
+.myappts{border:1px solid var(--line,#dde5e1);border-radius:12px;padding:8px 10px;margin:0 0 10px;background:#fbfdfc}
+.myappts h3{margin:0;font-size:15px}.ma-head{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:space-between}
+.ma-nav{display:flex;gap:4px;align-items:center;flex-wrap:wrap}.ma-nav input{min-width:0;width:9.5em;padding:4px}
+.ma-half{margin-top:6px}.ma-half b.h{font-size:13px;color:#2f7a68}.myappts ul{margin:2px 0 0;padding-left:16px}.myappts li{overflow-wrap:anywhere;margin:2px 0}
+.ma-name{background:none;border:0;padding:0;color:#1d6b5a;font-weight:700;text-decoration:underline;cursor:pointer;font-size:inherit}
+.ma-by{color:#6b7a75;font-size:12px}
+</style>
 </head>
 <body>
 <header class="topbar">
@@ -747,6 +755,10 @@ document.addEventListener("DOMContentLoaded",function(){new MutationObserver(chk
   <!-- LEFT: patients -->
   <aside class="panel" id="leftPanel">
     <div class="panel-head"><h2>Patients</h2><button class="small primary" id="addPatientBtn">+ New patient</button></div>
+    <section class="myappts" id="apptCard" hidden aria-label="My appointments">
+      <div class="ma-head"><h3>📅 My appointments</h3><span class="ma-nav"><button type="button" class="small" id="maPrev" aria-label="Previous day">◀</button><input type="date" id="maDay"><button type="button" class="small" id="maNext" aria-label="Next day">▶</button><button type="button" class="small" id="maToday">Today</button></span></div>
+      <div id="maBody"></div>
+    </section>
     <input type="search" class="search" id="patientSearch" placeholder="Search name, contact, notes…">
     <ul class="patient-list" id="patientList"></ul>
     <div class="profile" id="patientProfile"></div>
@@ -6701,9 +6713,10 @@ async function connectClinicPicker() {
   rateMsg("Opening Google Drive…");
   try {
     const tok = await ensureToken(); await loadPicker();
-    const view = new google.picker.DocsView(google.picker.ViewId.DOCS).setMimeTypes("application/json").setQuery(CLINIC_PRICES_FILE).setOwnedByMe(false);
+    const __mkV = (q, mine) => { const v = new google.picker.DocsView(google.picker.ViewId.DOCS).setMimeTypes("application/json").setQuery(q).setOwnedByMe(mine); if (v.setLabel) v.setLabel(mine ? "My Drive" : "Shared with me"); return v; };
+    const views = [__mkV(CLINIC_PRICES_FILE, false), __mkV(CLINIC_PRICES_FILE, true)];
     const picker = new google.picker.PickerBuilder().setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID)
-      .addView(view).setTitle("Select the clinic herb price list (" + CLINIC_PRICES_FILE + ")")
+      .addView(views[0]).addView(views[1]).setTitle("Select " + CLINIC_PRICES_FILE)
       .setCallback(async d => { if (d.action === google.picker.Action.PICKED && d.docs && d.docs[0]) await connectClinicById(d.docs[0].id); else if (d.action === google.picker.Action.CANCEL) rateMsg(""); }).build();
     picker.setVisible(true);
   } catch (e) { rateMsg("Google Picker failed: " + (e.message || e) + " — paste the shared link instead.", true); }
@@ -7367,6 +7380,67 @@ function cdbMsg(t, err) { const m = $("#cdbMsg"); if (m) { m.textContent = t; m.
 // v27: drive.file lets the app list files it created with the same OAuth client → the clinic OWNER (who created the database on the
 // Clinic admin page) is connected automatically, no Picker. Doctors (files owned by someone else) still pick the folder's files once.
 let cdbAutoBusy = false;
+/* ---------- v32: My appointments (read-only; booked on scheduler.html) ----------
+   schedule file (tcm-clinic-config.json) → appointmentsFileId. Owner: found by files.list. Doctors: picked once (drive.file). */
+const MA = { cfgId: "", apptId: "", appts: null, day: "", error: "", need: false };
+const maKey = () => "tcm_myappts_" + (Cloud.account ? Cloud.account.sub : "");
+const maYmd = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+const maAdd = (ymd, n) => maYmd(new Date(new Date(ymd + "T12:00:00+08:00").getTime() + n * 86400000));
+async function maTry(ids) {
+  for (const id of ids) {
+    try { const d = await driveDownload(id);
+      if (d && d.kind === "clinic-config") { MA.cfgId = id; if (d.appointmentsFileId && !MA.apptId) MA.apptId = d.appointmentsFileId; }
+      else if (d && d.kind === "clinic-appointments") { MA.apptId = id; MA.appts = d; }
+    } catch (e) { if (e.status === 401) throw e; }
+  }
+}
+async function syncMyAppts(acc) {
+  if (!Cloud.account || Cloud.account !== acc) return;
+  try { const k = JSON.parse(localStorage.getItem(maKey()) || "{}"); MA.cfgId = MA.cfgId || k.cfgId || ""; MA.apptId = MA.apptId || k.apptId || ""; } catch {}
+  if (!MA.cfgId || !MA.apptId) {   // owner: its own files; otherwise any already-granted copy
+    try { const q = n => driveList(`name='${n}' and trashed=false`);
+      const c = await q("tcm-clinic-config.json"), a = await q("tcm-clinic-appointments.json");
+      await maTry([...c, ...a].map(f => f.id)); } catch (e) { if (e.status === 401) throw e; }
+  }
+  if (MA.cfgId && MA.apptId && !MA.appts) await maTry([MA.cfgId]);
+  if (MA.apptId) { try { const d = await driveDownload(MA.apptId); if (d && d.kind === "clinic-appointments") { MA.appts = d; MA.error = ""; } } catch (e) { if (e.status === 401) throw e; MA.appts = null; MA.error = "no access"; } }
+  MA.need = !MA.appts;
+  localStorage.setItem(maKey(), JSON.stringify({ cfgId: MA.cfgId, apptId: MA.apptId }));
+  renderMyAppts();
+}
+async function maPicker() {
+  if (!pickerAvailable()) { toast("Google Picker isn't configured on this site."); return; }
+  try {
+    const tok = await ensureToken(); await loadPicker(); const P = google.picker;
+    const mk = mine => { const v = new P.DocsView(P.ViewId.DOCS).setMimeTypes("application/json").setQuery("tcm-clinic-").setOwnedByMe(mine); if (v.setLabel) v.setLabel(mine ? "My Drive" : "Shared with me"); return v; };
+    new P.PickerBuilder().setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID).addView(mk(false)).addView(mk(true)).enableFeature(P.Feature.MULTISELECT_ENABLED)
+      .setTitle("Select both tcm-clinic- files").setCallback(async d => { if (d.action === P.Action.PICKED) { await maTry((d.docs || []).map(x => x.id)); await syncMyAppts(Cloud.account); } }).build().setVisible(true);
+  } catch (e) { toast("Google Picker failed: " + (e.message || e)); }
+}
+function renderMyAppts() {
+  const card = $("#apptCard"); if (!card) return;
+  card.hidden = !Cloud.account || (!MA.appts && !MA.need);
+  if (card.hidden) return;
+  if (!MA.day) MA.day = maYmd(); $("#maDay").value = MA.day;
+  if (!MA.appts) { $("#maBody").innerHTML = `<div class="ma-by">Appointments booked by the clinic scheduler show here (read-only).</div><button type="button" class="small" id="maConnect">📂 Connect clinic schedule</button>`; return; }
+  const me = normEmail(Cloud.account.email), list = Object.values(MA.appts.appts || {}).filter(a => !a.deleted && a.date === MA.day && normEmail(a.doctor) === me);
+  const half = h => { const xs = list.filter(a => a.half === h).sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+    return xs.length ? `<div class="ma-half" data-ma-half="${h}"><b class="h">${h === "am" ? "Morning" : "Afternoon"}</b><ul>${xs.map(a => `<li>${a.time ? esc(a.time) + " · " : ""}<button type="button" class="ma-name" data-ma-name="${esc(a.name)}">${esc(a.name)}</button>${a.phone ? " · ☎ " + esc(a.phone) : ""}${a.note ? ` <span class="ma-by">(${esc(a.note)})</span>` : ""} <span class="ma-by">· Booked by ${esc(a.createdBy || "unknown")}</span></li>`).join("")}</ul></div>` : ""; };
+  $("#maBody").innerHTML = list.length ? half("am") + half("pm") : `<div class="ma-by">No appointments on ${esc(MA.day)}.</div>`;
+}
+function maOpenName(name) {   // name match only — never links records automatically
+  const n = String(name).trim().toLowerCase().replace(/\s+/g, " ");
+  const hits = state.patients.filter(p => String(p.name || "").trim().toLowerCase().replace(/\s+/g, " ") === n);
+  $("#patientSearch").value = name; state.search = name; renderPatients();
+  if (hits.length === 1) selectPatient(hits[0].id); else toast(hits.length ? `${hits.length} patients named ${name} — pick one` : `No saved patient named ${name} — search shown`);
+}
+document.addEventListener("click", e => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.id === "maConnect") maPicker();
+  else if (t.id === "maPrev" || t.id === "maNext" || t.id === "maToday") { MA.day = t.id === "maToday" ? maYmd() : maAdd(MA.day || maYmd(), t.id === "maPrev" ? -1 : 1); renderMyAppts(); }
+  else if (t.dataset.maName != null) maOpenName(t.dataset.maName);
+});
+document.addEventListener("change", e => { if (e.target.id === "maDay" && e.target.value) { MA.day = e.target.value; renderMyAppts(); } });
 async function cdbAutoFind() {
   if (cdbAutoBusy || !Cloud.account || clinicDbState.conf) return false;
   const off = "tcm_cdb_auto_off_" + Cloud.account.sub;
@@ -7832,6 +7906,8 @@ function syncNow() {
       try { await syncClinicPrices(acc, folderId); }   // v16: clinic herb price list (own file, or a file shared by the clinic owner)
       catch (e) { if (e.status === 401 || AUTH_ERRORS.test(e.message || "")) throw e; console.warn("Clinic price list:", e); if (billingState.clinic) billingState.clinic.error = "Could not sync the clinic price list" + (e.status ? ` (Google Drive ${e.status})` : ""); }
       if (Cloud.account !== acc) return;
+      try { await syncMyAppts(acc); } catch (e) { if (e.status === 401) throw e; console.warn("My appointments:", e); }
+      if (Cloud.account !== acc) return;
       try { await syncSlips(acc, folderId); }   // v17: front desk slips file (own file, shared with the front desk e-mail)
       catch (e) { if (e.status === 401 || AUTH_ERRORS.test(e.message || "")) throw e; console.warn("Front desk slips:", e); fdState.error = "Could not sync front desk slips" + (e.status ? ` (Google Drive ${e.status})` : ""); renderSendRow(); }
       if (Cloud.account !== acc) return;
@@ -8259,7 +8335,7 @@ async function init() {
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { dataPut, doctorTag, canEditVisit, deleteVisit, cdbKeepOthersVisits, CDB3, cdbTrack, cdbEnsureLoaded, cdbGrantPicker, syncClinicDb4, cdbOpenUpgraded, openPatientDialog, selectPatient, sameNamePatients, nameKey, ptIdParts, savePatientFromForm, deleteVisit, clinicDbState, clinicActive, connectClinicDb, disconnectClinicDb, syncClinicDb, cdbContains, CLINIC_PATIENTS_FILE, __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Slips, fdState, buildSlip, sendToFrontdesk, syncSlips, renderSendRow, FRONTDESK_SLIPS_FILE, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { MA, renderMyAppts, syncMyAppts,  dataPut, doctorTag, canEditVisit, deleteVisit, cdbKeepOthersVisits, CDB3, cdbTrack, cdbEnsureLoaded, cdbGrantPicker, syncClinicDb4, cdbOpenUpgraded, openPatientDialog, selectPatient, sameNamePatients, nameKey, ptIdParts, savePatientFromForm, deleteVisit, clinicDbState, clinicActive, connectClinicDb, disconnectClinicDb, syncClinicDb, cdbContains, CLINIC_PATIENTS_FILE, __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Slips, fdState, buildSlip, sendToFrontdesk, syncSlips, renderSendRow, FRONTDESK_SLIPS_FILE, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>

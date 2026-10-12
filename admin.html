@@ -3445,8 +3445,9 @@ async function findWithPicker() {
   if (!pickerAvailable()) { toast("Google Picker isn't configured for this site."); return; }
   try {
     const tok = await ensureToken(); await loadPicker();
-    const view = new google.picker.DocsView(google.picker.ViewId.DOCS).setMimeTypes("application/json").setQuery(CLINIC_PRICES_FILE).setOwnedByMe(true);
-    new google.picker.PickerBuilder().setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID).addView(view).setTitle("Select your clinic herb price list (" + CLINIC_PRICES_FILE + ")")
+    const __mkV = (q, mine) => { const v = new google.picker.DocsView(google.picker.ViewId.DOCS).setMimeTypes("application/json").setQuery(q).setOwnedByMe(mine); if (v.setLabel) v.setLabel(mine ? "My Drive" : "Shared with me"); return v; };
+    const views = [__mkV(CLINIC_PRICES_FILE, true), __mkV(CLINIC_PRICES_FILE, false)];
+    new google.picker.PickerBuilder().setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID).addView(views[0]).addView(views[1]).setTitle("Select " + CLINIC_PRICES_FILE)
       .setCallback(async d => { if (d.action === google.picker.Action.PICKED && d.docs && d.docs[0]) { try { await openFile(d.docs[0].id); toast("Price list opened"); } catch (e) { toast(e.message, 5000); } } }).build().setVisible(true);
   } catch (e) { toast("Google Picker failed: " + (e.message || e), 5000); }
 }

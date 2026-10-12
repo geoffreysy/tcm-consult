@@ -42,7 +42,7 @@ input,select,textarea{font:inherit;padding:8px;border:1px solid #cfd9d5;border-r
 .aform{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}.aform .full{grid-column:1/-1}.aform label{display:grid;gap:2px;font-size:12.5px;color:var(--muted)}
 .empty{color:var(--muted);font-size:13px}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#23312d;color:#fff;padding:8px 14px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:100}.toast.show{opacity:1}
-.picker-dialog-bg{z-index:2147482999!important}.picker-dialog{z-index:2147483000!important}
+.picker-dialog-bg{z-index:2147482999!important}.picker-dialog,.picker.picker-dialog{z-index:2147483000!important}body.picker-open .toast{display:none!important}
 </style>
 </head>
 <body>
@@ -126,6 +126,14 @@ const driveDownload = async id => (await gfetch(`${G.drive}/files/${encodeURICom
 const driveUpdate = (id, doc) => gjson(`${G.upload}/files/${encodeURIComponent(id)}?uploadType=media&fields=id,modifiedTime`, { method: "PATCH", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify(doc) });
 const accKey = () => "tcm_sc_files_" + (SC.account ? SC.account.sub : "");
 
+// v32: the clinic owner (who created both files with this app) connects automatically via files.list — no Picker
+async function autoFind() {
+  try {
+    const q = n => `${G.drive}/files?q=${encodeURIComponent(`name='${n}' and 'me' in owners and trashed=false`)}&fields=${encodeURIComponent("files(id)")}&pageSize=5`;
+    const c = ((await gjson(q("tcm-clinic-config.json"))).files || [])[0], a = ((await gjson(q("tcm-clinic-appointments.json"))).files || [])[0];
+    if (c && a) { SC.auto = true; await connect([c.id, a.id]); }
+  } catch (e) { /* not the owner — Picker */ }
+}
 async function signIn() {
   $("#welcomeMsg").textContent = "";
   try {
@@ -134,6 +142,7 @@ async function signIn() {
     const u = await r.json(); SC.account = { sub: String(u.sub), email: u.email || "", name: u.name || u.email || "" }; lsSet(LS_ACC, JSON.stringify(SC.account));
     try { const f = JSON.parse(lsGet(accKey()) || "{}"); SC.cfgId = f.cfgId || ""; SC.apptId = f.apptId || ""; } catch {}
     renderAll(); await refresh();
+    if (!(SC.cfg && SC.appts)) await autoFind();
   } catch (e) { $("#welcomeMsg").textContent = "Sign-in did not complete (" + e.message + ")."; renderAll(); }
 }
 function signOut() { SC.account = null; SC.token = null; SC.cfg = SC.appts = null; lsSet(LS_ACC, null); renderAll(); }
@@ -169,9 +178,9 @@ async function openPicker() {
   if (!pickerAvailable()) { $("#setupMsg").textContent = "Google Picker isn't configured on this site."; return; }
   try {
     const tok = await ensureToken(); await loadPicker();
-    const P = google.picker, view = new P.DocsView(P.ViewId.DOCS).setMimeTypes("application/json").setQuery("tcm-clinic-").setOwnedByMe(false);
-    new P.PickerBuilder().setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID).addView(view).enableFeature(P.Feature.MULTISELECT_ENABLED)
-      .setTitle("Select the clinic schedule + appointments").setCallback(d => { if (d.action === P.Action.PICKED) connect((d.docs || []).map(x => x.id)); }).build().setVisible(true);
+    const P = google.picker, mk = mine => { const v = new P.DocsView(P.ViewId.DOCS).setMimeTypes("application/json").setQuery("tcm-clinic-").setOwnedByMe(mine); if (v.setLabel) v.setLabel(mine ? "My Drive" : "Shared with me"); return v; };
+    new P.PickerBuilder().setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID).addView(mk(false)).addView(mk(true)).enableFeature(P.Feature.MULTISELECT_ENABLED)
+      .setTitle("Select both tcm-clinic- files").setCallback(d => { if (d.action === P.Action.PICKED) connect((d.docs || []).map(x => x.id)); }).build().setVisible(true);
   } catch (e) { $("#setupMsg").textContent = "Google Picker failed: " + (e.message || e); }
 }
 

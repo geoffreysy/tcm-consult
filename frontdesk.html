@@ -149,6 +149,7 @@ a{color:var(--accent)}
 .sched-week summary{cursor:pointer;font-weight:600;font-size:13px;padding:4px 0}.sched-wrap{overflow-x:auto}
 .sched-grid{border-collapse:collapse;font-size:12.5px;width:100%}.sched-grid th,.sched-grid td{border:1px solid #e3ebe8;padding:4px 5px;text-align:center}.sched-grid tbody th{text-align:left;white-space:nowrap}
 .sched-grid .today{background:#fff4dc}
+.queue .tdoc{display:block;grid-column:1/-1;font-weight:700;color:#1d6b5a;font-size:14px}.tdoc-d{color:#1d6b5a}
 .appts-today{margin-top:8px}.appts-today ul{margin:4px 0 0;padding-left:18px}.appts-today li{overflow-wrap:anywhere}
 </style>
 <style>/* v27: Google Picker always on top of the app (sticky banners, bottom bars, dialogs) */
@@ -3085,9 +3086,10 @@ async function openPicker(kind) {
   try {
     const tok = await ensureToken(); await loadPicker();
     const name = kind === "slips" ? FRONTDESK_SLIPS_FILE : kind === "index" ? CDB3.INDEX : kind === "schedule" ? CLINIC_CONFIG_FILE : kind === "appts" ? APPTS_FILE : CLINIC_PRICES_FILE;
-    const view = new google.picker.DocsView(google.picker.ViewId.DOCS).setMimeTypes("application/json").setQuery(name).setOwnedByMe(false);
-    let b = new google.picker.PickerBuilder().setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID).addView(view)
-      .setTitle(kind === "appts" ? "Select the clinic appointments (" + name + ")" : kind === "schedule" ? "Select the clinic schedule (" + name + ")" : kind === "slips" ? "Select the doctors' front desk slips files (" + name + ")" : kind === "index" ? "Select the clinic patient list (" + CDB3.FOLDER + " / " + name + ")" : "Select the clinic herb price list (" + name + ")")
+    const __mkV = (q, mine) => { const v = new google.picker.DocsView(google.picker.ViewId.DOCS).setMimeTypes("application/json").setQuery(q).setOwnedByMe(mine); if (v.setLabel) v.setLabel(mine ? "My Drive" : "Shared with me"); return v; };
+    const views = [__mkV(name, false), __mkV(name, true)];
+    let b = new google.picker.PickerBuilder().setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID).addView(views[0]).addView(views[1])
+      .setTitle((kind === "slips" ? "Select all " : "Select ") + name)
       .setCallback(async d => {
         if (d.action === google.picker.Action.PICKED) { for (const doc of d.docs || []) { if (kind === "slips") await connectDoctor(doc.id); else if (kind === "index") await connectPatients(doc.id); else if (kind === "schedule") await connectSchedule(doc.id); else if (kind === "appts") await connectAppts(doc.id); else await connectClinic(doc.id); } }
         else if (d.action === google.picker.Action.CANCEL) setMsg("");
@@ -3131,7 +3133,7 @@ function queueItems() {
   const f = FD.filter;
   return allItems().filter(it => {
     const st = Slips.status(it.slip);
-    if (f.doctor && it.fileId !== f.doctor) return false;
+    if (f.doctor && (f.doctor.startsWith("n:") ? treatingDoc(it) !== f.doctor.slice(2) : it.fileId !== f.doctor)) return false;
     if (f.status === "open" ? st === "paid" : f.status && st !== f.status) return false;
     if (f.day && Slips.ymd(it.slip.visitAt || it.slip.sentAt) !== f.day && Slips.ymd((it.slip.fd || {}).paidAt) !== f.day) return false;
     return true;
@@ -3140,6 +3142,8 @@ function queueItems() {
 const draftKey = (fileId, slipId) => fileId + "|" + slipId;
 const fdView = it => ({ ...(it.slip.fd || {}), ...(FD.drafts[draftKey(it.fileId, it.slip.id)] || {}) });
 function billFor(it) { return Slips.bill(it.slip, FD.clinic && FD.clinic.prices, fdView(it)); }
+// v32: treating doctor of a slip (the doctor app writes the visit's doctor; Rates name, else Google name)
+const treatingDoc = it => (typeof it.slip.doctor === "string" && it.slip.doctor) || (it.slip.doctor && it.slip.doctor.name) || it.doctorName;
 function renderQueue() {
   const items = queueItems();
   $("#queueTitle").textContent = `Queue (${items.length})`;
@@ -3147,7 +3151,7 @@ function renderQueue() {
     const s = it.slip, st = Slips.status(s), sel = FD.sel && FD.sel.fileId === it.fileId && FD.sel.slipId === s.id;
     const amt = st === "paid" ? s.fd.paid.amount : billFor(it).total;
     return `<li data-file="${esc(it.fileId)}" data-slip="${esc(s.id)}" class="${sel ? "sel" : ""}" style="--dc:${esc(it.color)}"><span class="pt">${esc(s.patient && s.patient.name)}</span><span class="amt">${esc(fmt(amt))}</span>
-      <span class="sub">${esc(it.doctorName)} · ${esc(fmtT(s.visitAt || s.sentAt))}${s.rx && s.rx.length ? " · " + s.rx.length + " Rx · " + (s.packs || 0) + " packs" : ""}</span><span><span class="badge ${st}">${st}</span></span></li>`;
+      <span class="tdoc">👨‍⚕️ ${esc(treatingDoc(it))}</span><span class="sub">${esc(fmtT(s.visitAt || s.sentAt))}${s.rx && s.rx.length ? " · " + s.rx.length + " Rx · " + (s.packs || 0) + " packs" : ""}</span><span><span class="badge ${st}">${st}</span></span></li>`;
   }).join("") : `<li class="empty" style="cursor:default;border:none">${FD.config.doctors.length ? "No slips for this date / filter." : "Connect a doctor to see their slips."}</li>`;
   $("#queue").innerHTML = html;
 }
@@ -3184,7 +3188,7 @@ function renderDetail() {
        ${b.warnings.length ? `<div class="warn">${b.warnings.slice(0, 6).map(esc).join("<br>")}</div>` : ""}`;
   const amount = fd.amount != null && fd.amount !== "" ? fd.amount : b.total;
   box.innerHTML = `<div class="detail-head"><button type="button" class="small back" id="backBtn">← Queue</button>
-      <div style="flex:1;min-width:0"><h3>${esc(s.patient && s.patient.name)}</h3><div class="muted">${esc(it.doctorName)} · ${esc(fmtDT(s.visitAt || s.sentAt))}${s.patient && s.patient.phone ? " · " + esc(s.patient.phone) : ""}</div></div>
+      <div style="flex:1;min-width:0"><h3>${esc(s.patient && s.patient.name)}</h3><div class="muted"><b class="tdoc-d">👨‍⚕️ ${esc(treatingDoc(it))}</b> · ${esc(fmtDT(s.visitAt || s.sentAt))}${s.patient && s.patient.phone ? " · " + esc(s.patient.phone) : ""}</div></div>
       <span class="badge ${st}">${st}</span></div>
     <div class="detail-head" style="margin-top:12px;align-items:center"><h2 style="flex:1;margin:0">Dispensing — ${esc(s.packs)} pack${s.packs === 1 ? "" : "s"}</h2>
       <span class="seg" role="group" aria-label="Herb names"><button type="button" data-hn-mode="py"${HN.mode === "py" ? ' class="on"' : ""}>Pinyin</button><button type="button" data-hn-mode="zh"${HN.mode === "zh" ? ' class="on"' : ""}>中文</button><button type="button" data-hn-mode="both"${HN.mode === "both" ? ' class="on"' : ""}>Both</button></span>
@@ -3286,7 +3290,7 @@ function receiptHTML(it) {
     <div class="c"><h1>${esc(r.name || "Clinic")}</h1>${r.address ? `<div>${esc(r.address).replace(/\n/g, "<br>")}</div>` : ""}${r.phone ? `<div>${esc(r.phone)}</div>` : ""}${r.tin ? `<div>TIN ${esc(r.tin)}</div>` : ""}</div>
     <h2 class="c">RECEIPT</h2>
     <table class="meta"><tr><td>Receipt no.</td><td class="r"><b>${esc(p.receiptNo)}</b></td></tr><tr><td>Date</td><td class="r">${esc(fmtDT(s.fd.paidAt))}</td></tr>
-      <tr><td>Patient</td><td class="r">${esc(s.patient && s.patient.name)}</td></tr><tr><td>Doctor</td><td class="r">${esc(r.doctor || s.doctor || it.doctorName)}</td></tr></table>
+      <tr><td>Patient</td><td class="r">${esc(s.patient && s.patient.name)}</td></tr><tr><td>Attending doctor</td><td class="r"><b>${esc(treatingDoc(it) || r.doctor)}</b></td></tr></table>
     <table>${p.lines.map(l => `<tr class="ln"><td>${esc(l.label)}${l.detail ? `<br><small>${esc(l.detail)}</small>` : ""}</td><td class="r">${esc(fmt(l.amount))}</td></tr>`).join("")}
       <tr class="ln"><td>Subtotal</td><td class="r">${esc(fmt(p.subtotal))}</td></tr>
       ${p.discount ? `<tr><td>Discount</td><td class="r">−${esc(fmt(p.discount))}</td></tr>` : ""}${p.rounding ? `<tr><td>Rounding</td><td class="r">${esc(fmt(p.rounding))}</td></tr>` : ""}
@@ -3297,7 +3301,7 @@ function receiptHTML(it) {
 function sheetHTML(it) {
   const s = it.slip;
   return `<div class="pr"><h1>Dispensing sheet</h1>
-    <table class="meta"><tr><td>Patient</td><td class="r"><b>${esc(s.patient && s.patient.name)}</b></td></tr><tr><td>Doctor</td><td class="r">${esc(it.doctorName)}</td></tr><tr><td>Visit</td><td class="r">${esc(fmtDT(s.visitAt))}</td></tr><tr><td>Packs</td><td class="r"><b>${esc(s.packs)}</b></td></tr></table>
+    <table class="meta"><tr><td>Patient</td><td class="r"><b>${esc(s.patient && s.patient.name)}</b></td></tr><tr><td>Attending doctor</td><td class="r">${esc(treatingDoc(it))}</td></tr><tr><td>Visit</td><td class="r">${esc(fmtDT(s.visitAt))}</td></tr><tr><td>Packs</td><td class="r"><b>${esc(s.packs)}</b></td></tr></table>
     ${(s.rx || []).map(r => `<h2>${rxTitle(r)}</h2><table><tr><th>Herb</th><th class="r">/pack</th><th class="r">total</th><th class="r">✓</th></tr>${r.herbs.map(h => `<tr class="ln"><td>${herbName(h)}</td><td class="r">${h.qty != null ? esc(h.qty) + " " + esc(h.unit || "g") : "—"}</td><td class="r">${h.qty != null ? esc(Math.round(h.qty * (s.packs || 0) * 100) / 100) + " " + esc(h.unit || "g") : "—"}</td><td class="r">☐</td></tr>`).join("")}</table>`).join("")}
     <div class="foot">Prepared by ____________ · Checked by ____________</div></div>`;
 }
@@ -3339,7 +3343,8 @@ function renderSetup() {
   $("#clinicStatus").innerHTML = c && c.prices ? `📄 <b>${esc(c.ownerName || "Clinic owner")}</b>'s price list · read-only · ${esc(c.prices.mode === "gram" ? "per gram" : c.prices.mode === "pack" ? "per pack" : "per formula")} · updated ${esc(fmtDT(c.prices.updatedAt || c.modifiedTime))}${c.error ? ` <span style="color:#a12d22">⚠ ${esc(c.error)}</span>` : ""}`
     : "Not connected — bills use each doctor's estimate until the clinic price list is connected.";
   const sel = $("#doctorFilter"), cur = FD.filter.doctor;
-  sel.innerHTML = `<option value="">All doctors</option>` + FD.config.doctors.map(d => `<option value="${esc(d.fileId)}"${d.fileId === cur ? " selected" : ""}>${esc(d.name)}</option>`).join("");
+  sel.innerHTML = `<option value="">All doctors</option>` + (() => { const names = [...new Set(allItems().map(treatingDoc).filter(Boolean))].sort();
+    return names.map(n => `<option value="n:${esc(n)}"${"n:" + n === cur ? " selected" : ""}>${esc(n)}</option>`).join("") + (FD.config.doctors.length > 1 ? `<optgroup label="Slips file of">` + FD.config.doctors.map(d => `<option value="${esc(d.fileId)}"${d.fileId === cur ? " selected" : ""}>${esc(d.name)}</option>`).join("") + `</optgroup>` : ""); })();
   $("#refreshedAt").textContent = FD.lastRefresh ? "updated " + fmtT(FD.lastRefresh) : "";
   const nd = FD.config.doctors.length;
   $("#setupSummary").textContent = `Setup — ${nd} doctor${nd === 1 ? "" : "s"} connected · clinic price list ${c && c.prices ? "✓" : "not connected"}`;
