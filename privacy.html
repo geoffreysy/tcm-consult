@@ -18,7 +18,7 @@ h1{font-size:24px;margin-bottom:4px}h2{font-size:17px;margin-top:28px}
 </head>
 <body>
 <h1>Privacy Policy — TCM Consult Assistant</h1>
-<p class="muted">Effective 10 October 2026 (updated: clinic price list page) · App: <a href="https://geoffreysy.github.io/tcm-consult/">https://geoffreysy.github.io/tcm-consult/</a></p>
+<p class="muted">Effective 12 October 2026 (updated: shared clinic patient database) · App: <a href="https://geoffreysy.github.io/tcm-consult/">https://geoffreysy.github.io/tcm-consult/</a></p>
 
 <p>TCM Consult Assistant is a static web app for Traditional Chinese Medicine practitioners. It runs entirely in your web browser. There is no app server and no developer database: the developer never receives, stores or can see your patient records.</p>
 
@@ -46,6 +46,14 @@ h1{font-size:24px;margin-bottom:4px}h2{font-size:17px;margin-top:28px}
   <li><b>Google Picker</b>: “Connect” opens Google's file picker (a Google-hosted window) so you can choose a file shared with you; choosing it lets the app open just that file.</li>
 </ul>
 
+<h2>Shared clinic patient database (optional)</h2>
+<ul>
+  <li>A clinic can keep <b>one patient database for all its doctors</b>. The clinic owner signs in on the <b>Clinic admin</b> page (<code>pricing.html</code>) and creates <code>tcm-clinic-patients.json</code> in the owner's own “TCM Consult Assistant” Drive folder. It holds the same kind of records as a personal file (patients, visits, deletions), plus which doctor saw each visit and who created / last changed each record.</li>
+  <li><b>The owner decides who has access</b>: only the doctors ticked on the Clinic admin page get Google Drive <b>editor</b> access to that one file (Google e-mails each person once). Unticking removes the access. The front desk is never given access; the front desk page never opens this file.</li>
+  <li>A doctor who connects the database (once, with Google Picker or a shared link) reads and saves patients and visits there instead of in their personal file, with an offline copy in the browser for that account and file. Their personal file is not changed and stays as a backup; “Move my records into the clinic database” copies personal records into the shared file (after a review of possible duplicates).</li>
+  <li>If a doctor's access is removed, the app stops syncing and deletes the shared patients from that device's cache; the doctor's personal records remain.</li>
+  <li>Everyone with access can see all patients in the shared database — share it only with the clinic's own doctors, as your clinic's privacy policies and the Data Privacy Act require.</li>
+</ul>
 <h2>What is sent to whom</h2>
 <ul>
   <li><b>Nothing is sent to the developer.</b> The app has no analytics, advertising or tracking.</li>

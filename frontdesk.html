@@ -2416,6 +2416,7 @@ const HERB_POPUP_ONLY = new Set(Object.keys(HERBS_EXTRA).filter(n => !Object.val
    No DOM, no app state, no Drive calls here.
    ===================================================================== */
 const CLINIC_PRICES_FILE = "tcm-clinic-herb-prices.json";
+const CLINIC_PATIENTS_FILE = "tcm-clinic-patients.json";   // v21: shared clinic patient database (owner = clinic admin; doctors get WRITER access)
 const FRONTDESK_SLIPS_FILE = "tcm-frontdesk-slips.json";
 const RECORDS_FILE_NAME = "tcm-consult-data.json";   // the doctor's records — never shared, never opened by frontdesk.html
 /* ---------- PRICING (pure; shared with frontdesk.html later — no DOM, no app state) ---------- */

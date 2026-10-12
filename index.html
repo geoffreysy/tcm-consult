@@ -576,6 +576,18 @@ details.est>summary{display:flex;align-items:center;gap:8px;padding:5px 9px;curs
 details.est>summary::-webkit-details-marker{display:none}
 details.est>summary::before{content:"▸";color:var(--muted);transition:transform .12s}
 details.est[open]>summary::before{transform:rotate(90deg)}
+/* v21 clinic patient database */
+.cdb{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:12px 0;background:#fbfdfc}
+.cdb h4{margin:0 0 6px;font-size:14px}
+.cdb .cdb-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+.cdb .cdb-row input{flex:1 1 200px;min-width:0}
+.cdb-err{color:#a12d22;font-size:12.5px;margin:6px 0}
+.cdb-warn{color:#8a5a00;font-size:12.5px;margin:6px 0}
+.cdb-msg{font-size:12.5px;margin-top:6px}
+.sync-chip.clinic{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hv-doc,.vdoc{color:#1f5d50;font-weight:600}
+.cdb-mig-list{max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin:6px 0}
+.cdb-mig-list label{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:4px 0}
 .est-title{color:var(--muted);font-size:12px}
 .est-total{margin-left:auto;font-variant-numeric:tabular-nums;color:#1f4f45}
 .est-body{padding:2px 9px 8px}
@@ -811,6 +823,11 @@ textarea,input,select,button{font-family:inherit}
   <div class="dlg-head"><h3>Google account &amp; Drive storage</h3><button type="button" class="link" data-close>✕</button></div>
   <div class="dlg-body" id="accountBody"></div>
   <div class="dlg-foot"><button type="button" data-close>Close</button></div>
+</dialog>
+<dialog id="cdbMigDialog">
+  <div class="dlg-head"><h3>Move my records into the clinic database</h3><button type="button" class="link" data-close>✕</button></div>
+  <div class="dlg-body" id="cdbMigBody"></div>
+  <div class="dlg-foot"><button type="button" data-close>Cancel</button><button type="button" class="primary" id="cdbMigGo">Move records</button></div>
 </dialog>
 <dialog id="migrateDialog">
   <div class="dlg-head"><h3>Copy records into your Google Drive?</h3></div>
@@ -3812,6 +3829,7 @@ const HERB_POPUP_ONLY = new Set(Object.keys(HERBS_EXTRA).filter(n => !Object.val
    No DOM, no app state, no Drive calls here.
    ===================================================================== */
 const CLINIC_PRICES_FILE = "tcm-clinic-herb-prices.json";
+const CLINIC_PATIENTS_FILE = "tcm-clinic-patients.json";   // v21: shared clinic patient database (owner = clinic admin; doctors get WRITER access)
 const FRONTDESK_SLIPS_FILE = "tcm-frontdesk-slips.json";
 const RECORDS_FILE_NAME = "tcm-consult-data.json";   // the doctor's records — never shared, never opened by frontdesk.html
 /* ---------- PRICING (pure; shared with frontdesk.html later — no DOM, no app state) ---------- */
@@ -4343,7 +4361,7 @@ function analyzeSession(session, liveMatches) {
    practitioners sharing a device never see each other's records.
    ===================================================================== */
 const DB_BASE = "tcm-consult-assistant";
-const DB = {
+function makeStore() { return {
   mode: "memory", db: null, ns: "", memAll: {}, mem: null,
   STORES: ["patients", "visits", "meta"],
   dbName(ns) { return ns ? DB_BASE + "::" + ns : DB_BASE; },
@@ -4418,7 +4436,17 @@ const DB = {
     if (this.mode === "localstorage") { const d = this._ls(store); delete d[id]; this._lsSave(store, d); return; }
     delete this.mem[store][id];
   }
-};
+}; }
+const DB = makeStore();
+// v21: when a clinic patient database is connected, patients / visits / tombstones live in a second store
+// (cache per account + clinic file); everything else (settings, Rates, drafts, sync state) stays in the personal store.
+DB.rec = null;
+const REC_META = new Set(["tombstones"]);
+for (const m of ["all", "get", "put", "del"]) {
+  const raw = DB[m].bind(DB); DB["raw_" + m] = raw;
+  DB[m] = function (store, x) { const r = this.rec; if (r && (store === "patients" || store === "visits" || (store === "meta" && REC_META.has(m === "put" ? x && x.id : x)))) return r[m](store, x); return raw(store, x); };
+}
+DB.raw = { all: s => DB.raw_all(s), get: (s, i) => DB.raw_get(s, i), put: (s, o) => DB.raw_put(s, o), del: (s, i) => DB.raw_del(s, i) };
 
 /* =====================================================================
    APP STATE
@@ -4552,7 +4580,7 @@ function renderProfile() {
     <h3 style="margin-top:12px">Past visits (${visits.length})</h3>
     <ul class="visit-list">${visits.length ? visits.map(v => `
       <li data-vid="${v.id}" class="${v.id === state.session.id ? "current" : ""}">
-        <div class="vdate">${esc(fmtDateTime(v.startedAt))}</div>
+        <div class="vdate">${esc(fmtDateTime(v.startedAt))}${doctorTag(v, "vdoc")}</div>
         <div class="vsub">${v.patterns && v.patterns[0] ? esc(v.patterns[0].name) + " " + v.patterns[0].pct + "%" : "No pattern"}${v.diagnosis ? " · Dx: " + esc(v.diagnosis.slice(0, 60)) : ""}</div>
         <button class="small danger vdel" data-delvid="${v.id}" title="Delete visit">✕</button>
       </li>`).join("") : `<li class="empty" style="cursor:default;border:none">No saved visits yet.</li>`}
@@ -5633,7 +5661,7 @@ function renderHistory() {
   const v = prior[0], ref = s.startedAt, rx = rxLinesOf(v.diagnosis);
   const cmp = progressCompare(v), trend = patternTrend(v);
   const html = `<div class="hv-card" data-vid="${v.id}">
-      <div class="hv-head"><span><b>${esc(fmtDate(v.startedAt))}</b> <span class="hv-ago">· ${esc(relAgo(v.startedAt, ref))}</span></span>
+      <div class="hv-head"><span><b>${esc(fmtDate(v.startedAt))}</b> <span class="hv-ago">· ${esc(relAgo(v.startedAt, ref))}</span>${doctorTag(v, "hv-doc")}</span>
         <button type="button" class="small primary" id="carryRxBtn" data-carry="${v.id}"${rx.length ? "" : " disabled"} title="${rx.length ? "Copy the last visit's Rx lines into today's Final diagnosis / treatment" : "The last visit has no Rx lines"}">⤵ Carry forward Rx</button></div>
       ${visitSummaryHTML(v, ref)}
       <div class="hv-links"><button type="button" class="link-btn" data-open-visit="${v.id}">Open this visit</button></div>
@@ -5641,7 +5669,7 @@ function renderHistory() {
     <div class="hv-block"><div class="hv-sub">Progress since last visit</div>${progressHTML(cmp)}</div>
     <div class="hv-block"><div class="hv-sub">Pattern trend <span class="muted">(last visit → today)</span></div>${trendHTML(trend)}</div>
     ${prior.length > 1 ? `<details class="hv-older" data-dkey="older"${op("older")}><summary>Older visits (${prior.length - 1})</summary>
-      ${prior.slice(1).map(o => `<details class="hv-ov" data-dkey="ov:${o.id}"${op("ov:" + o.id)}><summary><b>${esc(fmtDate(o.startedAt))}</b> · ${esc(relAgo(o.startedAt, ref))}${o.patterns && o.patterns[0] ? " · " + esc(shortPat(o.patterns[0].name)) + " " + o.patterns[0].pct + "%" : ""}</summary>
+      ${prior.slice(1).map(o => `<details class="hv-ov" data-dkey="ov:${o.id}"${op("ov:" + o.id)}><summary><b>${esc(fmtDate(o.startedAt))}</b> · ${esc(relAgo(o.startedAt, ref))}${doctorTag(o, "hv-doc")}${o.patterns && o.patterns[0] ? " · " + esc(shortPat(o.patterns[0].name)) + " " + o.patterns[0].pct + "%" : ""}</summary>
         <div class="hv-card hv-card-old">${visitSummaryHTML(o, ref)}<div class="hv-links"><button type="button" class="link-btn" data-open-visit="${o.id}">Open this visit</button>${rxLinesOf(o.diagnosis).length ? ` <button type="button" class="link-btn" data-carry="${o.id}">Carry forward this Rx</button>` : ""}</div></div></details>`).join("")}
     </details>` : ""}`;
   setHTML(body, html);
@@ -6967,9 +6995,15 @@ async function driveUpdate(id, doc) {
 
 /* ---------- local data helpers (all record writes go through these) ---------- */
 const recTime = r => (r && (r.updatedAt || r.savedAt || r.createdAt)) || "";
-async function getTombstones() { const t = await DB.get("meta", "tombstones"); return (t && t.map) || {}; }
+async function getTombstones(store = DB) { const t = await store.get("meta", "tombstones"); return (t && t.map) || {}; }
 async function dataPut(kind, rec) {
   if (!rec.updatedAt) rec.updatedAt = new Date().toISOString();
+  const me = Cloud.account;   // v21: who wrote it (shown in the clinic database; harmless in a personal file)
+  if (me) {
+    if (kind === "visits" && !rec.doctor) rec.doctor = { email: me.email, name: me.name || me.email };
+    if (!rec.createdBy) rec.createdBy = me.email;
+    rec.updatedBy = me.email;
+  }
   await DB.put(kind, rec);
   markDataChanged();
 }
@@ -6979,7 +7013,7 @@ async function dataDel(kind, id) {
   await DB.put("meta", { id: "tombstones", map });
   markDataChanged();
 }
-function currentSettings() { return { lang: $("#langSel").value, aiModel: AI.model, herbNames: { mode: HN.mode, script: HN.script } }; }
+function currentSettings() { const c = clinicDbState.conf; return { lang: $("#langSel").value, aiModel: AI.model, herbNames: { mode: HN.mode, script: HN.script }, clinicDb: c && c.fileId && !c.revoked ? { fileId: c.fileId, ownerName: c.ownerName || "", ownerEmail: c.ownerEmail || "" } : null }; }
 async function saveSettings() {
   const data = { ...currentSettings(), updatedAt: new Date().toISOString() };
   try { await DB.put("meta", { id: "settings", data }); markDataChanged(); } catch (e) { console.warn(e); }
@@ -6989,6 +7023,12 @@ function applySettings(s) {
   if (s.lang && [...$("#langSel").options].some(o => o.value === s.lang)) { $("#langSel").value = s.lang; lsSet("tcm_lang", s.lang); if (state.session && !sessionHasContent(state.session)) state.session.lang = s.lang; }
   if (s.aiModel) AI.model = s.aiModel;
   if (s.herbNames && (s.updatedAt || "") >= (HN.updatedAt || "")) setHerbNames(s.herbNames.mode, s.herbNames.script, { fromSync: true, updatedAt: s.updatedAt });
+  // v21: another device of this doctor connected the clinic database → connect here too (never auto-disconnects)
+  const c = clinicDbState.conf;
+  if (s.clinicDb && s.clinicDb.fileId && Cloud.account && (!c || (c.fileId !== s.clinicDb.fileId && !(c.revoked && c.fileId === s.clinicDb.fileId))) && !clinicDbState.autoTried.has(s.clinicDb.fileId)) {
+    clinicDbState.autoTried.add(s.clinicDb.fileId);
+    setTimeout(() => connectClinicDb(s.clinicDb.fileId, { auto: true }).catch(e => console.warn("clinic database auto-connect:", e)), 0);
+  }
 }
 function markDataChanged() {
   if (!Cloud.account) return;
@@ -7036,27 +7076,29 @@ function docSignature(d) {
   parts.push("b@" + ((d.billing && d.billing.updatedAt) || ""));
   return parts.sort().join("|");
 }
-async function localDoc() {
+async function localDoc(store = DB.raw) {   // the PERSONAL records file (never the clinic store)
   const s = await DB.get("meta", "settings");
   const bl = await DB.get("meta", "billing");
-  return { patients: await DB.all("patients"), visits: await DB.all("visits"), deleted: await getTombstones(), settings: (s && s.data) || null, billing: (bl && bl.data && bl.data.updatedAt) ? bl.data : null };
+  return { patients: await store.all("patients"), visits: await store.all("visits"), deleted: await getTombstones(store), settings: (s && s.data) || null, billing: (bl && bl.data && bl.data.updatedAt) ? bl.data : null };
 }
 // write the merged result into the local cache, never overwriting a newer local edit
-async function applyToLocal(merged) {
+async function applyToLocal(merged, store = DB.raw) {
   let changed = false;
   for (const kind of ["patients", "visits"]) {
     const keep = new Set(merged[kind].map(r => r.id));
     for (const r of merged[kind]) {
-      const cur = await DB.get(kind, r.id);
-      if (!cur || recTime(r) > recTime(cur)) { await DB.put(kind, r); changed = true; }
+      const cur = await store.get(kind, r.id);
+      if (!cur || recTime(r) > recTime(cur)) { await store.put(kind, r); changed = true; }
     }
-    for (const cur of await DB.all(kind)) {
+    for (const cur of await store.all(kind)) {
       const t = merged.deleted[kind + "/" + cur.id];
-      if (!keep.has(cur.id) && t && t >= recTime(cur)) { await DB.del(kind, cur.id); changed = true; }
+      if (!keep.has(cur.id) && t && t >= recTime(cur)) { await store.del(kind, cur.id); changed = true; }
     }
   }
-  const lt = await getTombstones();
-  await DB.put("meta", { id: "tombstones", map: { ...lt, ...merged.deleted } });
+  const lt = await getTombstones(store);
+  await store.put("meta", { id: "tombstones", map: { ...lt, ...merged.deleted } });
+  if (store !== DB.raw) changed = changed && store === DB.rec;   // clinic store: refresh the UI only if it is the active one
+  else if (DB.rec) changed = false;                              // personal records are hidden while the clinic database is active
   const ls = await DB.get("meta", "settings");
   if (merged.settings && (!ls || !ls.data || (merged.settings.updatedAt || "") > (ls.data.updatedAt || ""))) { await DB.put("meta", { id: "settings", data: merged.settings }); applySettings(merged.settings); }
   const lb = await DB.get("meta", "billing");
@@ -7067,6 +7109,196 @@ async function applyToLocal(merged) {
     renderPatients(); renderProfile(); renderSessionInfo(); renderHistory();
   }
   return changed;
+}
+
+/* =====================================================================
+   v21 CLINIC PATIENT DATABASE
+   One shared tcm-clinic-patients.json owned by the clinic admin (pricing.html → Clinic admin),
+   shared WRITER with the doctors who should see it. Same record schema as the personal file,
+   plus doctor attribution. Sync: re-read → per-record merge (newest wins, tombstones) →
+   re-check the Drive version just before writing → write → re-read and verify → retry.
+   ===================================================================== */
+const clinicDbState = { conf: null, error: "", busy: false, autoTried: new Set(), warnedBig: false };
+const CDB_BIG = 5 * 1024 * 1024;
+const clinicActive = () => !!(DB.rec && clinicDbState.conf && clinicDbState.conf.fileId && !clinicDbState.conf.revoked);
+const clinicOwnerLabel = c => (c && (c.ownerName || c.ownerEmail)) || "clinic admin";
+const clinicChipText = () => "Clinic database · owner " + clinicOwnerLabel(clinicDbState.conf);
+function doctorTag(v, cls) { const d = v && v.doctor; if (!d || !(d.name || d.email)) return ""; return ` <span class="${cls}" title="${esc(d.email || "")}">· ${esc(d.name || d.email)}</span>`; }
+const clinicNs = (acc, fileId) => nsFor(acc) + "__c_" + String(fileId).replace(/[^\w-]/g, "_");
+async function clinicCachesOf(acc) {
+  const out = new Set(); try { const c = await DB.raw_get("meta", "clinicDb"); if (c && c.data && c.data.fileId) out.add(clinicNs(acc, c.data.fileId)); } catch {}
+  try { if (indexedDB.databases) for (const d of await indexedDB.databases()) if (d.name && d.name.startsWith(DB.dbName(nsFor(acc)) + "__c_")) out.add(d.name.slice(DB_BASE.length + 2)); } catch {}
+  return [...out];
+}
+async function saveClinicConf(conf) {
+  clinicDbState.conf = conf;
+  if (conf) await DB.raw_put("meta", { id: "clinicDb", data: conf }); else await DB.raw_del("meta", "clinicDb");
+}
+async function openClinicStore() {
+  DB.rec = null; clinicDbState.conf = null; clinicDbState.error = "";
+  if (!Cloud.account || !DB.ns) return;
+  let c = null; try { c = await DB.raw_get("meta", "clinicDb"); } catch {}
+  clinicDbState.conf = (c && c.data) || null;
+  const d = clinicDbState.conf;
+  if (d && d.fileId && !d.revoked) { const st = makeStore(); await st.init(clinicNs(Cloud.account, d.fileId)); DB.rec = st; }
+}
+const cdbMeta = id => gjson(`${GAUTH.drive}/files/${encodeURIComponent(id)}?fields=${encodeURIComponent("id,name,version,modifiedTime,size,appProperties,capabilities(canEdit),owners(displayName,emailAddress,me)")}`);
+const recDocOf = async st => ({ patients: await st.all("patients"), visits: await st.all("visits"), deleted: await getTombstones(st) });
+// every record / tombstone we wrote must be in `remote` (same or newer) — otherwise a concurrent writer overwrote us
+function cdbContains(remote, merged) {
+  const idx = {}; for (const k of ["patients", "visits"]) { idx[k] = new Map(); for (const r of remote[k] || []) idx[k].set(r.id, r); }
+  for (const k of ["patients", "visits"]) for (const r of merged[k]) { const x = idx[k].get(r.id); if (!x) { const t = (remote.deleted || {})[k + "/" + r.id]; if (!t || t < recTime(r)) return false; } else if (recTime(x) < recTime(r)) return false; }
+  for (const [key, t] of Object.entries(merged.deleted || {})) { const [k, id] = key.split("/"); const x = idx[k] && idx[k].get(id); if (x ? recTime(x) < t : !(remote.deleted || {})[key]) return false; }
+  return true;
+}
+async function syncClinicDb(acc) {
+  const c = clinicDbState.conf;
+  if (!c || !c.fileId || c.revoked || !DB.rec) return;
+  const st = DB.rec;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    if (attempt) await new Promise(r => setTimeout(r, 150 + Math.random() * 350 * attempt));
+    let meta, remote;
+    try { meta = await cdbMeta(c.fileId); if (!(meta.capabilities || {}).canEdit) { const e = new Error("read-only"); e.status = 403; throw e; } remote = await driveDownload(c.fileId); }
+    catch (e) { if (e.status === 403 || e.status === 404) { await revokeClinicDb(e.status === 404 ? "The clinic patient database is no longer shared with this account (or was deleted)." : "This account no longer has edit access to the clinic patient database."); return; } throw e; }
+    if (Cloud.account !== acc || DB.rec !== st) return;
+    if (!remote || remote.kind !== "clinic-patients") throw new Error("The connected file is not a clinic patient database.");
+    const merged = mergeDocs(await recDocOf(st), { patients: remote.patients || [], visits: remote.visits || [], deleted: remote.deleted || {} });
+    merged.settings = null; merged.billing = null;
+    await applyToLocal(merged, st);
+    const size = +meta.size || 0; clinicDbState.conf = { ...c, size, owner: (meta.owners || [])[0] || null, lastSyncAt: new Date().toISOString(), error: "" };
+    if (size > CDB_BIG && !clinicDbState.warnedBig) { clinicDbState.warnedBig = true; toast(`The clinic patient database is ${(size / 1048576).toFixed(1)} MB — syncing gets slower above ~5 MB.`, 6000); }
+    if (docSignature({ ...merged, settings: null, billing: null }) === docSignature({ patients: remote.patients || [], visits: remote.visits || [], deleted: remote.deleted || {} })) { await saveClinicConf(clinicDbState.conf); return; }
+    const m2 = await cdbMeta(c.fileId);   // re-read just before writing: someone else wrote meanwhile → merge again
+    if (String(m2.version) !== String(meta.version)) continue;
+    const doc = { ...remote, app: GAUTH.appId, kind: "clinic-patients", format: 2, patients: merged.patients, visits: merged.visits, deleted: merged.deleted, updatedAt: new Date().toISOString(), updatedBy: { email: acc.email, name: acc.name || acc.email } };
+    await driveUpdate(c.fileId, doc);
+    const check = await driveDownload(c.fileId);   // verify after writing
+    if (check && cdbContains(check, merged)) { await saveClinicConf(clinicDbState.conf); return; }
+  }
+  const e = new Error("The clinic patient database is busy (other doctors are saving) — will retry"); e.status = 409; throw e;
+}
+async function revokeClinicDb(msg) {
+  const acc = Cloud.account, c = clinicDbState.conf; if (!acc || !c) return;
+  const ns = clinicNs(acc, c.fileId);
+  DB.rec = null;
+  await saveClinicConf({ ...c, revoked: true, error: msg, revokedAt: new Date().toISOString() });
+  await DB.destroy(ns);   // shared patients disappear from this device; personal records remain
+  await loadData();
+  if (state.selectedPatientId && !patientById(state.selectedPatientId)) state.selectedPatientId = null;
+  if (state.session.patientId && !patientById(state.session.patientId)) state.session.patientId = null;
+  renderAll(); renderAuth(); updateStorageStatus(); if ($("#accountDialog").open) renderAccountDialog();
+  toast(msg + " Shared patients were removed from this device; your personal records are shown.", 7000);
+}
+function cdbMsg(t, err) { const m = $("#cdbMsg"); if (m) { m.textContent = t; m.classList.toggle("cdb-err", !!err); } else if (t) toast(t, 5000); }
+async function connectClinicDb(fileId, opt = {}) {
+  if (!Cloud.account) throw new Error("Sign in with Google first.");
+  cdbMsg("Connecting…");
+  let meta;
+  try { meta = await cdbMeta(fileId); }
+  catch (e) { throw new Error(e.status === 404 || e.status === 403 ? "This account can't open that file. Ask the clinic admin to give you access (Clinic admin page → Doctors with access), then connect it with Google Picker." : `Google Drive error ${e.status || e.message}`); }
+  if (meta.name !== CLINIC_PATIENTS_FILE || ((meta.appProperties || {}).tcmConsult && meta.appProperties.tcmConsult !== "clinic-patients")) throw new Error(`That is not the clinic patient database (${CLINIC_PATIENTS_FILE}).`);
+  if (!(meta.capabilities || {}).canEdit) throw new Error("You have read-only access — ask the clinic admin to tick you under “Doctors with access to the patient database”.");
+  const doc = await driveDownload(fileId);
+  if (!doc || doc.kind !== "clinic-patients") throw new Error("That file was not made by TCM Consult Assistant.");
+  const owner = (meta.owners || [])[0] || {};
+  if (state.session.dirty && sessionHasContent(state.session)) await saveDraft();
+  await saveClinicConf({ fileId, ownerName: owner.displayName || (doc.owner || {}).name || "", ownerEmail: owner.emailAddress || (doc.owner || {}).email || "", connectedAt: new Date().toISOString(), revoked: false, size: +meta.size || 0 });
+  await openClinicStore();
+  await loadData();
+  state.selectedPatientId = null; if (state.session.patientId && !patientById(state.session.patientId)) state.session.patientId = null;
+  renderAll(); renderAuth(); updateStorageStatus();
+  if (!opt.auto) saveSettings();
+  markDataChanged(); await syncNow();
+  if ($("#accountDialog").open) renderAccountDialog();
+  cdbMsg(`Connected ✓ — ${state.patients.length} patients in ${clinicOwnerLabel(clinicDbState.conf)}'s clinic database.`);
+  toast("Clinic patient database connected");
+  return true;
+}
+async function connectClinicDbPicker() {
+  if (!pickerAvailable()) { cdbMsg("Google Picker isn't configured — paste the shared link instead.", true); return; }
+  try {
+    const tok = await ensureToken(); await loadPicker();
+    const view = new google.picker.DocsView(google.picker.ViewId.DOCS).setMimeTypes("application/json").setQuery(CLINIC_PATIENTS_FILE).setOwnedByMe(false);
+    new google.picker.PickerBuilder().setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID).addView(view)
+      .setTitle("Select the clinic patient database (" + CLINIC_PATIENTS_FILE + ")")
+      .setCallback(async d => { if (d.action === google.picker.Action.PICKED && d.docs && d.docs[0]) { try { await connectClinicDb(d.docs[0].id); } catch (e) { cdbMsg(e.message, true); } } }).build().setVisible(true);
+  } catch (e) { cdbMsg("Google Picker failed: " + (e.message || e) + " — paste the shared link instead.", true); }
+}
+async function disconnectClinicDb() {
+  const c = clinicDbState.conf; if (!c) return;
+  if (!c.revoked && !confirm("Disconnect the clinic patient database on this device? Its cached copy is removed from this device (the clinic file is not affected); your personal records are shown again.")) return;
+  if (!c.revoked && Cloud.pending) { try { await syncNow(); } catch {} }
+  const ns = clinicNs(Cloud.account, c.fileId);
+  DB.rec = null; await saveClinicConf(null); await DB.destroy(ns);
+  await loadData(); state.selectedPatientId = null; if (state.session.patientId && !patientById(state.session.patientId)) state.session.patientId = null;
+  renderAll(); renderAuth(); updateStorageStatus(); if ($("#accountDialog").open) renderAccountDialog();
+  toast("Clinic patient database disconnected on this device");
+}
+function clinicDbSectionHTML() {
+  const c = clinicDbState.conf, on = clinicActive();
+  const pick = `<button type="button" class="small${pickerAvailable() ? " primary" : ""}" id="cdbPickBtn"${pickerAvailable() ? "" : " disabled"}>📂 Connect with Google Picker</button>`;
+  const paste = `<div class="cdb-row"><input id="cdbPaste" placeholder="…or paste the shared link / file ID" spellcheck="false" autocomplete="off"><button type="button" class="small" id="cdbPasteBtn">Connect</button></div>`;
+  let body;
+  if (on) {
+    const size = +c.size || 0;
+    body = `<p>✓ Connected to <b>${esc(clinicOwnerLabel(c))}</b>'s clinic patient database${c.ownerEmail ? ` <span class="muted">(${esc(c.ownerEmail)})</span>` : ""}. Patients and visits are read and saved there (shared with the clinic's doctors); your personal file is kept as it is.</p>
+      <div class="muted" style="font-size:12px">${state.patients.length} patients · ${state.visits.length} visits${size ? ` · file ${(size / 1048576).toFixed(size > 1048576 ? 1 : 2)} MB` : ""}${c.lastSyncAt ? ` · last sync ${esc(fmtDateTime(c.lastSyncAt))}` : ""}</div>
+      ${size > CDB_BIG ? `<div class="cdb-warn">⚠ The database file is over 5 MB — syncing slows down; ask the clinic admin to archive old records.</div>` : ""}
+      <div class="cdb-row"><button type="button" class="small" id="cdbMigrateBtn">Move my records into the clinic database…</button><button type="button" class="small" id="cdbDisconnectBtn">Disconnect</button></div>`;
+  } else if (c && c.revoked) {
+    body = `<div class="cdb-err">${esc(c.error || "Access to the clinic patient database was removed.")} Shared patients were removed from this device.</div>
+      <p class="muted" style="font-size:12px">If the clinic admin gives you access again, reconnect:</p>${pick}${paste}<div class="cdb-row"><button type="button" class="small" id="cdbDisconnectBtn">Forget this database</button></div>`;
+  } else {
+    body = `<p class="muted" style="font-size:12.5px">If your clinic keeps one shared patient database (set up by the clinic admin on the <a href="pricing.html" target="_blank" rel="noopener">Clinic admin</a> page and shared with you), connect it once. Patients and visits are then shared with the other doctors; your personal records stay in your own file.</p>${pick}${paste}`;
+  }
+  return `<div class="cdb" id="cdbSection"><h4>🏥 Clinic patient database</h4>${body}<div class="cdb-msg" id="cdbMsg" role="status"></div></div>`;
+}
+// ---- move personal records into the clinic database (dedupe with review) ----
+const cdbNm = p => String((p && p.name) || "").toLowerCase().normalize("NFKD").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+const cdbPh = p => { const d = String((p && (p.contact || p.phone)) || "").replace(/\D/g, ""); return d.length >= 7 ? d.slice(-9) : ""; };
+async function openClinicMigration() {
+  if (!clinicActive()) return;
+  const mine = { patients: await DB.raw_all("patients"), visits: await DB.raw_all("visits") };
+  const clinic = state.patients, clinicIds = new Set(clinic.map(p => p.id));
+  const rows = [];
+  for (const p of mine.patients) {
+    if (clinicIds.has(p.id)) { rows.push({ p, kind: "same", match: patientById(p.id) }); continue; }
+    const same = clinic.filter(c => cdbNm(c) === cdbNm(p) && cdbNm(p));
+    const exact = same.find(c => (cdbPh(p) && cdbPh(p) === cdbPh(c)) || (p.dob && p.dob === c.dob));
+    rows.push(exact ? { p, kind: "dup", match: exact } : same.length ? { p, kind: "maybe", match: same[0] } : { p, kind: "new" });
+  }
+  const nNew = rows.filter(r => r.kind === "new").length, review = rows.filter(r => r.kind === "dup" || r.kind === "maybe");
+  const desc = c => [c.dob ? "born " + c.dob : "", c.contact || ""].filter(Boolean).join(" · ") || "no DOB / phone";
+  $("#cdbMigBody").innerHTML = `<p>Your personal file has <b>${mine.patients.length} patients</b> and <b>${mine.visits.length} visits</b>. They will be copied into <b>${esc(clinicOwnerLabel(clinicDbState.conf))}</b>'s clinic database; your visits are marked as seen by <b>${esc(Cloud.account.name || Cloud.account.email)}</b>. Your personal file is <b>not changed</b> (it stays as a backup).</p>
+    <p>${nNew} new patient${nNew === 1 ? "" : "s"}${rows.some(r => r.kind === "same") ? ` · ${rows.filter(r => r.kind === "same").length} already in the clinic database` : ""}${review.length ? ` · <b>${review.length} possible duplicate${review.length === 1 ? "" : "s"}</b> — ticked ones are merged into the existing clinic patient (their visits move there); unticked ones are added as separate patients:` : ""}</p>
+    ${review.length ? `<div class="cdb-mig-list">${review.map(r => `<label><input type="checkbox" data-mig-merge="${esc(r.p.id)}"${r.kind === "dup" ? " checked" : ""}><span><b>${esc(r.p.name)}</b> <span class="muted">(${esc(desc(r.p))})</span> → existing <b>${esc(r.match.name)}</b> <span class="muted">(${esc(desc(r.match))})</span> ${r.kind === "dup" ? "<span class=\"cdb-warn\">same name + phone/DOB</span>" : "<span class=\"muted\">same name only</span>"}</span></label>`).join("")}</div>` : ""}`;
+  $("#cdbMigGo").onclick = async () => {
+    const merge = new Set([...document.querySelectorAll("[data-mig-merge]:checked")].map(x => x.dataset.migMerge));
+    $("#cdbMigDialog").close();
+    const now = new Date().toISOString(), me = Cloud.account, idMap = {};
+    let np = 0, nm = 0, nv = 0;
+    for (const r of rows) {
+      if (r.kind === "same") { idMap[r.p.id] = r.p.id; continue; }
+      if ((r.kind === "dup" || r.kind === "maybe") && merge.has(r.p.id)) {
+        idMap[r.p.id] = r.match.id; nm++;
+        const fill = {}; for (const k of ["dob", "contact", "sex", "notes"]) if (!r.match[k] && r.p[k]) fill[k] = r.p[k];
+        if (Object.keys(fill).length) await dataPut("patients", { ...r.match, ...fill, updatedAt: now });
+        continue;
+      }
+      idMap[r.p.id] = r.p.id; np++;
+      await dataPut("patients", { ...r.p, updatedAt: now, createdBy: r.p.createdBy || me.email, migratedFrom: me.email });
+    }
+    const have = new Set(state.visits.map(v => v.id));
+    for (const v of mine.visits) {
+      if (have.has(v.id)) continue;
+      await dataPut("visits", { ...v, patientId: idMap[v.patientId] || v.patientId, doctor: v.doctor || { email: me.email, name: me.name || me.email }, createdBy: v.createdBy || me.email, migratedFrom: me.email, updatedAt: now }); nv++;
+    }
+    await DB.raw_put("meta", { id: "clinicMigration", at: now, fileId: clinicDbState.conf.fileId, counts: { patients: np, merged: nm, visits: nv } });
+    await loadData(); renderAll(); if ($("#accountDialog").open) renderAccountDialog();
+    toast(`Moved ${np} patients (${nm} merged with existing) and ${nv} visits into the clinic database — saving…`, 5000);
+    syncNow();
+  };
+  $("#cdbMigDialog").showModal();
 }
 
 /* ---------- sync ---------- */
@@ -7094,6 +7326,8 @@ function syncNow() {
         if (fileId) await driveUpdate(fileId, doc);
         else { folderId = await driveEnsureFolder(); const f = await driveCreateDataFile(folderId, doc); fileId = f.id; }
       }
+      if (Cloud.account !== acc) return;
+      await syncClinicDb(acc);   // v21: shared clinic patient database (per-record merge with re-read / verify / retry)
       if (Cloud.account !== acc) return;
       try { await syncClinicPrices(acc, folderId); }   // v16: clinic herb price list (own file, or a file shared by the clinic owner)
       catch (e) { if (e.status === 401 || AUTH_ERRORS.test(e.message || "")) throw e; console.warn("Clinic price list:", e); if (billingState.clinic) billingState.clinic.error = "Could not sync the clinic price list" + (e.status ? ` (Google Drive ${e.status})` : ""); }
@@ -7133,6 +7367,7 @@ async function switchNamespace(ns, carrySession) {
   if (state.session && state.session.dirty && sessionHasContent(state.session) && state.session !== carrySession) await saveDraft();
   clearTimeout(draftTimer);
   const mode = await DB.init(ns);
+  await openClinicStore();
   await loadData();
   let d = null; try { d = await DB.get("meta", "draft"); } catch {}
   if (carrySession && sessionHasContent(carrySession)) state.session = carrySession;
@@ -7173,8 +7408,8 @@ function offerMigration(snap) {
     const acc = Cloud.account; if (!acc) return;
     await DB.put("meta", { id: "migration", decided: copy ? "copied" : "declined", at: new Date().toISOString(), counts: { patients: snap.patients.length, visits: snap.visits.length } });
     if (copy) {
-      for (const r of snap.patients) { const cur = await DB.get("patients", r.id); if (!cur || recTime(r) > recTime(cur)) await DB.put("patients", r); }
-      for (const r of snap.visits) { const cur = await DB.get("visits", r.id); if (!cur || recTime(r) > recTime(cur)) await DB.put("visits", r); }
+      for (const r of snap.patients) { const cur = await DB.raw.get("patients", r.id); if (!cur || recTime(r) > recTime(cur)) await DB.raw.put("patients", r); }
+      for (const r of snap.visits) { const cur = await DB.raw.get("visits", r.id); if (!cur || recTime(r) > recTime(cur)) await DB.raw.put("visits", r); }
       await loadData(); markDataChanged(); renderAll();
       toast(`Copied ${snap.patients.length} patients and ${snap.visits.length} visits — saving to Google Drive…`, 4000);
     } else if (state.session.patientId && !patientById(state.session.patientId)) { state.session.patientId = null; renderAll(); }
@@ -7234,7 +7469,7 @@ async function signOut(clearCache) {
   if (tok) { try { google.accounts.oauth2.revoke(tok, () => {}); } catch {} }
   lsSet(LS_ACCOUNT, null);
   await switchNamespace("", null);                   // never carry one practitioner's session into another's space
-  if (clearCache) { await DB.destroy(nsFor(acc)); lsSet("tcm_xai_key::" + nsFor(acc), null); }
+  if (clearCache) { const cdb = await clinicCachesOf(acc); for (const ns of cdb) await DB.destroy(ns); await DB.destroy(nsFor(acc)); lsSet("tcm_xai_key::" + nsFor(acc), null); }
   setSync(Cloud.configured ? "local" : "notconfigured");
   toast(`Signed out ${acc.email}${clearCache ? " and removed its cached records from this device" : ""}.`, 4000);
 }
@@ -7248,6 +7483,7 @@ function avatarHTML(acc, lg) {
   return acc.picture ? `<img class="avatar${lg ? " lg" : ""}" src="${esc(acc.picture)}" alt="" referrerpolicy="no-referrer" onerror="this.outerHTML='<span class=&quot;avatar${lg ? " lg" : ""}&quot;>${ini}</span>'">` : `<span class="avatar${lg ? " lg" : ""}">${ini}</span>`;
 }
 function syncTitle() {
+  if (Cloud.status === "synced" && Cloud.lastSyncAt && clinicActive()) return `Patients and visits are in the clinic patient database (owner ${clinicDbState.conf.ownerName || clinicDbState.conf.ownerEmail}) · last sync ${fmtDateTime(Cloud.lastSyncAt)}`;
   if (Cloud.status === "synced" && Cloud.lastSyncAt) return "Saved in your Google Drive · last sync " + fmtDateTime(Cloud.lastSyncAt);
   if (Cloud.status === "offline") return "No connection — changes are kept on this device and uploaded when you are back online";
   if (Cloud.status === "reauth") return "Google access expired or was blocked — click Reconnect Google. Your work is kept on this device.";
@@ -7257,7 +7493,7 @@ function syncTitle() {
 }
 function renderAuth() {
   const el = $("#authArea"); if (!el) return;
-  const st = Cloud.status, chip = `<span class="sync-chip ${st}" id="syncChip" title="${esc(syncTitle())}">${esc(SYNC_TEXT[st] || st)}</span>`;
+  const st = Cloud.status, cl = clinicActive() && st === "synced", chip = `<span class="sync-chip ${st}${clinicActive() ? " clinic" : ""}" id="syncChip" title="${esc(syncTitle())}">${esc(cl ? clinicChipText() : SYNC_TEXT[st] || st)}</span>`;
   let html;
   if (!Cloud.configured) html = `<button class="sync-chip notconfigured" id="syncChip" data-acct-open title="${esc(syncTitle())}">${esc(Cloud.fileCopy ? "Local file — sign-in off" : SYNC_TEXT.notconfigured)}</button>`;
   else if (!Cloud.account) html = `<button class="gbtn" data-signin title="Store your records in your own Google Drive">${G_LOGO}<span>Sign in with Google</span></button>${chip}`;
@@ -7266,7 +7502,8 @@ function renderAuth() {
 }
 function updateStorageStatus(mode = DB.mode) {
   const el = $("#storageStatus"); if (!el) return;
-  if (Cloud.account) el.textContent = `Signed in as ${Cloud.account.email} — records saved in your Google Drive (folder “${GAUTH.folderName}”) with an offline copy in this browser.`;
+  if (Cloud.account && clinicActive()) el.textContent = `Signed in as ${Cloud.account.email} — patients and visits are in the clinic patient database (owner ${clinicOwnerLabel(clinicDbState.conf)}), with an offline copy in this browser.`;
+  else if (Cloud.account) el.textContent = `Signed in as ${Cloud.account.email} — records saved in your Google Drive (folder “${GAUTH.folderName}”) with an offline copy in this browser.`;
   else el.textContent = mode === "indexeddb" ? "Records stored locally in this browser (IndexedDB) — export regularly as backup."
     : mode === "localstorage" ? "IndexedDB unavailable — records stored in localStorage (limited size). Export regularly."
     : "⚠ Browser storage unavailable — records will be lost when the page closes. Use Export.";
@@ -7287,6 +7524,7 @@ function renderAccountDialog() {
       <div class="acct-kv"><div><b>Status</b><span class="sync-chip ${Cloud.status}">${esc(SYNC_TEXT[Cloud.status])}</span></div>
       <div><b>Last synced</b>${Cloud.lastSyncAt ? esc(fmtDateTime(Cloud.lastSyncAt)) : "—"}</div>
       <div><b>Records</b>${state.patients.length} patient${state.patients.length === 1 ? "" : "s"} · ${state.visits.length} visit${state.visits.length === 1 ? "" : "s"}</div></div>${perm}
+${clinicDbSectionHTML()}
       <div class="acct-actions">${Cloud.status === "reauth" ? `<button class="primary" data-reconnect>Reconnect Google</button>` : `<button id="syncNowBtn">Sync now</button>`}
       ${Cloud.folderId ? `<a class="btnlink" href="https://drive.google.com/drive/folders/${encodeURIComponent(Cloud.folderId)}" target="_blank" rel="noopener">Open Drive folder</a>` : ""}
       <button class="danger" id="signOutBtn">Sign out…</button></div>`;
@@ -7302,6 +7540,10 @@ function bindCloudEvents() {
     else if (t.id === "useLocalBtn") { lsSet(LS_CHOICE, "local"); $("#accountDialog").close(); setSync("local"); toast("Using local-only mode — records stay in this browser."); }
     else if (t.id === "syncNowBtn") syncNow();
     else if (t.id === "signOutBtn") { $("#accountDialog").close(); openSignOut(); }
+    else if (t.id === "cdbPickBtn") connectClinicDbPicker();
+    else if (t.id === "cdbPasteBtn") { const id = parseDriveFileId($("#cdbPaste").value); if (!id) cdbMsg("Paste the share link of the clinic patient database (…/file/d/<ID>/…) or its file ID.", true); else connectClinicDb(id).catch(err => cdbMsg(err.message, true)); }
+    else if (t.id === "cdbMigrateBtn") openClinicMigration();
+    else if (t.id === "cdbDisconnectBtn") disconnectClinicDb();
   };
   $("#authArea").addEventListener("click", onClick);
   $("#accountBody").addEventListener("click", onClick);
@@ -7493,6 +7735,7 @@ async function init() {
   bindEvents();
   bindCloudEvents();
   const mode = await DB.init(cloudBootNamespace());
+  await openClinicStore();
   updateStorageStatus(mode);
   if (mode === "memory") banner("Browser storage is unavailable, so records are kept in memory only. Use <b>Export</b> to save a backup file.", "error");
   await loadData();
@@ -7515,7 +7758,7 @@ async function init() {
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Slips, fdState, buildSlip, sendToFrontdesk, syncSlips, renderSendRow, FRONTDESK_SLIPS_FILE, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { deleteVisit, clinicDbState, clinicActive, connectClinicDb, disconnectClinicDb, syncClinicDb, openClinicMigration, cdbContains, CLINIC_PATIENTS_FILE, __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Slips, fdState, buildSlip, sendToFrontdesk, syncSlips, renderSendRow, FRONTDESK_SLIPS_FILE, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>

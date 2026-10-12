@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Clinic herb price list — TCM Consult Assistant</title>
+<title>Clinic admin — TCM Consult Assistant</title>
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/icon-32.png" sizes="32x32" type="image/png">
 <link rel="icon" href="icons/icon-48.png" sizes="48x48" type="image/png">
@@ -148,12 +148,20 @@ a{color:var(--accent)}
 .savebar{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;z-index:15}
 .savebar .dirty{color:var(--warn);font-weight:600;font-size:12.5px}
 textarea{width:100%}
+.db-list{border:1px solid var(--line);border-radius:8px;margin-top:6px}
+.dbr{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid #eef2f0}
+.dbr .st{white-space:nowrap;flex:none}.dbr button{flex:none}
+.db-add .check{flex:1 1 200px}
+.dbr:last-child{border-bottom:0}.dbr .em{flex:1 1 0;min-width:0;overflow-wrap:anywhere;font-size:13.5px}
+.dbr input[type=checkbox]{width:18px;height:18px}
+.db-add input{width:100%}
+.db-warn{color:#8a5a00;font-size:12.5px}
 @media (max-width:860px){.pr-grid{grid-template-columns:1fr}.money input{width:96px}.ov-list{max-height:380px}}
 </style>
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="./" title="Doctor's app"><span class="yy"><img src="icons/icon.svg" alt="" width="26" height="26"></span><span>Clinic price list</span></a>
+  <a class="brand" href="./" title="Doctor's app"><span class="yy"><img src="icons/icon.svg" alt="" width="26" height="26"></span><span>Clinic admin</span></a>
   <span class="spacer"></span>
   <span class="seg" role="group" aria-label="Herb names"><button type="button" data-hn-mode="py">Pinyin</button><button type="button" data-hn-mode="zh">中文</button><button type="button" data-hn-mode="both">Both</button></span>
   <span class="seg hn-script" role="group" aria-label="Chinese script"><button type="button" data-hn-script="s">简</button><button type="button" data-hn-script="t">繁</button></span>
@@ -161,8 +169,8 @@ textarea{width:100%}
 </header>
 <div class="wrap">
   <section class="card welcome" id="welcome">
-    <h1 style="color:var(--accent);margin-top:0">₱ Clinic herb price list</h1>
-    <p>For the clinic admin. Sign in with the Google account that keeps the clinic's herb price list. Doctors and the front desk get read-only access; they never edit prices.</p>
+    <h1 style="color:var(--accent);margin-top:0">🏥 Clinic admin</h1>
+    <p>For the clinic owner / admin. Sign in with the Google account that keeps the clinic's files: the <b>herb price list</b> (doctors and the front desk get read-only access) and the shared <b>clinic patient database</b> (you decide which doctors have access).</p>
     <button type="button" class="primary" id="signInBtn">Sign in with Google</button>
     <p class="hint" id="welcomeMsg"></p>
   </section>
@@ -170,6 +178,23 @@ textarea{width:100%}
     <h2>No clinic price list in this Google account yet</h2>
     <p class="hint">Create one here — it is stored as <code>tcm-clinic-herb-prices.json</code> in this account's “TCM Consult Assistant” Drive folder. If this account already created one earlier (also from the doctor app's old owner mode) it is found automatically; otherwise you can pick it.</p>
     <div class="actions"><button type="button" class="primary" id="createBtn">Create clinic price list</button><button type="button" id="findPickerBtn">📂 Find it with Google Picker</button></div>
+  </section>
+  <section class="card" id="dbCard" hidden>
+    <h2>🏥 Clinic patient database</h2>
+    <div id="dbNone" hidden>
+      <p class="hint">One shared patient database for the whole clinic: <code>tcm-clinic-patients.json</code> in this account's “TCM Consult Assistant” folder. Doctors you tick below can open, add and edit all patients and visits from their app (each visit shows which doctor saw it). The front desk never gets access.</p>
+      <div class="actions"><button type="button" class="primary" id="dbCreateBtn">Create clinic patient database</button></div>
+    </div>
+    <div id="dbOn" hidden>
+      <div class="hint" id="dbInfo"></div>
+      <h2 style="margin-top:14px">Doctors with access to the patient database</h2>
+      <p class="hint">Ticked doctors can read and edit <b>all</b> patients and visits (Google Drive “editor” access to this one file only). Untick and Save to remove access — the app then clears the shared patients from that doctor's devices.</p>
+      <div class="db-list" id="dbList"></div>
+      <div class="row db-add"><label style="flex:1 1 220px">Add a doctor's Google e-mail<input type="email" id="dbAddEmail" placeholder="dr.cruz@gmail.com" autocomplete="off" spellcheck="false"></label>
+        <label class="check"><input type="checkbox" id="dbAlsoPrice" checked> also share the price list (read-only)</label><button type="button" class="small" id="dbAddBtn">Add</button></div>
+      <label class="hint" style="display:block;margin-top:8px">Front desk e-mail(s) — <b>never</b> given access to patient records<textarea id="dbFrontDesk" rows="2" spellcheck="false" placeholder="frontdesk@clinic.ph"></textarea></label>
+      <div class="actions"><button type="button" class="primary" id="dbSaveBtn">Save access</button><span class="msg" id="dbMsg" role="status"></span></div>
+    </div>
   </section>
   <div id="editor" hidden>
     <section class="card"><div class="detail-head"><div style="flex:1;min-width:0"><h2>Price list</h2><div class="hint" id="fileInfo"></div></div></div></section>
@@ -2426,6 +2451,7 @@ const HERB_POPUP_ONLY = new Set(Object.keys(HERBS_EXTRA).filter(n => !Object.val
    No DOM, no app state, no Drive calls here.
    ===================================================================== */
 const CLINIC_PRICES_FILE = "tcm-clinic-herb-prices.json";
+const CLINIC_PATIENTS_FILE = "tcm-clinic-patients.json";   // v21: shared clinic patient database (owner = clinic admin; doctors get WRITER access)
 const FRONTDESK_SLIPS_FILE = "tcm-frontdesk-slips.json";
 const RECORDS_FILE_NAME = "tcm-consult-data.json";   // the doctor's records — never shared, never opened by frontdesk.html
 /* ---------- PRICING (pure; shared with frontdesk.html later — no DOM, no app state) ---------- */
@@ -2696,16 +2722,126 @@ async function signIn() {
     const r = await fetch(PG.userinfo, { headers: { Authorization: "Bearer " + tok } }); if (!r.ok) throw new Error("userinfo " + r.status);
     const u = await r.json(); P.account = { sub: String(u.sub), email: u.email || "", name: u.name || u.email || "" };
     lsSet(LS_ACC, JSON.stringify(P.account)); renderAuth();
-    await loadList();
+    await loadList(); await loadDb();
   } catch (e) { console.warn("sign-in", e); $("#welcomeMsg").textContent = /popup_failed/.test(e.message) ? "The Google sign-in window was blocked — allow pop-ups and try again." : "Sign-in did not complete (" + e.message + ")."; renderAll(); }
 }
 function signOut() {
   if (P.dirty && !confirm("Discard unsaved changes and sign out?")) return;
   if (P.token) try { google.accounts.oauth2.revoke(P.token, () => {}); } catch {}
   Object.assign(P, { account: null, token: null, fileId: null, remote: null, draft: null, loaded: false, dirty: false, perms: [], shareStatus: {} });
+  Object.assign(D, { fileId: null, doc: null, rows: [], frontDesk: [], loaded: false, status: {} });
   lsSet(LS_ACC, null); renderAll();
 }
 /* ---------- load / create / reuse ---------- */
+/* ---------- v21: clinic patient database (owner side: create + doctors' WRITER access) ---------- */
+const D = { fileId: null, doc: null, size: 0, perms: [], rows: [], frontDesk: [], loaded: false, status: {} };
+const FD_HINT = /front.?desk|reception|cashier/i;
+const dbMeta = id => gjson(`${PG.drive}/files/${encodeURIComponent(id)}?fields=${encodeURIComponent("id,name,version,modifiedTime,size,owners(displayName,emailAddress,me)")}`);
+async function loadDb() {
+  const files = await driveList(`name='${qEsc(CLINIC_PATIENTS_FILE)}' and 'me' in owners and trashed=false`);
+  const f = files.find(x => (x.appProperties || {}).tcmConsult === "clinic-patients") || files[0];
+  D.loaded = true;
+  if (!f) { Object.assign(D, { fileId: null, doc: null }); renderDb(); return; }
+  const meta = await dbMeta(f.id); const doc = await driveDownload(f.id);
+  if (!doc || doc.kind !== "clinic-patients") { D.fileId = null; renderDb(); return; }
+  Object.assign(D, { fileId: f.id, doc, size: +meta.size || 0 });
+  const acc = doc.access || {};
+  D.rows = (acc.doctors || []).map(d => ({ email: normEmail(d.email), on: d.on !== false }));
+  D.frontDesk = (acc.frontDesk || []).map(normEmail);
+  await loadDbPerms(); renderDb();
+}
+async function loadDbPerms() {
+  try { D.perms = (await gjson(`${PG.drive}/files/${encodeURIComponent(D.fileId)}/permissions?fields=${encodeURIComponent("permissions(id,emailAddress,role,type)")}`)).permissions || []; } catch { D.perms = []; }
+  D.status = {};
+  for (const r of D.rows) { const p = D.perms.find(x => normEmail(x.emailAddress) === r.email); D.status[r.email] = p ? (p.role === "writer" ? "has access" : p.role === "reader" ? "read-only (fix on Save)" : p.role) : "no access"; }
+}
+async function createDb() {
+  const now = new Date().toISOString();
+  const doc = { app: "tcm-consult-assistant", kind: "clinic-patients", format: 2, createdAt: now, updatedAt: now, owner: { name: P.account.name, email: P.account.email }, createdBy: { email: P.account.email, name: P.account.name },
+    note: "Clinic patient database from TCM Consult Assistant. Contains patient records — shared only with the clinic's doctors (editor access set on the Clinic admin page). Keep private.",
+    patients: [], visits: [], deleted: {}, access: { doctors: [], frontDesk: [], updatedAt: now, updatedBy: P.account.email } };
+  const bd = "db_" + uid(), meta = { name: CLINIC_PATIENTS_FILE, mimeType: "application/json", parents: [await ensureFolder()], appProperties: { tcmConsult: "clinic-patients" }, description: "TCM Consult Assistant — clinic patient database (patient records). Managed on the Clinic admin page." };
+  const body = `--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(doc)}\r\n--${bd}--`;
+  await gjson(`${PG.upload}/files?uploadType=multipart&fields=id`, { method: "POST", headers: { "Content-Type": `multipart/related; boundary=${bd}` }, body });
+  await loadDb(); toast("Clinic patient database created");
+}
+function readDbForm() {
+  D.frontDesk = parseEmails($("#dbFrontDesk").value);
+  document.querySelectorAll("[data-db-on]").forEach(x => { const r = D.rows.find(y => y.email === x.dataset.dbOn); if (r) r.on = x.checked; });
+}
+function dbAdd() {
+  readDbForm();
+  const list = parseEmails($("#dbAddEmail").value), m = $("#dbMsg"); if (!list.length) { m.textContent = "Enter a valid Google e-mail."; m.classList.add("err"); return; }
+  const notes = [];
+  for (const e of list) {
+    if (e === normEmail(P.account.email)) { notes.push("you already own the database"); continue; }
+    if (D.frontDesk.includes(e)) { notes.push(`${e} is the front desk — never given access`); continue; }
+    if (FD_HINT.test(e) && !confirm(`${e} looks like a front desk / reception address. The front desk must not get access to patient records. Add it as a DOCTOR anyway?`)) continue;
+    const r = D.rows.find(x => x.email === e); if (r) r.on = true; else D.rows.push({ email: e, on: true });
+    if ($("#dbAlsoPrice").checked && P.draft) { const cur = parseEmails($("#shareInput").value); if (!cur.includes(e)) { $("#shareInput").value = [...cur, e].join("\n"); markDirty(); renderShareStatus(); notes.push(`${e} added to the price list share list — press “Save & share” below to publish`); } }
+    else if ($("#dbAlsoPrice").checked && !P.draft) notes.push("no price list yet — create it below to share prices");
+  }
+  $("#dbAddEmail").value = ""; renderDbList();
+  m.classList.remove("err"); m.textContent = notes.join(" · ") || "Added — press “Save access” to give access.";
+}
+async function syncWriters(fileId, emails) {
+  const base = `${PG.drive}/files/${encodeURIComponent(fileId)}/permissions`;
+  const cur = (await gjson(`${base}?fields=${encodeURIComponent("permissions(id,emailAddress,role,type)")}`)).permissions || [];
+  const want = new Set(emails), status = {};
+  for (const e of want) {
+    const has = cur.find(p => normEmail(p.emailAddress) === e);
+    try {
+      if (has && has.role === "writer") status[e] = "has access";
+      else if (has && has.role !== "owner") { await gjson(`${base}/${encodeURIComponent(has.id)}?fields=id`, { method: "PATCH", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify({ role: "writer" }) }); status[e] = "has access"; }
+      else if (!has) { await gjson(`${base}?sendNotificationEmail=true&fields=id`, { method: "POST", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify({ type: "user", role: "writer", emailAddress: e }) }); status[e] = "has access"; }
+    } catch (err) { status[e] = "error " + (err.status || ""); }
+  }
+  for (const p of cur) if (p.type === "user" && p.role !== "owner" && !want.has(normEmail(p.emailAddress))) {
+    try { await gfetch(`${base}/${encodeURIComponent(p.id)}`, { method: "DELETE" }); status[normEmail(p.emailAddress)] = "access removed"; } catch (err) { status[normEmail(p.emailAddress)] = "remove failed"; }
+  }
+  return status;
+}
+async function saveDbAccess() {
+  readDbForm();
+  const m = $("#dbMsg"); m.classList.remove("err");
+  const blocked = D.rows.filter(r => r.on && D.frontDesk.includes(r.email));
+  for (const r of blocked) r.on = false;
+  if (blocked.length) alert(`Not given access — front desk e-mail${blocked.length > 1 ? "s" : ""}: ${blocked.map(r => r.email).join(", ")}.\nThe front desk must never have access to patient records.`);
+  m.textContent = "Saving…"; $("#dbSaveBtn").disabled = true;
+  try {
+    const now = new Date().toISOString(), access = { doctors: D.rows.map(r => ({ email: r.email, on: r.on })), frontDesk: D.frontDesk, updatedAt: now, updatedBy: P.account.email };
+    let ok = false;
+    for (let i = 0; i < 5 && !ok; i++) {   // doctors may be writing records at the same time: re-read, change only `access`, verify
+      const meta = await dbMeta(D.fileId), doc = await driveDownload(D.fileId);
+      const m2 = await dbMeta(D.fileId); if (String(m2.version) !== String(meta.version)) continue;
+      await driveUpdate(D.fileId, { ...doc, access });
+      const chk = await driveDownload(D.fileId); ok = !!(chk.access && chk.access.updatedAt === now && (chk.patients || []).length >= (doc.patients || []).length);
+    }
+    if (!ok) throw new Error("the database was busy — try again");
+    const st = await syncWriters(D.fileId, D.rows.filter(r => r.on).map(r => r.email));
+    await loadDb();
+    for (const [e, v] of Object.entries(st)) if (/error|failed/.test(v)) D.status[e] = v;
+    for (const r of blocked) D.status[r.email] = "blocked — front desk";
+    renderDb();
+    m.textContent = `Saved ✓ — ${D.rows.filter(r => r.on).length} doctor${D.rows.filter(r => r.on).length === 1 ? "" : "s"} with access.`;
+  } catch (e) { m.textContent = "Could not save: " + e.message; m.classList.add("err"); }
+  finally { $("#dbSaveBtn").disabled = false; }
+}
+function renderDbList() {
+  $("#dbList").innerHTML = D.rows.length ? D.rows.map(r => { const st = D.status[r.email] || (r.on ? "access on Save" : "no access"), fd = D.frontDesk.includes(r.email);
+    return `<div class="dbr"><input type="checkbox" data-db-on="${esc(r.email)}"${r.on ? " checked" : ""} aria-label="Access for ${esc(r.email)}"><span class="em">${esc(r.email)}</span><span class="st ${/^has access/.test(st) ? "ok" : /error|fail|blocked|removed/.test(st) ? "bad" : "wait"}">${esc(fd ? "blocked — front desk" : st)}</span><button type="button" class="small" data-db-rm="${esc(r.email)}" title="Remove from the list (access is removed on Save)">✕</button></div>`; }).join("")
+    : `<div class="hint" style="padding:10px">No doctors yet — add their Google e-mails below.</div>`;
+}
+function renderDb() {
+  const on = !!P.account && D.loaded;
+  $("#dbCard").hidden = !on; if (!on) return;
+  $("#dbNone").hidden = !!D.fileId; $("#dbOn").hidden = !D.fileId;
+  if (!D.fileId) return;
+  const d = D.doc || {}, mb = D.size / 1048576;
+  $("#dbInfo").innerHTML = `<b>${esc(CLINIC_PATIENTS_FILE)}</b> · ${(d.patients || []).length} patients · ${(d.visits || []).length} visits · ${mb >= 1 ? mb.toFixed(1) + " MB" : Math.max(1, Math.round(D.size / 1024)) + " KB"} · <a href="https://drive.google.com/file/d/${esc(D.fileId)}/view" target="_blank" rel="noopener">open in Drive</a>${D.size > 5 * 1048576 ? `<div class="db-warn">⚠ Over 5 MB — syncing slows down for every doctor. Consider archiving old records.</div>` : ""}`;
+  renderDbList();
+  if (document.activeElement !== $("#dbFrontDesk")) $("#dbFrontDesk").value = D.frontDesk.join("\n");
+}
 async function loadList() {
   const files = await driveList(`name='${qEsc(CLINIC_PRICES_FILE)}' and 'me' in owners and trashed=false`);
   const f = files.find(x => (x.appProperties || {}).tcmConsult === "clinic-herb-prices") || files[0];
@@ -2910,9 +3046,15 @@ function renderAll() {
   $("#editor").hidden = !(on && P.fileId && P.draft);
   $("#findPickerBtn").disabled = !pickerAvailable();
   if (on && P.fileId && P.draft) { renderForm(); renderOverrides(); renderMeta(); renderShareStatus(); }
-  renderSaveBar();
+  renderSaveBar(); renderDb();
 }
 function bind() {
+  $("#dbCreateBtn").onclick = async () => { try { await createDb(); } catch (e) { toast("Could not create: " + e.message, 5000); } };
+  $("#dbAddBtn").onclick = () => dbAdd();
+  $("#dbAddEmail").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); dbAdd(); } });
+  $("#dbSaveBtn").onclick = () => saveDbAccess();
+  $("#dbList").addEventListener("click", e => { const b = e.target.closest("[data-db-rm]"); if (!b) return; readDbForm(); const r = D.rows.find(x => x.email === b.dataset.dbRm); if (r) r.on = false; D.rows = D.rows.filter(x => x !== r); D.removed = (D.removed || []).concat(b.dataset.dbRm); renderDbList(); $("#dbMsg").textContent = "Removed — press “Save access” to take away access."; });
+  $("#dbList").addEventListener("change", e => { if (e.target.dataset.dbOn) { readDbForm(); $("#dbMsg").textContent = "Press “Save access” to apply."; } });
   $("#signInBtn").onclick = () => signIn();
   $("#authArea").addEventListener("click", e => { if (e.target.id === "signOutBtn") signOut(); });
   document.addEventListener("click", e => { const m = e.target.closest("[data-hn-mode]"), s = e.target.closest("[data-hn-script]"); if (m) setHN(m.dataset.hnMode); else if (s) setHN(null, s.dataset.hnScript); });
@@ -2946,10 +3088,10 @@ function init() {
   try { const a = JSON.parse(lsGet(LS_ACC) || "null"); if (a && a.sub) P.account = a; } catch {}
   if (typeof GOOGLE_CLIENT_ID !== "string" || !GOOGLE_CLIENT_ID.trim() || !/^https?:$/.test(location.protocol)) { $("#signInBtn").disabled = true; $("#welcomeMsg").textContent = "Google sign-in isn't available here (open the page from the website)."; P.account = null; }
   renderAll();
-  if (P.account) requestToken("silent").then(() => loadList()).catch(e => { console.warn("silent sign-in", e); P.account = null; renderAll(); });
+  if (P.account) requestToken("silent").then(() => loadList()).then(() => loadDb()).catch(e => { console.warn("silent sign-in", e); P.account = null; renderAll(); });
   window.__prReady = true;
 }
-window.PRICING = { P, HN, Pricing, buildCSV, importCSV, parseCSV, findHerb, searchHerbs, changeSummary, save, openFile, loadList, createFile, pickerAvailable, PICKER_APP_ID, signIn };
+window.PRICING = { D, loadDb, createDb, saveDbAccess, syncWriters, P, HN, Pricing, buildCSV, importCSV, parseCSV, findHerb, searchHerbs, changeSummary, save, openFile, loadList, createFile, pickerAvailable, PICKER_APP_ID, signIn };
 init();
 </script>
 </body>
