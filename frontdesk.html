@@ -145,6 +145,14 @@ a{color:var(--accent)}
   .pr .sheet-break{page-break-after:always}
 }
 </style>
+<style>/* v27: Google Picker always on top of the app (sticky banners, bottom bars, dialogs) */
+.picker-dialog-bg{z-index:2147482999!important}.picker-dialog,.picker.picker-dialog{z-index:2147483000!important}
+body.picker-open #noClinicBanner,body.picker-open .no-clinic,body.picker-open header,body.picker-open .sticky,body.picker-open .bottom-bar,body.picker-open #cdbNeed{visibility:hidden!important}
+</style>
+<script>/* v27: while Google Picker is visible: close modal dialogs (they live in the top layer above any z-index) and hide sticky banners */
+(function(){function on(){return [].some.call(document.querySelectorAll(".picker-dialog"),function(e){return e.offsetParent!==null||getComputedStyle(e).display!=="none"&&getComputedStyle(e).visibility!=="hidden";});}
+function chk(){var o=on();if(o&&!document.body.classList.contains("picker-open")){[].forEach.call(document.querySelectorAll("dialog[open]"),function(d){try{d.close();}catch(e){}});}document.body.classList.toggle("picker-open",o);}
+document.addEventListener("DOMContentLoaded",function(){new MutationObserver(chk).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:["style","class"]});});})();</script>
 </head>
 <body>
 <header class="topbar">

@@ -698,6 +698,14 @@ textarea,input,select,button{font-family:inherit}
   .dx-copy{padding:6px 12px;min-height:32px}
 }
 </style>
+<style>/* v27: Google Picker always on top of the app (sticky banners, bottom bars, dialogs) */
+.picker-dialog-bg{z-index:2147482999!important}.picker-dialog,.picker.picker-dialog{z-index:2147483000!important}
+body.picker-open #noClinicBanner,body.picker-open .no-clinic,body.picker-open header,body.picker-open .sticky,body.picker-open .bottom-bar,body.picker-open #cdbNeed{visibility:hidden!important}
+</style>
+<script>/* v27: while Google Picker is visible: close modal dialogs (they live in the top layer above any z-index) and hide sticky banners */
+(function(){function on(){return [].some.call(document.querySelectorAll(".picker-dialog"),function(e){return e.offsetParent!==null||getComputedStyle(e).display!=="none"&&getComputedStyle(e).visibility!=="hidden";});}
+function chk(){var o=on();if(o&&!document.body.classList.contains("picker-open")){[].forEach.call(document.querySelectorAll("dialog[open]"),function(d){try{d.close();}catch(e){}});}document.body.classList.toggle("picker-open",o);}
+document.addEventListener("DOMContentLoaded",function(){new MutationObserver(chk).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:["style","class"]});});})();</script>
 </head>
 <body>
 <header class="topbar">
@@ -7332,6 +7340,23 @@ async function revokeClinicDb(msg) {
   cdbRenderBanner(); toast(msg + " The clinic's patients were removed from this device. " + NO_CLINIC_MSG + ".", 7000);
 }
 function cdbMsg(t, err) { const m = $("#cdbMsg"); if (m) { m.textContent = t; m.classList.toggle("cdb-err", !!err); } else if (t) toast(t, 5000); }
+// v27: drive.file lets the app list files it created with the same OAuth client → the clinic OWNER (who created the database on the
+// Clinic admin page) is connected automatically, no Picker. Doctors (files owned by someone else) still pick the folder's files once.
+let cdbAutoBusy = false;
+async function cdbAutoFind() {
+  if (cdbAutoBusy || !Cloud.account || clinicDbState.conf) return false;
+  const off = "tcm_cdb_auto_off_" + Cloud.account.sub;
+  if (localStorage.getItem(off)) return false;   // this account disconnected on purpose
+  cdbAutoBusy = true;
+  try {
+    const list = await driveList(`name='${qEsc(CDB3.INDEX)}' and 'me' in owners and trashed=false`);
+    for (const f of list) {
+      try { const idx = await driveDownload(f.id); if (!idx || idx.kind !== "clinic-patients-index" || idx.format !== 4) continue; } catch { continue; }
+      await connectClinicDb(f.id, { auto: true, inSync: true }); return true;
+    }
+    return false;
+  } finally { cdbAutoBusy = false; }
+}
 async function connectClinicDb(fileId, opt = {}) {
   if (!Cloud.account) throw new Error("Sign in with Google first.");
   cdbMsg("Connecting…");
@@ -7342,14 +7367,23 @@ async function connectClinicDb(fileId, opt = {}) {
   if (tag === CDB3.INDEX_TAG) return connectClinicIndex(meta, opt);
   throw new Error(`That is not the clinic patient database (${CDB3.FOLDER}/${CDB3.INDEX}). Older clinic database files are no longer used.`);
 }
+// v27: Picker tabs — the files can be in "Shared with me" (doctors) or "My Drive" (the owner); a single owner-filtered view hid them.
+function cdbPickerViews(folderId, fileIds) {
+  const P = google.picker, mk = () => { const v = new P.DocsView(P.ViewId.DOCS).setIncludeFolders(true).setMimeTypes("application/json,application/vnd.google-apps.folder"); if (v.setMode && P.DocsViewMode) v.setMode(P.DocsViewMode.LIST); return v; };
+  const views = [];
+  if (folderId) { const v = mk().setIncludeFolders(false); if (v.setParent) v.setParent(folderId); if (fileIds && fileIds.length && v.setFileIds) v.setFileIds(fileIds.join(",")); v.setMimeTypes("application/json"); views.push(v); }
+  views.push(mk().setOwnedByMe(false), mk().setOwnedByMe(true));
+  return views;
+}
 async function connectClinicDbPicker() {
   if (!pickerAvailable()) { cdbMsg("Google Picker isn't configured — paste the shared link instead.", true); return; }
   try {
     const tok = await ensureToken(); await loadPicker();
     // the database is a folder — select index.json and ALL shard files in it once (drive.file only lets the app open what is picked)
-    const view = new google.picker.DocsView(google.picker.ViewId.DOCS).setIncludeFolders(true).setOwnedByMe(false);
-    new google.picker.PickerBuilder().setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID).addView(view).enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
-      .setTitle("Open the clinic's “" + CDB3.FOLDER + "” folder — Select all (Ctrl/long-press) then Select")
+    const pb = new google.picker.PickerBuilder(); if (pb.setMaxItems) pb.setMaxItems(1000);
+    for (const v of cdbPickerViews(null)) pb.addView(v);
+    pb.setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID).enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
+      .setTitle("Select all files in " + CDB3.FOLDER)
       .setCallback(async d => { if (d.action === google.picker.Action.PICKED && d.docs && d.docs[0]) { try { await connectPicked(d.docs); } catch (e) { cdbMsg(e.message, true); } } }).build().setVisible(true);
   } catch (e) { cdbMsg("Google Picker failed: " + (e.message || e) + " — paste the shared link instead.", true); }
 }
@@ -7378,6 +7412,7 @@ async function connectClinicIndex(meta, opt = {}) {
   if (cur && !cur.revoked && cur.layout !== 3 && cur.layout !== 4 && DB.rec && cur.fileId !== meta.id) await cdbSwitchToIndex(meta, idx.folderId);   // upgraded from the single file: keep the cache
   else {
     const owner = (meta.owners || [])[0] || {};
+    if (Cloud.account) localStorage.removeItem("tcm_cdb_auto_off_" + Cloud.account.sub);
     await saveClinicConf({ layout: 4, fileId: meta.id, indexId: meta.id, folderId: idx.folderId || (meta.parents || [])[0] || "", ownerName: owner.displayName || (idx.owner || {}).name || "", ownerEmail: owner.emailAddress || (idx.owner || {}).email || "", connectedAt: new Date().toISOString(), revoked: false, size: 0 });
     await openClinicStore();
   }
@@ -7385,7 +7420,7 @@ async function connectClinicIndex(meta, opt = {}) {
   state.selectedPatientId = null; if (state.session.patientId && !state.session.pendingUpload && !patientById(state.session.patientId)) state.session.patientId = null;
   renderAll(); renderAuth(); updateStorageStatus();
   if (!opt.auto) saveSettings();
-  markDataChanged(); await syncNow();
+  markDataChanged(); if (!opt.inSync) await syncNow();   // auto-find runs inside syncNow, which continues with the clinic sync
   if ($("#accountDialog").open) renderAccountDialog();
   cdbMsg(`Connected ✓ — ${state.patients.length} patients in ${clinicOwnerLabel(clinicDbState.conf)}'s clinic database.`);
   toast("Clinic patient database connected");
@@ -7405,7 +7440,7 @@ async function cdbLegacyUpgraded(meta, acc) {
 }
 async function cdbOpenUpgraded() {
   const u = (clinicDbState.conf || {}).upgrade; if (!u) return;
-  await cdbGrantPicker(null, { folderId: u.folderId, title: "“" + CDB3.FOLDER + "”: Select all (Ctrl/long-press) then Select", onPicked: async docs => {
+  await cdbGrantPicker(null, { folderId: u.folderId, title: "Select all files in " + CDB3.FOLDER, onPicked: async docs => {
     const im = await cdbMeta(u.indexId);   // throws if index.json wasn't among the picked files
     await cdbSwitchToIndex(im, u.folderId); await loadData(); renderAll(); renderAuth(); markDataChanged(); await syncNow(); if ($("#accountDialog").open) renderAccountDialog();
     toast("Switched to the upgraded clinic database");
@@ -7675,14 +7710,12 @@ async function cdbGrantPicker(fileIds, opt = {}) {
   try {
     const tok = await ensureToken(); await loadPicker();
     // only the clinic folder's files: files view (no folders), JSON only, rooted at the folder
-    const view = new google.picker.DocsView(google.picker.ViewId.DOCS).setIncludeFolders(!c.folderId).setOwnedByMe(false);
-    if (c.folderId) { view.setMimeTypes("application/json"); if (view.setParent) view.setParent(c.folderId); }
-    if (fileIds && fileIds.length && view.setFileIds) view.setFileIds(fileIds.join(","));
-    if (view.setMode && google.picker.DocsViewMode) view.setMode(google.picker.DocsViewMode.LIST);   // ~100 data files: a compact list is easier to select in one go
+    const views = cdbPickerViews(c.folderId, fileIds);   // folder tab first, then Shared with me + My Drive
     const n = fileIds && fileIds.length;
     const pb = new google.picker.PickerBuilder(); if (pb.setMaxItems) pb.setMaxItems(1000);
-    pb.setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID).addView(view).enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
-      .setTitle(opt.title || (n ? `${n} file${n === 1 ? "" : "s"} not allowed yet — Select all (Ctrl/long-press) then Select` : "“" + CDB3.FOLDER + "”: Select all (Ctrl/long-press) then Select"))
+    for (const v of views) pb.addView(v);
+    pb.setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID).enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
+      .setTitle(opt.title || (n ? `Select the ${n} missing file${n === 1 ? "" : "s"}` : "Select all files in " + CDB3.FOLDER))
       .setCallback(async d => {
         if (d.action !== google.picker.Action.PICKED || !d.docs) return;
         if (opt.onPicked) { try { await opt.onPicked(d.docs); } catch (e) { cdbMsg(e.message, true); } return; }
@@ -7743,6 +7776,7 @@ function syncNow() {
         else { folderId = await driveEnsureFolder(); const f = await driveCreateDataFile(folderId, doc); fileId = f.id; }
       }
       if (Cloud.account !== acc) return;
+      if (!clinicDbState.conf) { try { await cdbAutoFind(); } catch (e) { if (e.status === 401) throw e; console.warn("clinic auto-find:", e); } }   // v27: the owner's own database is found without Picker
       await syncClinicDb(acc);   // v21: shared clinic patient database (per-record merge with re-read / verify / retry)
       if (Cloud.account !== acc) return;
       if (clinicActive()) { try { await clinicUploadDraft(); } catch (e) { if (e.status === 401) throw e; console.warn("clinic draft upload:", e); } }
@@ -7964,7 +7998,7 @@ function bindCloudEvents() {
     else if (t.id === "cdbPasteBtn") { const id = parseDriveFileId($("#cdbPaste").value); if (!id) cdbMsg("Paste the share link of the clinic patient database (…/file/d/<ID>/…) or its file ID.", true); else connectClinicDb(id).catch(err => cdbMsg(err.message, true)); }
     else if (t.id === "cdbGrantBtn") cdbGrantAll();
     else if (t.id === "cdbUpgradeBtn") cdbOpenUpgraded();
-    else if (t.id === "cdbDisconnectBtn") disconnectClinicDb();
+    else if (t.id === "cdbDisconnectBtn") { if (Cloud.account) localStorage.setItem("tcm_cdb_auto_off_" + Cloud.account.sub, "1"); disconnectClinicDb(); }
   };
   $("#authArea").addEventListener("click", onClick);
   $("#accountBody").addEventListener("click", onClick);

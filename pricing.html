@@ -150,16 +150,24 @@ a{color:var(--accent)}
 textarea{width:100%}
 .db-upg{margin-top:8px;padding:8px 10px;border:1px dashed #2f7d6d;border-radius:8px;background:#f2f8f6;font-size:13px}.db-upg button{margin-top:6px}
 .db-list{border:1px solid var(--line);border-radius:8px;margin-top:6px}
-.dbr{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid #eef2f0}
-.dbr .st{white-space:nowrap;flex:none}.dbr button{flex:none}
+.dbr{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"cb em x" "cb st x";align-items:center;column-gap:10px;row-gap:2px;padding:7px 10px;border-bottom:1px solid #eef2f0}
+.dbr .st{grid-area:st;min-width:0;overflow-wrap:anywhere;font-size:12.5px;justify-self:start}.dbr button{grid-area:x;align-self:center}.dbr input[type=checkbox]{grid-area:cb;align-self:center}
 .db-add .check{flex:1 1 200px}
-.dbr:last-child{border-bottom:0}.dbr .em{flex:1 1 0;min-width:0;overflow-wrap:anywhere;font-size:13.5px}
+.dbr:last-child{border-bottom:0}.dbr .em{grid-area:em;min-width:0;overflow-wrap:anywhere;word-break:normal;font-size:13.5px}
 .dbr input[type=checkbox]{width:18px;height:18px}
 .db-add input:not([type=checkbox]){width:100%}
 .db-add .check{display:flex;align-items:center;gap:6px}
 .db-warn{color:#8a5a00;font-size:12.5px}
 @media (max-width:860px){.pr-grid{grid-template-columns:1fr}.money input{width:96px}.ov-list{max-height:380px}}
 </style>
+<style>/* v27: Google Picker always on top of the app (sticky banners, bottom bars, dialogs) */
+.picker-dialog-bg{z-index:2147482999!important}.picker-dialog,.picker.picker-dialog{z-index:2147483000!important}
+body.picker-open #noClinicBanner,body.picker-open .no-clinic,body.picker-open header,body.picker-open .sticky,body.picker-open .bottom-bar,body.picker-open #cdbNeed{visibility:hidden!important}
+</style>
+<script>/* v27: while Google Picker is visible: close modal dialogs (they live in the top layer above any z-index) and hide sticky banners */
+(function(){function on(){return [].some.call(document.querySelectorAll(".picker-dialog"),function(e){return e.offsetParent!==null||getComputedStyle(e).display!=="none"&&getComputedStyle(e).visibility!=="hidden";});}
+function chk(){var o=on();if(o&&!document.body.classList.contains("picker-open")){[].forEach.call(document.querySelectorAll("dialog[open]"),function(d){try{d.close();}catch(e){}});}document.body.classList.toggle("picker-open",o);}
+document.addEventListener("DOMContentLoaded",function(){new MutationObserver(chk).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:["style","class"]});});})();</script>
 </head>
 <body>
 <header class="topbar">
@@ -3121,7 +3129,7 @@ async function addShards() {
 }
 // drive.file: let the owner's app open files it didn't create (patient files added by doctors in the old layout)
 function readDbForm() {
-  D.frontDesk = parseEmails($("#dbFrontDesk").value);
+  D.frontDesk = parseEmails($("#dbFrontDesk").value); D.rows = D.rows.filter(r => !D.frontDesk.includes(r.email));
   document.querySelectorAll("[data-db-on]").forEach(x => { const r = D.rows.find(y => y.email === x.dataset.dbOn); if (r) r.on = x.checked; });
 }
 function dbAdd() {
@@ -3204,7 +3212,8 @@ async function saveDbAccess() {   // ONE save: patient database (writer on folde
   finally { $("#dbSaveBtn").disabled = false; }
 }
 function renderDbList() {
-  $("#dbList").innerHTML = D.rows.length ? D.rows.map(r => { const st = D.status[r.email] || (r.on ? "access on Save" : "no access"), fd = D.frontDesk.includes(r.email);
+  D.rows = D.rows.filter(r => !D.frontDesk.includes(r.email));   // v27: a front desk e-mail is never a doctor (it keeps its own access)
+  $("#dbList").innerHTML = D.rows.length ? D.rows.map(r => { const st0 = D.status[r.email] || (r.on ? "access on Save" : "no access"), st = !r.on && st0 === "no access" && D.oldPrice && D.oldPrice.has(r.email) && P.fileId ? "old price-list access" : st0, fd = D.frontDesk.includes(r.email);
     return `<div class="dbr"><input type="checkbox" data-db-on="${esc(r.email)}"${r.on ? " checked" : ""} aria-label="Access for ${esc(r.email)}"><span class="em">${esc(r.email)}</span><span class="st ${/^has access/.test(st) ? "ok" : /error|fail|blocked|removed/.test(st) ? "bad" : "wait"}">${esc(fd ? "blocked — front desk" : st)}</span><button type="button" class="small" data-db-rm="${esc(r.email)}" title="Remove from the list (access is removed on Save)">✕</button></div>`; }).join("")
     : `<div class="hint" style="padding:10px">No doctors yet — add their Google e-mails below.</div>`;
 }
@@ -3217,7 +3226,7 @@ function absorbPriceShares() {
   for (const e of (P.remote && P.remote.sharedWith) || []) {
     const x = normEmail(e); if (!x || x === me || D.frontDesk.includes(x) || D.rows.some(r => r.email === x)) continue;
     if (FD_HINT.test(x)) D.frontDesk.push(x);
-    else { D.rows.push({ email: x, on: false }); D.status[x] = "price list only (old setting) — tick to keep access"; }
+    else { D.rows.push({ email: x, on: false }); (D.oldPrice = D.oldPrice || new Set()).add(x); }
   }
 }
 function renderDb() {
