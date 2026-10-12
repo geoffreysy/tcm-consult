@@ -4680,6 +4680,9 @@ function renderSessionInfo() {
   const saved = state.visits.some(v => v.id === s.id);
   $("#sessionInfo").innerHTML = `Session: <b>${p ? esc(p.name) : "No patient assigned"}</b> · started ${esc(fmtDateTime(s.startedAt))}`
     + (saved ? ` · <span>saved visit</span>` : "") + (s.dirty ? ` · <span class="dirty">unsaved changes</span>` : (saved ? " ✓" : ""));
+  const ex = state.visits.find(v => v.id === s.id), ro = !!ex && !canEditVisit(ex);
+  if (ro) $("#sessionInfo").innerHTML += ` · <span class="ro-note" id="roNote">🔒 ${esc(readOnlyNote(ex))}</span>`;
+  const sb = $("#saveBtn"); if (sb) { sb.hidden = ro; }
 }
 
 function renderPatients() {
@@ -4720,7 +4723,7 @@ function renderProfile() {
       <li data-vid="${v.id}" class="${v.id === state.session.id ? "current" : ""}">
         <div class="vdate">${esc(fmtDateTime(v.startedAt))}${doctorTag(v, "vdoc")}</div>
         <div class="vsub">${v.patterns && v.patterns[0] ? esc(v.patterns[0].name) + " " + v.patterns[0].pct + "%" : "No pattern"}${v.diagnosis ? " · Dx: " + esc(v.diagnosis.slice(0, 60)) : ""}</div>
-        <button class="small danger vdel" data-delvid="${v.id}" title="Delete visit">✕</button>
+        ${canEditVisit(v) ? `<button class="small danger vdel" data-delvid="${v.id}" title="Delete visit">✕</button>` : `<span class="muted ro-note" title="${esc(readOnlyNote(v))}">🔒</span>`}
       </li>`).join("") : `<li class="empty" style="cursor:default;border:none">No saved visits yet.</li>`}
     </ul>`;
 }
@@ -5539,6 +5542,7 @@ async function saveSession() {
     else { alert("Please select or create a patient first, then save."); return; }
   }
   const rec = buildVisitRecord();
+  { const ex = state.visits.find(v => v.id === rec.id); if (ex && !canEditVisit(ex)) { toast(readOnlyNote(ex) + ". Use “Carry forward Rx” or start a new visit to record your own.", 6000); return; } }
   try {
     await dataPut("visits", rec);
     const i = state.visits.findIndex(v => v.id === rec.id);
@@ -5633,6 +5637,7 @@ async function deletePatient(id) {
 }
 async function deleteVisit(vid) {
   const v = state.visits.find(x => x.id === vid); if (!v) return;
+  if (!canEditVisit(v)) { toast(readOnlyNote(v) + " — only that doctor can delete it.", 5000); return; }
   if (!confirm(`Delete the visit from ${fmtDateTime(v.startedAt)}? This cannot be undone.`)) return;
   await dataDel("visits", vid);
   state.visits = state.visits.filter(x => x.id !== vid);
@@ -5844,7 +5849,7 @@ function renderHistory() {
       ${visitSummaryHTML(v, ref)}
       <div class="hv-links"><button type="button" class="link-btn" data-open-visit="${v.id}">Open this visit</button></div>
     </div>
-    <div class="hv-block"><div class="hv-sub">Progress since last visit</div>${progressHTML(cmp)}</div>
+    <div class="hv-block"><div class="hv-sub">Progress since last visit${doctorTag(v, "hv-doc")}</div>${progressHTML(cmp)}</div>
     <div class="hv-block"><div class="hv-sub">Pattern trend <span class="muted">(last visit → today)</span></div>${trendHTML(trend)}</div>
     ${prior.length > 1 ? `<details class="hv-older" data-dkey="older"${op("older")}><summary>Older visits (${prior.length - 1})</summary>
       ${prior.slice(1).map(o => `<details class="hv-ov" data-dkey="ov:${o.id}"${op("ov:" + o.id)}><summary><b>${esc(fmtDate(o.startedAt))}</b> · ${esc(relAgo(o.startedAt, ref))}${doctorTag(o, "hv-doc")}${o.patterns && o.patterns[0] ? " · " + esc(shortPat(o.patterns[0].name)) + " " + o.patterns[0].pct + "%" : ""}</summary>
@@ -6619,7 +6624,7 @@ async function syncClinicPrices(acc, folderId) {
     await saveClinicLocal(c, { noSync: true });
     return;
   }
-  if (c.role === "owner" && !c.pending) {   // v18: prices are edited only in pricing.html — the doctor app just reads its own file
+  if (c.role === "owner" && !c.pending) {   // v18: prices are edited only in admin.html — the doctor app just reads its own file
     if (c.fileId) await clinicFetch(c.fileId, { quiet: true });
     return;
   }
@@ -6630,7 +6635,7 @@ async function syncClinicPrices(acc, folderId) {
     if (Cloud.account !== acc) return;
     const remoteNewer = remote && remote.prices && (remote.prices.updatedAt || "") > (c.prices.updatedAt || "");
     if (remoteNewer) { c = { ...c, prices: Pricing.normalizeHerbPrices(remote.prices), sharedWith: remote.sharedWith || c.sharedWith || [] }; }
-    const doc = { ...(remote && typeof remote === "object" ? remote : {}), ...clinicDoc(c), sharedWith: c.sharedWith || [] };   // keep fields written by pricing.html (audit…)
+    const doc = { ...(remote && typeof remote === "object" ? remote : {}), ...clinicDoc(c), sharedWith: c.sharedWith || [] };   // keep fields written by admin.html (audit…)
     if (!c.fileId) { const fid = folderId || await driveEnsureFolder(); const f = await clinicCreateFile(fid, doc); c = { ...c, fileId: f.id, modifiedTime: f.modifiedTime }; }
     else if (!remoteNewer && (!remote || JSON.stringify(remote.prices) !== JSON.stringify(doc.prices) || JSON.stringify(remote.sharedWith || []) !== JSON.stringify(doc.sharedWith))) { const f = await driveUpdate(c.fileId, doc); c = { ...c, modifiedTime: f.modifiedTime }; }
     if (c.pendingShares || c.pending) c = { ...c, shareStatus: await clinicSyncShares(c.fileId, c.sharedWith || [], acc.email), pendingShares: false };
@@ -6729,7 +6734,7 @@ function renderRatesForm() {
   setHTML($("#ratesDoctor"), `
     <div class="form-grid">
       <label class="full">Clinic name<input id="rtClinicName" value="${esc(c.name)}" autocomplete="organization"></label>
-      <label>Doctor name<input id="rtDoctor" value="${esc(c.doctor)}" autocomplete="name"></label>
+      <label>Doctor name <span class="muted" style="font-weight:400">(shown on your visits, slips and receipts — e.g. Dr. Sy)</span><input id="rtDoctor" value="${esc(c.doctor)}" autocomplete="name"></label>
       <label>Phone<input id="rtPhone" value="${esc(c.phone)}" inputmode="tel" autocomplete="tel"></label>
       <label class="full">Address<textarea id="rtAddress" rows="2">${esc(c.address)}</textarea></label>
       <label>TIN <small>(optional)</small><input id="rtTin" value="${esc(c.tin)}"></label>
@@ -6755,7 +6760,7 @@ function readRatesForm() {
   return b;
 }
 const fmtWhen = iso => iso ? fmtDateTime(iso) : "—";
-const clinicAdminNote = () => `<p class="hint rt-admin-note">Prices are managed by the clinic admin — <a href="pricing.html" target="_blank" rel="noopener">open the clinic price list page</a>.</p>`;
+const clinicAdminNote = () => `<p class="hint rt-admin-note">Prices are managed by the clinic admin — <a href="admin.html" target="_blank" rel="noopener">open the clinic price list page</a>.</p>`;
 function renderClinicSection() {
   const box = $("#ratesClinic"); if (!box) return;
   const c = clinicDraft;
@@ -6772,7 +6777,7 @@ function renderClinicSection() {
     return;
   }
   const p = c.prices;
-  {   // v18: always read-only here (also for the account that owns the file — it edits in pricing.html)
+  {   // v18: always read-only here (also for the account that owns the file — it edits in admin.html)
     const ov = Object.entries(p.overrides || {}).sort((a, b) => a[0].localeCompare(b[0]));
     const modeTxt = p.mode === "gram" ? `Per gram — default ${p.perGram == null ? "not set" : Pricing.fmt(p.perGram) + "/g"}${ov.length ? ` · ${ov.length} herb-specific price${ov.length === 1 ? "" : "s"}` : ""}` : p.mode === "pack" ? `Per pack (day) — ${Pricing.fmt(p.perPack)}` : `Per formula — ${Pricing.fmt(p.perFormula)}${p.formulaTimesPacks ? " × packs" : " flat"}`;
     setHTML(box, `<div class="rt-ro">
@@ -6813,7 +6818,7 @@ function bindRatesEvents() {
   });
   $("#ratesDialog").addEventListener("input", e => {
     const t = e.target;
-    // (v18) price-list editing moved to pricing.html
+    // (v18) price-list editing moved to admin.html
   });
   // estimate box
   $("#estBox").addEventListener("toggle", () => { lsSet("tcm_est_open", $("#estBox").open ? "1" : "0"); if ($("#estBox").open) requestAnimationFrame(() => { try { $("#estBox").scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch {} }); });
@@ -6897,7 +6902,8 @@ function buildSlip(s = state.session) {
   }
   const phone = p && PHONE_RE.test(String(p.contact || "").trim()) ? String(p.contact).trim() : "";
   const now = new Date().toISOString();
-  return { id: s.id, doctor: fdDoctorName(), patient: { name: p ? p.name : "", ...(phone ? { phone } : {}) }, visitAt: s.startedAt,
+  const vd = (s.doctor && (s.doctor.name || s.doctor.email)) || (((state.visits || []).find(x => x.id === s.id) || {}).doctor || {}).name;   // v29: the visit's treating doctor
+  return { id: s.id, doctor: vd || fdDoctorName(), patient: { name: p ? p.name : "", ...(phone ? { phone } : {}) }, visitAt: s.startedAt,
     rx, herbNames: { mode: HN.mode, script: HN.script }, packs: sb.packs, consult,
     fees: { consult: { first: B.consult.first, followup: B.consult.followup } },
     services: sb.services.map(id => B.services.find(x => x.id === id)).filter(Boolean).map(x => ({ id: x.id, name: x.name, price: x.price })),
@@ -7165,9 +7171,14 @@ async function dataPut(kind, rec) {
     for (const k of Object.keys(rec)) if (k[0] === "_") delete rec[k];
   }
   if (!rec.updatedAt) rec.updatedAt = new Date().toISOString();
+  if (kind === "visits" && Cloud.account) { const curV = await DB.get("visits", rec.id).catch(() => null); if (curV && !canEditVisit(curV)) { const e = new Error(readOnlyNote(curV)); e.readOnly = true; throw e; } }
   const me = Cloud.account;   // v21: who wrote it (shown in the clinic database; harmless in a personal file)
   if (me) {
-    if (kind === "visits" && !rec.doctor) rec.doctor = { email: me.email, name: me.name || me.email };
+    if (kind === "visits") {   // v29: the TREATING doctor is fixed on first save; later edits (by anyone) only change lastEditedBy
+      const curV = await DB.get("visits", rec.id).catch(() => null), meD = { email: me.email, name: fdDoctorName() || me.name || me.email };
+      rec.doctor = (curV && curV.doctor && (curV.doctor.email || curV.doctor.name)) ? curV.doctor : (rec.doctor && (rec.doctor.email || rec.doctor.name) ? rec.doctor : meD);
+      rec.lastEditedBy = { ...meD, at: new Date().toISOString() };
+    }
     if (!rec.createdBy) rec.createdBy = me.email;
     rec.updatedBy = me.email;
   }
@@ -7281,7 +7292,7 @@ async function applyToLocal(merged, store = DB.raw) {
 
 /* =====================================================================
    v21 CLINIC PATIENT DATABASE
-   One shared tcm-clinic-patients.json owned by the clinic admin (pricing.html → Clinic admin),
+   One shared tcm-clinic-patients.json owned by the clinic admin (admin.html → Clinic admin),
    shared WRITER with the doctors who should see it. Same record schema as the personal file,
    plus doctor attribution. Sync: re-read → per-record merge (newest wins, tombstones) →
    re-check the Drive version just before writing → write → re-read and verify → retry.
@@ -7291,7 +7302,20 @@ const CDB_BIG = 5 * 1024 * 1024;
 const clinicActive = () => !!(DB.rec && clinicDbState.conf && clinicDbState.conf.fileId && !clinicDbState.conf.revoked);
 const clinicOwnerLabel = c => (c && (c.ownerName || c.ownerEmail)) || "clinic admin";
 const clinicChipText = () => "Clinic database · owner " + clinicOwnerLabel(clinicDbState.conf);
-function doctorTag(v, cls) { const d = v && v.doctor; if (!d || !(d.name || d.email)) return ""; return ` <span class="${cls}" title="${esc(d.email || "")}">· ${esc(d.name || d.email)}</span>`; }
+// v29 owner rule (app level): only the treating doctor edits / deletes a visit; visits without a recorded doctor → clinic owner only
+const normE = e => String(e || "").trim().toLowerCase();
+function isClinicOwner() { const c = clinicDbState.conf || {}, me = normE(Cloud.account && Cloud.account.email); return !!me && (normE(c.ownerEmail) === me || !!(c.owner && c.owner.me)); }
+function canEditVisit(v) {
+  if (!v || !Cloud.account) return true;
+  const d = normE(v.doctor && v.doctor.email);
+  return d ? d === normE(Cloud.account.email) : isClinicOwner();
+}
+function readOnlyNote(v) { const d = (v && v.doctor) || {}; return `Treated by ${d.name || d.email || "an unknown doctor"} — read only`; }
+function doctorTag(v, cls) {   // v29: every visit shows its treating doctor (older visits without one: “Unknown”)
+  if (!v) return ""; const d = v.doctor || {}, e = v.lastEditedBy, other = e && e.email && d.email && e.email !== d.email;
+  const tip = (d.email ? "Treating doctor: " + d.email : "Treating doctor not recorded") + (other ? ` · last edited by ${e.name || e.email}` : "");
+  return ` <span class="${cls}${d.name || d.email ? "" : " hv-doc-unknown"}" title="${esc(tip)}">· ${esc(d.name || d.email || "Unknown")}</span>`;
+}
 const clinicNs = (acc, fileId) => nsFor(acc) + "__c_" + String(fileId).replace(/[^\w-]/g, "_");
 async function clinicCachesOf(acc) {
   const out = new Set(); try { const c = await DB.raw_get("meta", "clinicDb"); if (c && c.data && c.data.fileId) out.add(clinicNs(acc, c.data.fileId)); } catch {}
@@ -7484,7 +7508,7 @@ function clinicDbSectionHTML() {
     body = `<div class="cdb-err">${esc(c.error || "Access to the clinic patient database was removed.")} Shared patients were removed from this device.</div>
       <p class="muted" style="font-size:12px">If the clinic admin gives you access again, reconnect:</p>${pick}${paste}<div class="cdb-row"><button type="button" class="small" id="cdbDisconnectBtn">Forget this database</button></div>`;
   } else {
-    body = `<p class="muted" style="font-size:12.5px">If your clinic keeps one shared patient database (set up by the clinic admin on the <a href="pricing.html" target="_blank" rel="noopener">Clinic admin</a> page and shared with you), connect it once. <b>While signed in, patients and visits are saved only in the clinic patient database</b> — never in your own Google Drive.</p>${pick}${paste}`;
+    body = `<p class="muted" style="font-size:12.5px">If your clinic keeps one shared patient database (set up by the clinic admin on the <a href="admin.html" target="_blank" rel="noopener">Clinic admin</a> page and shared with you), connect it once. <b>While signed in, patients and visits are saved only in the clinic patient database</b> — never in your own Google Drive.</p>${pick}${paste}`;
   }
   return `<div class="cdb" id="cdbSection"><h4>🏥 Clinic patient database</h4>${body}<div class="cdb-msg" id="cdbMsg" role="status"></div></div>`;
 }
@@ -7558,7 +7582,7 @@ async function cdbSyncShard(n, idx, st, track, acc) {
     catch (e) { if (e.status === 403 || e.status === 404) { track.noAccess[n] = fileId; return null; } throw e; }
     delete track.noAccess[n];
     const local = localShard(n, await st.all("patients"), await st.all("visits"), await getTombstones(st), track);
-    const merged = mergeDocs(local, r.part);
+    const merged = cdbKeepOthersVisits(mergeDocs(local, r.part), r.part);
     await cdbApplyShard(st, merged, n, track);
     const done = () => { track.loaded[n] = true; const ents = entriesOf(merged, n, fileId, track.vp); for (const [pid, e] of Object.entries(ents)) track.fh[pid] = e.h; track.sig[n] = partSig(localShardNow(merged)); return ents; };
     if (partSig(merged) === partSig(r.part)) return done();
@@ -7569,6 +7593,16 @@ async function cdbSyncShard(n, idx, st, track, acc) {
     if (cdbContains(chk, merged)) return done();
   }
   const e = new Error("A clinic data file is busy (other doctors are saving) — will retry"); e.status = 409; throw e;
+}
+// v29: on save, a visit whose treating doctor is someone else keeps the stored (remote) version — local edits / deletions are dropped
+function cdbKeepOthersVisits(merged, remote) {
+  if (!Cloud.account) return merged;
+  const rv = new Map((remote.visits || []).map(v => [v.id, v]));
+  const visits = merged.visits.map(v => { const o = rv.get(v.id); return o && !canEditVisit(o) ? o : v; });
+  for (const [id, o] of rv) if (!canEditVisit(o) && !visits.some(v => v.id === id)) visits.push(o);   // a deletion of someone else's visit is undone
+  const deleted = { ...(merged.deleted || {}) };
+  for (const [id, o] of rv) if (!canEditVisit(o) && deleted["visits/" + id] && !((remote.deleted || {})["visits/" + id])) delete deleted["visits/" + id];
+  return { ...merged, visits, deleted };
 }
 const localShardNow = merged => ({ patients: merged.patients, visits: merged.visits, deleted: merged.deleted });
 async function cdbUpdateIndex(c, mine, acc) {
@@ -8225,7 +8259,7 @@ async function init() {
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { CDB3, cdbTrack, cdbEnsureLoaded, cdbGrantPicker, syncClinicDb4, cdbOpenUpgraded, openPatientDialog, selectPatient, sameNamePatients, nameKey, ptIdParts, savePatientFromForm, deleteVisit, clinicDbState, clinicActive, connectClinicDb, disconnectClinicDb, syncClinicDb, cdbContains, CLINIC_PATIENTS_FILE, __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Slips, fdState, buildSlip, sendToFrontdesk, syncSlips, renderSendRow, FRONTDESK_SLIPS_FILE, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { dataPut, doctorTag, canEditVisit, deleteVisit, cdbKeepOthersVisits, CDB3, cdbTrack, cdbEnsureLoaded, cdbGrantPicker, syncClinicDb4, cdbOpenUpgraded, openPatientDialog, selectPatient, sameNamePatients, nameKey, ptIdParts, savePatientFromForm, deleteVisit, clinicDbState, clinicActive, connectClinicDb, disconnectClinicDb, syncClinicDb, cdbContains, CLINIC_PATIENTS_FILE, __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Slips, fdState, buildSlip, sendToFrontdesk, syncSlips, renderSendRow, FRONTDESK_SLIPS_FILE, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>
