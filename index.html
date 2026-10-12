@@ -713,6 +713,8 @@ document.addEventListener("DOMContentLoaded",function(){new MutationObserver(chk
 .ma-half{margin-top:6px}.ma-half b.h{font-size:13px;color:#2f7a68}.myappts ul{margin:2px 0 0;padding-left:16px}.myappts li{overflow-wrap:anywhere;margin:2px 0}
 .ma-name{background:none;border:0;padding:0;color:#1d6b5a;font-weight:700;text-decoration:underline;cursor:pointer;font-size:inherit}
 .ma-by{color:#6b7a75;font-size:12px}
+.vt-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.vt-grid label{font-size:12px;color:#55645f;display:flex;flex-direction:column}.vt-grid input{width:100%;box-sizing:border-box;padding:5px}
+.vt-by{font-size:12px;color:#2f7a68;margin-top:4px}.vt-warn{font-size:12px;color:#8a5a00;margin-top:4px}.vt-trend{margin:2px 0 0;padding-left:18px;font-size:13px}
 </style>
 </head>
 <body>
@@ -823,6 +825,10 @@ document.addEventListener("DOMContentLoaded",function(){new MutationObserver(chk
         <div class="section-head"><h2>AI suggestions (Grok)</h2><span><button class="small" id="aiCopyPanelBtn" title="Copy AI response">Copy</button> <button class="small" id="aiOpenBtn">Open</button></span></div>
         <div class="ai-meta" id="aiPanelMeta"></div>
         <div class="md ai-panel-body" id="aiPanelBody"></div>
+      </div>
+      <div class="section" id="vitalsSec" hidden>
+        <div class="section-head"><h2>Vitals</h2></div>
+        <div id="vitalsBody"></div>
       </div>
       <div class="section">
         <div class="section-head"><h2>Tongue</h2></div>
@@ -4136,6 +4142,48 @@ const CDB3 = (() => {
   }
   return { SHARD_TAG, DEFAULT_SHARDS, shardName, hashInt, shardOfId, emptyShard, packShard, unpackShard, slice, pickShard, hash, partHash, stable, FOLDER, INDEX, FOLDER_TAG, INDEX_TAG, PFILE_TAG, pName, T, gz, gunzip, canGz, packVisit, unpackVisit, unpackPart, packDoc, partTime, entryOf, mergeIndex, mergeEntry, fdEntry, cleanEntry, INDEX_KEYS, BASIC_KEYS, indexContains, sameEntry, emptyIndex, splitLegacy };
 })();
+
+/* v33: front desk check-in vitals — owner-owned tcm-clinic-checkins.json (writers: front desk + doctors). Never in the patient index.
+   doc = { kind:"clinic-checkins", format:1, entries:{ id:{ id, patientId, patientName, date(Asia/Manila), vitals:{bpSys,bpDia,weight,pulse,temp,spo2},
+           recordedBy, recordedAt, updatedAt, updatedBy, importedAt?, importedBy?, deleted? } } }
+   Kept only for today + yesterday; an entry the doctor imported into a visit is removed. */
+const Checkins = (() => {
+  const FILE = "tcm-clinic-checkins.json";
+  const ymd = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+  const addDays = (y, n) => ymd(new Date(new Date(y + "T12:00:00+08:00").getTime() + n * 86400000));
+  const KEYS = ["bpSys", "bpDia", "weight", "pulse", "temp", "spo2"];
+  const LABEL = { bpSys: "BP systolic", bpDia: "BP diastolic", weight: "Weight", pulse: "Pulse", temp: "Temperature", spo2: "SpO₂" };
+  const UNIT = { bpSys: "mmHg", bpDia: "mmHg", weight: "kg", pulse: "bpm", temp: "°C", spo2: "%" };
+  const RANGE = { bpSys: [80, 180], bpDia: [45, 120], weight: [2, 200], pulse: [45, 130], temp: [35, 38.5], spo2: [92, 100] };
+  const HARD = { bpSys: [50, 260], bpDia: [25, 160], weight: [0.5, 350], pulse: [20, 250], temp: [30, 44], spo2: [50, 100] };
+  function clean(v) { const o = {}; for (const k of KEYS) { const n = parseFloat(String(v && v[k] != null ? v[k] : "").replace(",", ".")); if (isFinite(n)) o[k] = Math.round(n * 10) / 10; } return o; }
+  function warnings(v) {   // [{k, msg, hard}] — hard = almost surely a typo
+    const out = [], c = clean(v);
+    for (const k of KEYS) if (k in c) { const [lo, hi] = RANGE[k], [hlo, hhi] = HARD[k];
+      if (c[k] < hlo || c[k] > hhi) out.push({ k, hard: true, msg: `${LABEL[k]} ${c[k]} ${UNIT[k]} looks wrong — please re-check` });
+      else if (c[k] < lo || c[k] > hi) out.push({ k, hard: false, msg: `${LABEL[k]} ${c[k]} ${UNIT[k]} is outside the usual range (${lo}–${hi})` }); }
+    if (c.bpSys && c.bpDia && c.bpDia >= c.bpSys) out.push({ k: "bpDia", hard: true, msg: "Diastolic should be lower than systolic" });
+    return out;
+  }
+  const text = v => { const c = clean(v), p = []; if (c.bpSys || c.bpDia) p.push(`BP ${c.bpSys ?? "?"}/${c.bpDia ?? "?"}`); if (c.weight != null) p.push(c.weight + " kg"); if (c.pulse != null) p.push(c.pulse + " bpm"); if (c.temp != null) p.push(c.temp + " °C"); if (c.spo2 != null) p.push("SpO₂ " + c.spo2 + "%"); return p.join(" · "); };
+  const t = e => (e && e.updatedAt) || "";
+  function merge(a, b) { const out = { ...((a || {}).entries || {}) }; for (const [id, x] of Object.entries((b || {}).entries || {})) if (!out[id] || t(x) > t(out[id])) out[id] = x; return out; }
+  function prune(entries, today = ymd()) { const keep = addDays(today, -1), out = {}; for (const [id, e] of Object.entries(entries || {})) if (e && e.date >= keep && !e.importedAt) out[id] = e; return out; }
+  const todays = (doc, today = ymd()) => Object.values((doc || {}).entries || {}).filter(e => e && !e.deleted && e.date === today);
+  const forPatient = (doc, pid, today = ymd()) => todays(doc, today).filter(e => e.patientId === pid && !e.importedAt).sort((a, b) => t(b).localeCompare(t(a)))[0] || null;
+  async function save(io, rec, by) {   // io = { get(), put(doc) } — re-read, merge, prune, write, verify; retry
+    for (let i = 0; i < 6; i++) {
+      if (i) await new Promise(r => setTimeout(r, 150 + Math.random() * 300 * i));
+      const cur = (await io.get()) || {};
+      const entries = prune(merge(cur, { entries: { [rec.id]: rec } }));
+      await io.put({ ...cur, app: "tcm-consult-assistant", kind: "clinic-checkins", format: 1, entries, updatedAt: new Date().toISOString(), updatedBy: by });
+      const chk = (await io.get()) || {}, e = (chk.entries || {})[rec.id];
+      if (rec.importedAt ? !e : e && t(e) >= t(rec)) return chk;
+    }
+    throw new Error("The check-in list is busy — try again");
+  }
+  return { save, FILE, ymd, addDays, KEYS, LABEL, UNIT, RANGE, clean, warnings, text, merge, prune, todays, forPatient };
+})();
 </script>
 <script>
 "use strict";
@@ -4688,6 +4736,7 @@ function renderLegend() {
 }
 
 function renderSessionInfo() {
+  try { if (!document.activeElement || !document.activeElement.closest || !document.activeElement.closest("#vitalsSec")) renderVitals(); } catch (e) { console.warn(e); }
   const s = state.session, p = patientById(s.patientId);
   const saved = state.visits.some(v => v.id === s.id);
   $("#sessionInfo").innerHTML = `Session: <b>${p ? esc(p.name) : "No patient assigned"}</b> · started ${esc(fmtDateTime(s.startedAt))}`
@@ -5535,6 +5584,7 @@ function buildVisitRecord() {
     prevVisitId: (priorVisits(s)[0] || {}).id || null,
     carriedFrom: s.carriedFrom || null,
     notes: s.notes, diagnosis: s.diagnosis,
+    ...(s.vitals && Object.keys(Checkins.clean(s.vitals)).length ? { vitals: { ...Checkins.clean(s.vitals), ...Object.fromEntries(['recordedBy', 'recordedAt', 'checkinId', 'editedBy', 'editedAt'].filter(k => s.vitals[k]).map(k => [k, s.vitals[k]])) } } : {}),
     ...(s.billing ? { billing: { ...s.billing } } : {}),   // packs / consult type / services ticked in Estimated charges
     ai: s.ai || null
   };
@@ -5564,6 +5614,7 @@ async function saveSession() {
     await clearDraft();
     renderSessionInfo(); renderPatients(); renderProfile(); renderHistory();
     toast("Session saved to " + patientById(s.patientId).name);
+    if (rec.vitals && rec.vitals.checkinId) ckMarkImported(rec.vitals.checkinId).catch(e => console.warn("check-in import:", e));
   } catch (e) { console.error(e); alert("Could not save: " + e.message); }
 }
 
@@ -5813,7 +5864,7 @@ function newPatientFromPicker() {
 function visitSummaryHTML(v, ref) {
   const dx = dxLinesOf(v.diagnosis), rx = rxLinesOf(v.diagnosis), f = visitFindings(v), tops = (v.patterns || []).slice(0, 3);
   const row = (k, html) => `<div class="hv-row"><span class="hv-k">${k}</span><span class="hv-v">${html}</span></div>`;
-  return row("Diagnosis", dx.length ? esc(dx.join(" · ")) : `<i class="muted">not recorded</i>`)
+  return (v.vitals ? row("Vitals", esc(Checkins.text(v.vitals))) : "") + row("Diagnosis", dx.length ? esc(dx.join(" · ")) : `<i class="muted">not recorded</i>`)
     + row("Rx", rx.length ? rx.map(l => `<div class="hv-rx">${esc(convertRxLine(l))}</div>`).join("") : `<i class="muted">none recorded</i>`)
     + row("Tongue", f.tongue.length ? esc(f.tongue.map(tName).join(", ")) : `<i class="muted">—</i>`)
     + row("Pulse", f.pulse.length ? esc(f.pulse.map(pName).join(", ")) : `<i class="muted">—</i>`)
@@ -5862,6 +5913,7 @@ function renderHistory() {
       <div class="hv-links"><button type="button" class="link-btn" data-open-visit="${v.id}">Open this visit</button></div>
     </div>
     <div class="hv-block"><div class="hv-sub">Progress since last visit${doctorTag(v, "hv-doc")}</div>${progressHTML(cmp)}</div>
+    ${vitalsTrendHTML(s, prior)}
     <div class="hv-block"><div class="hv-sub">Pattern trend <span class="muted">(last visit → today)</span></div>${trendHTML(trend)}</div>
     ${prior.length > 1 ? `<details class="hv-older" data-dkey="older"${op("older")}><summary>Older visits (${prior.length - 1})</summary>
       ${prior.slice(1).map(o => `<details class="hv-ov" data-dkey="ov:${o.id}"${op("ov:" + o.id)}><summary><b>${esc(fmtDate(o.startedAt))}</b> · ${esc(relAgo(o.startedAt, ref))}${doctorTag(o, "hv-doc")}${o.patterns && o.patterns[0] ? " · " + esc(shortPat(o.patterns[0].name)) + " " + o.patterns[0].pct + "%" : ""}</summary>
@@ -7382,31 +7434,34 @@ function cdbMsg(t, err) { const m = $("#cdbMsg"); if (m) { m.textContent = t; m.
 let cdbAutoBusy = false;
 /* ---------- v32: My appointments (read-only; booked on scheduler.html) ----------
    schedule file (tcm-clinic-config.json) → appointmentsFileId. Owner: found by files.list. Doctors: picked once (drive.file). */
-const MA = { cfgId: "", apptId: "", appts: null, day: "", error: "", need: false };
+const MA = { ckId: "", ck: null, ckNeed: false, cfgId: "", apptId: "", appts: null, day: "", error: "", need: false };
 const maKey = () => "tcm_myappts_" + (Cloud.account ? Cloud.account.sub : "");
 const maYmd = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
 const maAdd = (ymd, n) => maYmd(new Date(new Date(ymd + "T12:00:00+08:00").getTime() + n * 86400000));
 async function maTry(ids) {
   for (const id of ids) {
     try { const d = await driveDownload(id);
-      if (d && d.kind === "clinic-config") { MA.cfgId = id; if (d.appointmentsFileId && !MA.apptId) MA.apptId = d.appointmentsFileId; }
+      if (d && d.kind === "clinic-config") { MA.cfgId = id; if (d.appointmentsFileId && !MA.apptId) MA.apptId = d.appointmentsFileId; if (d.checkinsFileId && !MA.ckId) MA.ckId = d.checkinsFileId; }
+      else if (d && d.kind === "clinic-checkins") { MA.ckId = id; MA.ck = d; }
       else if (d && d.kind === "clinic-appointments") { MA.apptId = id; MA.appts = d; }
     } catch (e) { if (e.status === 401) throw e; }
   }
 }
 async function syncMyAppts(acc) {
   if (!Cloud.account || Cloud.account !== acc) return;
-  try { const k = JSON.parse(localStorage.getItem(maKey()) || "{}"); MA.cfgId = MA.cfgId || k.cfgId || ""; MA.apptId = MA.apptId || k.apptId || ""; } catch {}
+  try { const k = JSON.parse(localStorage.getItem(maKey()) || "{}"); MA.cfgId = MA.cfgId || k.cfgId || ""; MA.apptId = MA.apptId || k.apptId || ""; MA.ckId = MA.ckId || k.ckId || ""; } catch {}
   if (!MA.cfgId || !MA.apptId) {   // owner: its own files; otherwise any already-granted copy
     try { const q = n => driveList(`name='${n}' and trashed=false`);
-      const c = await q("tcm-clinic-config.json"), a = await q("tcm-clinic-appointments.json");
-      await maTry([...c, ...a].map(f => f.id)); } catch (e) { if (e.status === 401) throw e; }
+      const c = await q("tcm-clinic-config.json"), a = await q("tcm-clinic-appointments.json"), k = await q(Checkins.FILE);
+      await maTry([...c, ...a, ...k].map(f => f.id)); } catch (e) { if (e.status === 401) throw e; }
   }
   if (MA.cfgId && MA.apptId && !MA.appts) await maTry([MA.cfgId]);
   if (MA.apptId) { try { const d = await driveDownload(MA.apptId); if (d && d.kind === "clinic-appointments") { MA.appts = d; MA.error = ""; } } catch (e) { if (e.status === 401) throw e; MA.appts = null; MA.error = "no access"; } }
   MA.need = !MA.appts;
-  localStorage.setItem(maKey(), JSON.stringify({ cfgId: MA.cfgId, apptId: MA.apptId }));
-  renderMyAppts();
+  if (MA.cfgId && !MA.ckId) await maTry([MA.cfgId]);
+  if (MA.ckId) { try { const d = await driveDownload(MA.ckId); if (d && d.kind === "clinic-checkins") { MA.ck = d; MA.ckNeed = false; } } catch (e) { if (e.status === 401) throw e; MA.ck = null; MA.ckNeed = true; } }
+  localStorage.setItem(maKey(), JSON.stringify({ cfgId: MA.cfgId, apptId: MA.apptId, ckId: MA.ckId }));
+  renderMyAppts(); renderVitals();
 }
 async function maPicker() {
   if (!pickerAvailable()) { toast("Google Picker isn't configured on this site."); return; }
@@ -7414,9 +7469,46 @@ async function maPicker() {
     const tok = await ensureToken(); await loadPicker(); const P = google.picker;
     const mk = mine => { const v = new P.DocsView(P.ViewId.DOCS).setMimeTypes("application/json").setQuery("tcm-clinic-").setOwnedByMe(mine); if (v.setLabel) v.setLabel(mine ? "My Drive" : "Shared with me"); return v; };
     new P.PickerBuilder().setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID).addView(mk(false)).addView(mk(true)).enableFeature(P.Feature.MULTISELECT_ENABLED)
-      .setTitle("Select both tcm-clinic- files").setCallback(async d => { if (d.action === P.Action.PICKED) { await maTry((d.docs || []).map(x => x.id)); await syncMyAppts(Cloud.account); } }).build().setVisible(true);
+      .setTitle("Select all tcm-clinic- files").setCallback(async d => { if (d.action === P.Action.PICKED) { await maTry((d.docs || []).map(x => x.id)); await syncMyAppts(Cloud.account); } }).build().setVisible(true);
   } catch (e) { toast("Google Picker failed: " + (e.message || e)); }
 }
+/* ---------- v33: Vitals (front desk check-in → today's visit; doctor can edit; saved in the visit / data file) ---------- */
+const VLBL = { bpSys: "BP sys", bpDia: "BP dia", weight: "Weight kg", pulse: "Pulse bpm", temp: "Temp °C", spo2: "SpO₂ %" };
+function renderVitals() {
+  const sec = $("#vitalsSec"); if (!sec) return;
+  const s = state.session; sec.hidden = !s.patientId; if (!s.patientId) return;
+  if (!s.vitals && !s.savedAt && !state.visits.some(v => v.id === s.id) && MA.ck) {   // prefill from today's front desk check-in
+    const e = Checkins.forPatient(MA.ck, s.patientId);
+    if (e) s.vitals = { ...Checkins.clean(e.vitals), recordedBy: e.recordedBy, recordedAt: e.recordedAt, checkinId: e.id };
+  }
+  const v = s.vitals || {}, ex = state.visits.find(x => x.id === s.id), ro = !!ex && !canEditVisit(ex);
+  const w = Checkins.warnings(v);
+  setHTML($("#vitalsBody"), `<div class="vt-grid">${Checkins.KEYS.map(k => `<label>${VLBL[k]}<input data-vt="${k}" inputmode="decimal" value="${v[k] != null ? esc(v[k]) : ""}"${ro ? " disabled" : ""}></label>`).join("")}</div>`
+    + (v.recordedBy ? `<div class="vt-by" id="vitalsBy">Recorded by ${esc(v.recordedBy)} at ${esc(fmtDateTime(v.recordedAt))}${v.editedBy ? ` · edited by ${esc(v.editedBy)}` : ""}</div>` : "")
+    + (w.length ? `<div class="vt-warn">${w.map(x => "⚠ " + esc(x.msg)).join("<br>")}</div>` : "")
+    + (MA.ckNeed ? `<button type="button" class="small" id="ckConnect">📂 Connect front desk check-ins</button>` : ""));
+}
+function vitalsTrendHTML(s, prior) {
+  const vs = [...prior].filter(v => v.vitals).slice(0, 5); if (!vs.length && !s.vitals) return "";
+  const rows = (s.vitals && Object.keys(Checkins.clean(s.vitals)).length ? [`<li><b>Today</b>: ${esc(Checkins.text(s.vitals))}</li>`] : []).concat(vs.map(v => `<li><b>${esc(fmtDate(v.startedAt))}</b>: ${esc(Checkins.text(v.vitals))}</li>`));
+  return rows.length ? `<div class="hv-block" id="vitalsTrend"><div class="hv-sub">Vitals trend</div><ul class="vt-trend">${rows.join("")}</ul></div>` : "";
+}
+async function ckMarkImported(id) {
+  if (!MA.ckId || !Cloud.account) return;
+  const cur = await driveDownload(MA.ckId), e = ((cur || {}).entries || {})[id]; if (!e) return;
+  const now = new Date().toISOString();
+  MA.ck = await Checkins.save({ get: () => driveDownload(MA.ckId), put: d => driveUpdate(MA.ckId, d) }, { ...e, importedAt: now, importedBy: Cloud.account.email, updatedAt: now, updatedBy: Cloud.account.email }, Cloud.account.email);
+}
+document.addEventListener("input", e => {
+  const k = e.target.dataset && e.target.dataset.vt; if (!k) return;
+  const s = state.session, me = Cloud.account ? Cloud.account.email : "";
+  s.vitals = { ...(s.vitals || {}), [k]: e.target.value.trim() === "" ? undefined : e.target.value };
+  if (s.vitals[k] === undefined) delete s.vitals[k];
+  if (s.vitals.recordedBy) { s.vitals.editedBy = me; s.vitals.editedAt = new Date().toISOString(); }
+  markDirty();
+});
+document.addEventListener("change", e => { if (e.target.dataset && e.target.dataset.vt) { const s = state.session; if (s.vitals) s.vitals = { ...s.vitals, ...Checkins.clean(s.vitals) }; renderVitals(); renderHistory(); } });
+document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("#ckConnect"); if (b) maPicker(); });
 function renderMyAppts() {
   const card = $("#apptCard"); if (!card) return;
   card.hidden = !Cloud.account || (!MA.appts && !MA.need);
@@ -8335,7 +8427,7 @@ async function init() {
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { MA, renderMyAppts, syncMyAppts,  dataPut, doctorTag, canEditVisit, deleteVisit, cdbKeepOthersVisits, CDB3, cdbTrack, cdbEnsureLoaded, cdbGrantPicker, syncClinicDb4, cdbOpenUpgraded, openPatientDialog, selectPatient, sameNamePatients, nameKey, ptIdParts, savePatientFromForm, deleteVisit, clinicDbState, clinicActive, connectClinicDb, disconnectClinicDb, syncClinicDb, cdbContains, CLINIC_PATIENTS_FILE, __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Slips, fdState, buildSlip, sendToFrontdesk, syncSlips, renderSendRow, FRONTDESK_SLIPS_FILE, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { MA, renderVitals, ckMarkImported, renderMyAppts, syncMyAppts,  dataPut, doctorTag, canEditVisit, deleteVisit, cdbKeepOthersVisits, CDB3, cdbTrack, cdbEnsureLoaded, cdbGrantPicker, syncClinicDb4, cdbOpenUpgraded, openPatientDialog, selectPatient, sameNamePatients, nameKey, ptIdParts, savePatientFromForm, deleteVisit, clinicDbState, clinicActive, connectClinicDb, disconnectClinicDb, syncClinicDb, cdbContains, CLINIC_PATIENTS_FILE, __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Slips, fdState, buildSlip, sendToFrontdesk, syncSlips, renderSendRow, FRONTDESK_SLIPS_FILE, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>

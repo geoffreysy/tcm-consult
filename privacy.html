@@ -42,6 +42,7 @@ h1{font-size:24px;margin-bottom:4px}h2{font-size:17px;margin-top:28px}
 <ul>
   <li><b>Clinic schedule</b> (<code>tcm-clinic-config.json</code>, owned by the clinic owner): doctors' Google e-mails and the days / morning–afternoon sessions they are in. Shared read-only with the clinic's doctors, front desk and scheduler e-mails. No patient data.</li>
   <li><b>Appointments</b> (<code>tcm-clinic-appointments.json</code>, owned by the clinic owner): booked on <code>scheduler.html</code> — a typed patient name with optional phone, time and note, the doctor and session, plus who booked or last edited it (the signed-in Google e-mail) and when. Scheduler e-mails can edit it; doctors and front desk can only read it. It is separate from patient records: scheduler accounts get <b>no</b> access to the patient list, visit records, slips or prices.</li>
+  <li><b>Check-in vitals</b> (<code>tcm-clinic-checkins.json</code>, owned by the clinic owner): blood pressure, weight, pulse rate, temperature and SpO₂ the front desk records at check-in, with the patient's name/ID, date, and who recorded it and when. Front desk and doctors can edit it; scheduler-only accounts have no access. Entries are kept at most 2 days and are removed once a doctor saves them into the visit. The front desk only sees today's entries. Once saved, vitals are part of the visit record in the clinic patient database (doctors only). Vitals are never stored in the patient list the front desk uses.</li>
 </ul>
 <h2>Clinic price list and front desk (optional)</h2>
 <ul>

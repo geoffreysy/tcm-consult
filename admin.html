@@ -2757,6 +2757,48 @@ const CDB3 = (() => {
   }
   return { SHARD_TAG, DEFAULT_SHARDS, shardName, hashInt, shardOfId, emptyShard, packShard, unpackShard, slice, pickShard, hash, partHash, stable, FOLDER, INDEX, FOLDER_TAG, INDEX_TAG, PFILE_TAG, pName, T, gz, gunzip, canGz, packVisit, unpackVisit, unpackPart, packDoc, partTime, entryOf, mergeIndex, mergeEntry, fdEntry, cleanEntry, INDEX_KEYS, BASIC_KEYS, indexContains, sameEntry, emptyIndex, splitLegacy };
 })();
+
+/* v33: front desk check-in vitals — owner-owned tcm-clinic-checkins.json (writers: front desk + doctors). Never in the patient index.
+   doc = { kind:"clinic-checkins", format:1, entries:{ id:{ id, patientId, patientName, date(Asia/Manila), vitals:{bpSys,bpDia,weight,pulse,temp,spo2},
+           recordedBy, recordedAt, updatedAt, updatedBy, importedAt?, importedBy?, deleted? } } }
+   Kept only for today + yesterday; an entry the doctor imported into a visit is removed. */
+const Checkins = (() => {
+  const FILE = "tcm-clinic-checkins.json";
+  const ymd = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+  const addDays = (y, n) => ymd(new Date(new Date(y + "T12:00:00+08:00").getTime() + n * 86400000));
+  const KEYS = ["bpSys", "bpDia", "weight", "pulse", "temp", "spo2"];
+  const LABEL = { bpSys: "BP systolic", bpDia: "BP diastolic", weight: "Weight", pulse: "Pulse", temp: "Temperature", spo2: "SpO₂" };
+  const UNIT = { bpSys: "mmHg", bpDia: "mmHg", weight: "kg", pulse: "bpm", temp: "°C", spo2: "%" };
+  const RANGE = { bpSys: [80, 180], bpDia: [45, 120], weight: [2, 200], pulse: [45, 130], temp: [35, 38.5], spo2: [92, 100] };
+  const HARD = { bpSys: [50, 260], bpDia: [25, 160], weight: [0.5, 350], pulse: [20, 250], temp: [30, 44], spo2: [50, 100] };
+  function clean(v) { const o = {}; for (const k of KEYS) { const n = parseFloat(String(v && v[k] != null ? v[k] : "").replace(",", ".")); if (isFinite(n)) o[k] = Math.round(n * 10) / 10; } return o; }
+  function warnings(v) {   // [{k, msg, hard}] — hard = almost surely a typo
+    const out = [], c = clean(v);
+    for (const k of KEYS) if (k in c) { const [lo, hi] = RANGE[k], [hlo, hhi] = HARD[k];
+      if (c[k] < hlo || c[k] > hhi) out.push({ k, hard: true, msg: `${LABEL[k]} ${c[k]} ${UNIT[k]} looks wrong — please re-check` });
+      else if (c[k] < lo || c[k] > hi) out.push({ k, hard: false, msg: `${LABEL[k]} ${c[k]} ${UNIT[k]} is outside the usual range (${lo}–${hi})` }); }
+    if (c.bpSys && c.bpDia && c.bpDia >= c.bpSys) out.push({ k: "bpDia", hard: true, msg: "Diastolic should be lower than systolic" });
+    return out;
+  }
+  const text = v => { const c = clean(v), p = []; if (c.bpSys || c.bpDia) p.push(`BP ${c.bpSys ?? "?"}/${c.bpDia ?? "?"}`); if (c.weight != null) p.push(c.weight + " kg"); if (c.pulse != null) p.push(c.pulse + " bpm"); if (c.temp != null) p.push(c.temp + " °C"); if (c.spo2 != null) p.push("SpO₂ " + c.spo2 + "%"); return p.join(" · "); };
+  const t = e => (e && e.updatedAt) || "";
+  function merge(a, b) { const out = { ...((a || {}).entries || {}) }; for (const [id, x] of Object.entries((b || {}).entries || {})) if (!out[id] || t(x) > t(out[id])) out[id] = x; return out; }
+  function prune(entries, today = ymd()) { const keep = addDays(today, -1), out = {}; for (const [id, e] of Object.entries(entries || {})) if (e && e.date >= keep && !e.importedAt) out[id] = e; return out; }
+  const todays = (doc, today = ymd()) => Object.values((doc || {}).entries || {}).filter(e => e && !e.deleted && e.date === today);
+  const forPatient = (doc, pid, today = ymd()) => todays(doc, today).filter(e => e.patientId === pid && !e.importedAt).sort((a, b) => t(b).localeCompare(t(a)))[0] || null;
+  async function save(io, rec, by) {   // io = { get(), put(doc) } — re-read, merge, prune, write, verify; retry
+    for (let i = 0; i < 6; i++) {
+      if (i) await new Promise(r => setTimeout(r, 150 + Math.random() * 300 * i));
+      const cur = (await io.get()) || {};
+      const entries = prune(merge(cur, { entries: { [rec.id]: rec } }));
+      await io.put({ ...cur, app: "tcm-consult-assistant", kind: "clinic-checkins", format: 1, entries, updatedAt: new Date().toISOString(), updatedBy: by });
+      const chk = (await io.get()) || {}, e = (chk.entries || {})[rec.id];
+      if (rec.importedAt ? !e : e && t(e) >= t(rec)) return chk;
+    }
+    throw new Error("The check-in list is busy — try again");
+  }
+  return { save, FILE, ymd, addDays, KEYS, LABEL, UNIT, RANGE, clean, warnings, text, merge, prune, todays, forPatient };
+})();
 </script>
 <script>
 "use strict";
@@ -2880,7 +2922,7 @@ function signOut() {
 }
 /* ---------- load / create / reuse ---------- */
 /* ---------- v21: clinic patient database (owner side: create + doctors' WRITER access) ---------- */
-var C = { apptId: null, fileId: null, schedule: {}, loaded: false, open: new Set() };
+var C = { ckId: null, apptId: null, fileId: null, schedule: {}, loaded: false, open: new Set() };
 const D = { fileId: null, doc: null, size: 0, perms: [], rows: [], frontDesk: [], loaded: false, status: {} };
 const FD_HINT = /front.?desk|reception|cashier/i;
 const dbMeta = id => gjson(`${PG.drive}/files/${encodeURIComponent(id)}?fields=${encodeURIComponent("id,name,version,modifiedTime,size,parents,appProperties,owners(displayName,emailAddress,me)")}`);
@@ -3248,13 +3290,21 @@ const CLINIC_CONFIG_FILE = "tcm-clinic-config.json", SCHED_DAYS = ["Mon", "Tue",
 async function loadClinicConfig() {
   try {
     const f = (await driveList(`name='${qEsc(CLINIC_CONFIG_FILE)}' and 'me' in owners and trashed=false`))[0];
-    if (f) { const d = await driveDownload(f.id); C.fileId = f.id; C.schedule = (d && d.schedule) || {}; C.apptId = (d && d.appointmentsFileId) || C.apptId || null; }
+    if (f) { const d = await driveDownload(f.id); C.fileId = f.id; C.schedule = (d && d.schedule) || {}; C.apptId = (d && d.appointmentsFileId) || C.apptId || null; C.ckId = (d && d.checkinsFileId) || C.ckId || null; }
   } catch (e) { console.warn("clinic config:", e); }
   C.loaded = true; renderDbList();
 }
 // v31: appointments (scheduler.html) — owner-owned tcm-clinic-appointments.json: WRITER for scheduler e-mails,
 // READ-ONLY for ticked doctors + front desk. Free-text bookings only; no patient records.
 const APPTS_FILE = "tcm-clinic-appointments.json";
+// v33: check-in vitals file — owner-owned; WRITER for front desk + ticked doctors; never shared with scheduler-only e-mails
+async function ensureCheckinsFile() {
+  if (C.ckId) return C.ckId;
+  const f = (await driveList(`name='${qEsc(Checkins.FILE)}' and 'me' in owners and trashed=false`))[0];
+  if (f) return (C.ckId = f.id);
+  const n = await createIn(await ensureFolder(), Checkins.FILE, { app: "tcm-consult-assistant", kind: "clinic-checkins", format: 1, note: "Front desk check-in vitals for today (kept 2 days at most; removed once a doctor saves them into the visit). Not the patient index.", entries: {}, updatedAt: new Date().toISOString() }, { tcmConsult: "clinic-checkins" }, "TCM Consult Assistant — front desk check-in vitals.");
+  return (C.ckId = n.id);
+}
 async function ensureApptsFile() {
   if (C.apptId) return C.apptId;
   const f = (await driveList(`name='${qEsc(APPTS_FILE)}' and 'me' in owners and trashed=false`))[0];
@@ -3280,7 +3330,7 @@ async function saveClinicConfig() {
   const now = new Date().toISOString(), schedule = {};
   for (const r of D.rows) { const x = C.schedule[r.email]; if (x && Object.values(x).some(d => d && (d.am || d.pm))) schedule[r.email] = x; }
   if (!C.fileId) { const f = await createIn(await ensureFolder(), CLINIC_CONFIG_FILE, { app: "tcm-consult-assistant", kind: "clinic-config", format: 1, schedule: {}, updatedAt: now }, { tcmConsult: "clinic-config" }, "TCM Consult Assistant — clinic schedule (reference only). Shared read-only with doctors and front desk."); C.fileId = f.id; }
-  const cur = await driveDownload(C.fileId), doc = { ...cur, ...(C.apptId ? { appointmentsFileId: C.apptId } : {}), app: "tcm-consult-assistant", kind: "clinic-config", format: 1, note: "Clinic schedule for reference (doctor e-mails + days). No patient data. Shared read-only with the clinic's doctors and front desk.", schedule, updatedAt: now, updatedBy: P.account.email };
+  const cur = await driveDownload(C.fileId), doc = { ...cur, ...(C.apptId ? { appointmentsFileId: C.apptId } : {}), ...(C.ckId ? { checkinsFileId: C.ckId } : {}), app: "tcm-consult-assistant", kind: "clinic-config", format: 1, note: "Clinic schedule for reference (doctor e-mails + days). No patient data. Shared read-only with the clinic's doctors and front desk.", schedule, updatedAt: now, updatedBy: P.account.email };
   await driveUpdate(C.fileId, doc);
   const chk = await driveDownload(C.fileId); if (JSON.stringify(chk.schedule || {}) !== JSON.stringify(schedule)) throw new Error("schedule could not be verified");
   C.schedule = schedule;
@@ -3329,6 +3379,7 @@ async function saveDbAccess() {   // ONE save: patient database (writer on folde
     try {
       const sched = D.scheduler || D.frontDesk; D.scheduler = sched;
       if (sched.length || C.apptId) await ensureApptsFile();
+      await ensureCheckinsFile();
       await saveClinicConfig();
       const me0 = normEmail(P.account.email), rd = [...new Set([...want, ...D.frontDesk, ...sched])].filter(e => e && e !== me0);
       for (const [e, v] of Object.entries(await syncShares(C.fileId, rd))) if (/error|fail/.test(v)) st[e] = "schedule: " + v;
@@ -3336,6 +3387,8 @@ async function saveDbAccess() {   // ONE save: patient database (writer on folde
         const roles = {}; for (const e of [...want, ...D.frontDesk]) roles[e] = "reader"; for (const e of sched) roles[e] = "writer";
         for (const [e, v] of Object.entries(await syncRoles(C.apptId, roles))) if (/error|fail/.test(v)) st[e] = "appointments: " + v;
       }
+      if (C.ckId) { const roles = {}; for (const e of [...want, ...D.frontDesk]) roles[e] = "writer";
+        for (const [e, v] of Object.entries(await syncRoles(C.ckId, roles))) if (/error|fail/.test(v)) st[e] = "check-ins: " + v; }
     } catch (e) { st["(schedule)"] = "schedule error: " + e.message; }
     if (P.fileId) {   // price list: read-only for ticked doctors + front desk; unticked doctors lose it
       const me = normEmail(P.account.email), readers = [...new Set([...want, ...D.frontDesk])].filter(e => e && e !== me);
