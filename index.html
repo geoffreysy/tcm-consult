@@ -4098,7 +4098,7 @@ const CDB3 = (() => {
     return out;
   }
   // v24: fixed shards owned by the clinic owner — shard_00.json … shard_NN.json; each patient's shard number is kept in its index entry
-  const SHARD_TAG = "clinic-shard", DEFAULT_SHARDS = 100;
+  const SHARD_TAG = "clinic-shard", DEFAULT_SHARDS = 10;   // v28: 10 (Android's Picker has no select-all)
   const shardName = n => "shard_" + String(n).padStart(3, "0") + ".json";
   const hashInt = str => { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); } return h >>> 0; };
   const shardOfId = (pid, n) => hashInt(String(pid)) % Math.max(1, n);
@@ -7351,7 +7351,7 @@ async function cdbAutoFind() {
   try {
     const list = await driveList(`name='${qEsc(CDB3.INDEX)}' and 'me' in owners and trashed=false`);
     for (const f of list) {
-      try { const idx = await driveDownload(f.id); if (!idx || idx.kind !== "clinic-patients-index" || idx.format !== 4) continue; } catch { continue; }
+      try { const idx = await driveDownload(f.id); if (!idx || idx.kind !== "clinic-patients-index" || idx.format !== 4 || idx.supersededBy) continue; } catch { continue; }
       await connectClinicDb(f.id, { auto: true, inSync: true }); return true;
     }
     return false;
@@ -7368,10 +7368,11 @@ async function connectClinicDb(fileId, opt = {}) {
   throw new Error(`That is not the clinic patient database (${CDB3.FOLDER}/${CDB3.INDEX}). Older clinic database files are no longer used.`);
 }
 // v27: Picker tabs — the files can be in "Shared with me" (doctors) or "My Drive" (the owner); a single owner-filtered view hid them.
+const cdbShardNameOf = id => { const sh = ((clinicDbState.conf || {}).shardList || []).find(x => x.fileId === id); return sh ? CDB3.shardName(sh.n) : ""; };
 function cdbPickerViews(folderId, fileIds) {
   const P = google.picker, mk = () => { const v = new P.DocsView(P.ViewId.DOCS).setIncludeFolders(true).setMimeTypes("application/json,application/vnd.google-apps.folder"); if (v.setMode && P.DocsViewMode) v.setMode(P.DocsViewMode.LIST); return v; };
   const views = [];
-  if (folderId) { const v = mk().setIncludeFolders(false); if (v.setParent) v.setParent(folderId); if (fileIds && fileIds.length && v.setFileIds) v.setFileIds(fileIds.join(",")); v.setMimeTypes("application/json"); views.push(v); }
+  if (folderId) { const v = mk().setIncludeFolders(false); if (v.setParent) v.setParent(folderId); if (fileIds && fileIds.length) { if (v.setFileIds) v.setFileIds(fileIds.join(",")); else if (v.setQuery) v.setQuery(fileIds.length === 1 ? (cdbShardNameOf(fileIds[0]) || "shard_") : "shard_"); } v.setMimeTypes("application/json"); views.push(v); }
   views.push(mk().setOwnedByMe(false), mk().setOwnedByMe(true));
   return views;
 }
@@ -7402,11 +7403,22 @@ async function connectPicked(docs) {
   }
   throw new Error("None of the selected files is the clinic patient database (" + CDB3.FOLDER + "/" + CDB3.INDEX + ").");
 }
+// v28: the connected database was replaced (rebuilt with fewer files, or merged into the owner's main one) → switch to it.
+// The owner's app (and anyone whose app may already open the new files) switches silently; other doctors are asked to select the new files once.
+async function cdbFollow(newId) {
+  if (state.session.dirty && sessionHasContent(state.session)) await saveDraft();
+  try { await connectClinicDb(newId, { auto: true, inSync: true }); return true; }
+  catch (e) {
+    await revokeClinicDb("The clinic owner rebuilt the patient database. Tap “Connect…” and select all files in “" + CDB3.FOLDER + "” once — nothing typed is lost.");
+    return false;
+  }
+}
 async function connectClinicIndex(meta, opt = {}) {
   if (!(meta.capabilities || {}).canEdit) throw new Error("You have read-only access — ask the clinic admin to tick you under “Doctors with access to the patient database”.");
   const idx = await driveDownload(meta.id);
   if (!idx || idx.kind !== "clinic-patients-index") throw new Error("That file was not made by TCM Consult Assistant.");
   if (idx.format !== 4) throw new Error("That is an older clinic database format that is no longer used — ask the clinic admin to create the new clinic patient database.");
+  if (idx.supersededBy && !opt.noFollow) return connectClinicDb(idx.supersededBy, { ...opt, noFollow: true });   // picked an old (replaced) database
   if (state.session.dirty && sessionHasContent(state.session)) await saveDraft();
   const cur = clinicDbState.conf;
   if (cur && !cur.revoked && cur.layout !== 3 && cur.layout !== 4 && DB.rec && cur.fileId !== meta.id) await cdbSwitchToIndex(meta, idx.folderId);   // upgraded from the single file: keep the cache
@@ -7584,6 +7596,7 @@ async function syncClinicDb4(acc) {
   if (!idx || idx.kind !== "clinic-patients-index") throw new Error("The connected file is not a clinic patient index.");
   // the admin is converting the database (one-file-per-patient → shards): keep local changes, write nothing
   if (idx.format !== 4) { await revokeClinicDb("The clinic patient database is in an older format that is no longer used. Ask the clinic admin for the new database."); return; }
+  if (idx.supersededBy) { await cdbFollow(idx.supersededBy); return; }   // v28: the owner rebuilt / merged the database
   const conf = clinicDbState.conf;
   const track = await cdbTrack(st);
   if (!clinicDbState.probed || clinicDbState.probed !== (idx.shards || []).length) { await cdbProbeShards(idx, track); clinicDbState.probed = (idx.shards || []).length; }   // each app load, after every pick, and when the admin adds data files

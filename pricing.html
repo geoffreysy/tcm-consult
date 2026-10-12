@@ -193,7 +193,7 @@ document.addEventListener("DOMContentLoaded",function(){new MutationObserver(chk
     <h2>🏥 Clinic patient database</h2>
     <div id="dbNone" hidden>
       <p class="hint">One shared patient database for the whole clinic: a <code>TCM Clinic Patients</code> folder in this account's “TCM Consult Assistant” folder, with a small <code>index.json</code> and a fixed set of data files (<code>shard_000.json</code>…), all owned by this account. Doctors you tick below can open, add and edit all patients and visits from their app (each visit shows which doctor saw it). The front desk never gets access.</p>
-      <div class="actions"><label class="hint">Data files <input type="number" id="dbNewShards" min="1" max="500" value="100" style="width:5em"></label><button type="button" class="primary" id="dbCreateBtn">Create clinic patient database</button></div>
+      <div class="actions"><label class="hint">Data files <input type="number" id="dbNewShards" min="1" max="500" value="10" style="width:5em"></label><button type="button" class="primary" id="dbCreateBtn">Create clinic patient database</button></div>
     </div>
     <div id="dbOn" hidden>
       <div class="hint" id="dbInfo"></div>
@@ -2718,7 +2718,7 @@ const CDB3 = (() => {
     return out;
   }
   // v24: fixed shards owned by the clinic owner — shard_00.json … shard_NN.json; each patient's shard number is kept in its index entry
-  const SHARD_TAG = "clinic-shard", DEFAULT_SHARDS = 100;
+  const SHARD_TAG = "clinic-shard", DEFAULT_SHARDS = 10;   // v28: 10 (Android's Picker has no select-all)
   const shardName = n => "shard_" + String(n).padStart(3, "0") + ".json";
   const hashInt = str => { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); } return h >>> 0; };
   const shardOfId = (pid, n) => hashInt(String(pid)) % Math.max(1, n);
@@ -2875,10 +2875,12 @@ const permTarget = () => D.folderId;   // doctors get WRITER on the FOLDER (+ ev
 async function loadDb() {   // v25: only the sharded database (format 4); older clinic databases are ignored and left untouched (no migration)
   D.loaded = true;
   const cands = (await driveList(`name='${qEsc(CDB3.INDEX)}' and 'me' in owners and trashed=false`)).filter(x => (x.appProperties || {}).tcmConsult === CDB3.INDEX_TAG);
-  let old = null;
-  for (const c of cands) {
-    const doc = await driveDownload(c.id).catch(() => null);
-    if (!doc || doc.kind !== "clinic-patients-index") continue;
+  let old = null; const docs = [];
+  for (const c of cands) { const doc = await driveDownload(c.id).catch(() => null); if (doc && doc.kind === "clinic-patients-index") docs.push({ c, doc }); }
+  // v28: one database per owner — rebuilt / merged ones carry supersededBy; if several are live, the one with the most patients wins (others: “Import my existing patients”)
+  const live = docs.filter(x => x.doc.format === 4 && !x.doc.supersededBy).sort((a, b) => Object.keys(b.doc.patients || {}).length - Object.keys(a.doc.patients || {}).length || String(b.doc.createdAt || "").localeCompare(String(a.doc.createdAt || "")));
+  D.otherDbs = live.slice(1).map(x => ({ id: x.c.id, n: Object.keys(x.doc.patients || {}).length }));
+  for (const { c, doc } of [...live, ...docs.filter(x => x.doc.format !== 4)]) {
     if (doc.format !== 4) { old = old || doc; continue; }
     const meta = await dbMeta(c.id);
     Object.assign(D, { layout: 4, fileId: c.id, folderId: doc.folderId || (meta.parents || [])[0], doc, size: +meta.size || 0, total: +meta.size || 0, idxMeta: meta });
@@ -2977,7 +2979,7 @@ function mergeRecs(into, kind, recs, deleted = {}) {   // newest wins per id; re
   }
 }
 async function collectOwnerRecords() {
-  const all = { patients: new Map(), visits: new Map() }, src = { personal: 0, oldClinic: 0, patientFiles: 0, browser: 0 }, files = new Map();
+  const all = { patients: new Map(), visits: new Map() }, src = { personal: 0, oldClinic: 0, patientFiles: 0, browser: 0, otherDb: 0 }, files = new Map(), otherIdx = [];
   const note = (f, kind) => { const o = (f.owners || [])[0] || {}; files.set(f.id, { id: f.id, name: f.name, kind, mine: !!o.me, owner: o.displayName || o.emailAddress || "another account", parents: f.parents || [] }); };
   const add = (doc, key) => { if (!doc) return; const del = doc.deleted || {}; mergeRecs(all, "patients", doc.patients, del); mergeRecs(all, "visits", doc.visits, del); src[key] += (doc.patients || []).length; };
   for (const f of await driveListAll(`name='tcm-consult-data.json' and 'me' in owners and trashed=false`)) { try { add(await driveDownload(f.id), "personal"); note(f, "personal"); } catch {} }
@@ -2989,13 +2991,21 @@ async function collectOwnerRecords() {
   }
   for (const f of await driveListAll(`name='${qEsc(CDB3.INDEX)}' and trashed=false`)) {   // an older index (one-file-per-patient database)
     if (f.id === D.fileId || (f.appProperties || {}).tcmConsult !== CDB3.INDEX_TAG) continue;
-    try { const d = await driveDownload(f.id); if (d && d.kind === "clinic-patients-index" && d.format !== 4) note(f, "old"); } catch {}
+    try {
+      const d = await driveDownload(f.id); if (!d || d.kind !== "clinic-patients-index") continue;
+      if (d.format !== 4) { note(f, "old"); continue; }
+      // v28: another (or an earlier) sharded database of this owner — its patients come along, its files are “old” once verified
+      if (!((f.owners || [])[0] || {}).me) continue;
+      for (const sh of d.shards || []) { try { const part = await CDB3.unpackShard(await driveDownload(sh.fileId)); add(part, "otherDb"); note({ id: sh.fileId, name: CDB3.shardName(sh.n), owners: f.owners, parents: f.parents }, "old"); } catch {} }
+      if (!d.supersededBy) otherIdx.push({ id: f.id, doc: d });
+      note(f, "old");
+    } catch {}
   }
   for (const q of [`name='${qEsc(CDB3.FOLDER)}' and mimeType='application/vnd.google-apps.folder' and 'me' in owners and trashed=false`, `name contains 'Backup before shards' and 'me' in owners and trashed=false`])
     for (const f of await driveListAll(q)) if (f.id !== D.folderId && f.mimeType === "application/vnd.google-apps.folder") note(f, "folder");
   const nsList = ["", "g_" + String(P.account.sub).replace(/[^\w.-]/g, "_")].map(ns => ns ? "tcm-consult-assistant::" + ns : "tcm-consult-assistant"), browserDbs = [];
   for (const name of nsList) { const d = await idbRead(name); if (d && ((d.patients || []).length || (d.visits || []).length)) { add(d, "browser"); browserDbs.push(name); } }
-  return { patients: [...all.patients.values()], visits: [...all.visits.values()], src, files: [...files.values()], browserDbs };
+  return { patients: [...all.patients.values()], visits: [...all.visits.values()], src, files: [...files.values()], browserDbs, otherIdx };
 }
 function idbClear(name) {   // remove patients / visits kept by the doctor app in this browser (settings, drafts stay)
   return new Promise(res => { let req; try { req = indexedDB.open(name); } catch { return res(false); }
@@ -3099,8 +3109,10 @@ async function importOwnerPatients() {
     idx = await driveDownload(D.fileId); for (const p of got.patients) if (!(idx.patients || {})[p.id] && !(idx.deleted || {})["patients/" + p.id]) missing.push(p.name + " (index)");
     if (missing.length) throw new Error("verification failed for " + missing.slice(0, 5).join(", "));
     const newP = got.patients.filter(p => !known.has(p.id)).length;
+    // other live databases of this owner now point here: apps still connected to them switch over on their next sync
+    for (const o of got.otherIdx || []) { try { await driveUpdate(o.id, { ...(await driveDownload(o.id)), supersededBy: D.fileId, updatedAt: new Date().toISOString() }); } catch {} }
     D.imp = { ok: true, files: got.files, browserDbs: got.browserDbs, cleanMsg: "" };
-    D.imp.html = `✓ Imported and verified: <b>${got.patients.length} patients</b> (${newP} new, ${got.patients.length - newP} already there) and <b>${visits.length} visits</b> · from your personal file (${got.src.personal}), old clinic database (${got.src.oldClinic}), old patient files (${got.src.patientFiles}), this browser (${got.src.browser}) · ${wrote} data file${wrote === 1 ? "" : "s"} updated${flagged.length ? ` · <b>${flagged.length} likely duplicate${flagged.length === 1 ? "" : "s"} flagged</b> (not merged): ${esc(flagged.slice(0, 8).join(", "))}` : ""}. Your original files were not changed.`;
+    D.imp.html = `✓ Imported and verified: <b>${got.patients.length} patients</b> (${newP} new, ${got.patients.length - newP} already there) and <b>${visits.length} visits</b> · from your personal file (${got.src.personal}), old clinic database (${got.src.oldClinic}), old patient files (${got.src.patientFiles})${got.src.otherDb ? `, another clinic database (${got.src.otherDb})` : ""}, this browser (${got.src.browser}) · ${wrote} data file${wrote === 1 ? "" : "s"} updated${flagged.length ? ` · <b>${flagged.length} likely duplicate${flagged.length === 1 ? "" : "s"} flagged</b> (not merged): ${esc(flagged.slice(0, 8).join(", "))}` : ""}. Your original files were not changed.`;
     await loadDb();
   } catch (e) { D.imp = { ok: false, html: "", err: "Import failed: " + e.message + " (nothing was deleted; you can run it again)" }; }
   finally { renderDb(); }
@@ -3116,6 +3128,59 @@ async function updateIndex(fn) {
   throw new Error("the database was busy — try again");
 }
 // more shards: new empty files only — existing patients keep their shard (it is stored in their index entry)
+// v28: rebuild the (small) database with fewer data files — Android's Picker has no select-all, so 100 files are unworkable.
+// New folder + index + N shards (same doctors / front desk), every record copied and read back; the old index then points to
+// the new one (connected apps switch over) and the old data files go to the Drive trash only after verification.
+const REBUILD_N = 10;
+async function rebuildDb(N = REBUILD_N) {
+  if (D.layout !== 4 || !D.fileId) return;
+  const msg = (t, err) => { D.rebuildMsg = { t, err: !!err }; const m = $("#dbRebuildMsg"); if (m) { m.textContent = t; m.classList.toggle("err", !!err); } };
+  const oldId = D.fileId, old = await driveDownload(oldId), oldShards = old.shards || [];
+  if (!confirm(`Rebuild the clinic patient database with ${N} data files?\n\nAll ${Object.keys(old.patients || {}).length} patients and their visits are copied and checked. Then the ${oldShards.length} old data files are moved to the Google Drive trash. Doctors select the ${N + 1} new files once (they are asked automatically); the front desk keeps working.`)) return;
+  $("#dbRebuildBtn").disabled = true;
+  try {
+    msg("Reading data files…");
+    const all = { patients: new Map(), visits: new Map(), deleted: {} }, todo = [...oldShards]; let read = 0;
+    await Promise.all(Array.from({ length: Math.min(8, todo.length) }, async () => { while (todo.length) { const sh = todo.shift(); const part = await CDB3.unpackShard(await driveDownload(sh.fileId));
+      for (const p of part.patients) { const c = all.patients.get(p.id); if (!c || recT(p) > recT(c)) all.patients.set(p.id, p); }
+      for (const v of part.visits) { const c = all.visits.get(v.id); if (!c || recT(v) > recT(c)) all.visits.set(v.id, v); }
+      for (const [k, t] of Object.entries(part.deleted || {})) if (!(all.deleted[k] >= t)) all.deleted[k] = t;
+      msg(`Reading data files… ${++read} / ${oldShards.length}`); } }));
+    const vp = {}; for (const v of all.visits.values()) vp[v.id] = v.patientId;
+    const groups = {}; const g = n => (groups[n] = groups[n] || { patients: [], visits: [], deleted: {} });
+    const nOf = pid => CDB3.shardOfId(pid, N);
+    for (const p of all.patients.values()) g(nOf(p.id)).patients.push(p);
+    for (const v of all.visits.values()) g(nOf(v.patientId)).visits.push(v);
+    for (const [k, t] of Object.entries(all.deleted)) { const [kind, id] = k.split("/"); g(nOf(kind === "patients" ? id : (vp[id] || id))).deleted[k] = t; }
+    msg("Creating the new data files…");
+    const folderId = await createFolderIn(await ensureFolder(), CDB3.FOLDER, { tcmConsult: CDB3.FOLDER_TAG });
+    const shards = await writeShards(folderId, 0, N, groups, (i, n) => msg(`Writing data files… ${i} / ${n}`));   // each file is read back and compared
+    const patients = {};
+    for (const [pid, e] of Object.entries(old.patients || {})) { if (typeof e.shard !== "number" || !all.patients.has(pid)) patients[pid] = CDB3.cleanEntry ? CDB3.cleanEntry({ ...e, shard: undefined, fileId: undefined }) : e; }   // front desk entries (no data file yet)
+    for (const p of all.patients.values()) { const n = nOf(p.id), e = CDB3.entryOf(CDB3.slice(groups[n], p.id, vp), p.id, shards[n].fileId, 0); if (e) patients[p.id] = { ...e, shard: n }; }
+    for (const e of Object.values(patients)) for (const k of Object.keys(e)) if (e[k] === undefined) delete e[k];
+    const now = new Date().toISOString();
+    const idx = { ...old, folderId, shards, patients, deleted: Object.fromEntries(Object.entries(old.deleted || {})), createdAt: now, updatedAt: now, rebuiltFrom: oldId, supersededBy: undefined, shardBytes: undefined };
+    delete idx.supersededBy; delete idx.shardBytes;
+    const nf = await createIn(folderId, CDB3.INDEX, idx, { tcmConsult: CDB3.INDEX_TAG }, IDX_DESC);
+    // verify: every patient + visit in the new files, every index entry present
+    msg("Checking…");
+    const back = await driveDownload(nf.id), missing = [];
+    for (const pid of Object.keys(old.patients || {})) if (!(back.patients || {})[pid]) missing.push(pid);
+    const got = { p: new Set(), v: new Set() };
+    for (const sh of shards) { const part = await CDB3.unpackShard(await driveDownload(sh.fileId)); part.patients.forEach(p => got.p.add(p.id)); part.visits.forEach(v => got.v.add(v.id)); }
+    for (const id of all.patients.keys()) if (!got.p.has(id)) missing.push(id);
+    for (const id of all.visits.keys()) if (!got.v.has(id)) missing.push(id);
+    if (missing.length) throw new Error("verification failed (" + missing.length + " records) — the old database was not changed");
+    // the old index points to the new one; old data files → Drive trash
+    await driveUpdate(oldId, { ...(await driveDownload(oldId)), supersededBy: nf.id, updatedAt: new Date().toISOString() });
+    let trashed = 0; for (const sh of oldShards) { try { await trashFile(sh.fileId); trashed++; } catch {} }
+    await loadDb();
+    if (D.rows.some(r => r.on) || D.frontDesk.length) await saveDbAccess();   // doctors: new folder; front desk: new index only
+    msg(`✓ Rebuilt with ${N} data files: ${all.patients.size} patients and ${all.visits.size} visits copied and checked · ${trashed} old data files moved to the Drive trash. Doctors' apps ask once to select the new files.`);
+  } catch (e) { msg("Rebuild failed: " + (e.message || e) + ". Nothing was deleted.", true); }
+  finally { const b = $("#dbRebuildBtn"); if (b) b.disabled = false; }
+}
 async function addShards() {
   const cur = (D.doc.shards || []).length, want = shardCountInput(), m = $("#dbMsg"); m.classList.remove("err");
   if (want <= cur) { m.textContent = `The database already has ${cur} data files — the number can only grow (existing data never moves).`; return; }
@@ -3242,6 +3307,9 @@ function renderDb() {
     const ns = (d.shards || []).length;
     $("#dbInfo").innerHTML = `<b>${esc(CDB3.FOLDER)}</b> · ${nRec(d.patients)} patients · ${ns} data files · index ${sz(D.size)} · total ${sz(D.total)} · all files owned by you · <a href="https://drive.google.com/drive/folders/${esc(D.folderId)}" target="_blank" rel="noopener">open in Drive</a>${D.size > 1048576 ? `<div class="db-warn">⚠ The index is over 1 MB — it is loaded on every sync.</div>` : ""}
       <div class="db-upg" id="dbImportBox"><b>Import my existing patients</b> <span class="hint">(clinic owner only — safe to run again)</span><div class="hint">Copies <b>your own</b> earlier patients and visits into this database: from your personal file, your old clinic database files and this browser. Same patient id → newest copy wins; same name + DOB/phone with a different id is flagged, not merged. Nothing is removed until you choose “Delete old files” after a verified import.</div><button type="button" class="small primary" id="dbImportBtn">Import my existing patients</button><div class="msg" id="dbImportMsg" role="status"></div><div id="dbCleanup"></div></div>
+      ${ns > REBUILD_N ? `<div class="db-upg" id="dbRebuildBox"><b>Fewer data files</b><div class="hint">This database has ${ns} data files — on Android, doctors must tap each one in Google Picker. Rebuild it with ${REBUILD_N}: every patient and visit is copied and checked, then the old files go to the Drive trash.</div><button type="button" class="small primary" id="dbRebuildBtn">Rebuild with ${REBUILD_N} files</button></div>` : ""}
+      ${ns > REBUILD_N || D.rebuildMsg ? `<div class="msg${D.rebuildMsg && D.rebuildMsg.err ? " err" : ""}" id="dbRebuildMsg" role="status">${esc((D.rebuildMsg || {}).t || "")}</div>` : ""}
+      ${(D.otherDbs || []).length ? `<div class="msg err" id="dbOtherDbs">⚠ You have ${D.otherDbs.length} other clinic patient database${D.otherDbs.length === 1 ? "" : "s"} (${D.otherDbs.map(x => x.n + " patients").join(", ")}). Press “Import my existing patients” to bring them into this one — apps still connected to them then switch here.</div>` : ""}
       <div class="db-upg"><label>Data files (shards) <input type="number" id="dbShardCount" min="${ns}" max="200" value="${ns}" style="width:5.5em"></label> <button type="button" class="small" id="dbAddShardsBtn">Add data files</button><div class="hint">More files = smaller downloads per save. Existing patients never move; new patients go to the emptiest files. Doctors' apps ask once to allow new files.</div></div>`;
     const im = $("#dbImportMsg"); if (D.imp) { im.innerHTML = D.imp.ok ? D.imp.html : esc(D.imp.err || ""); im.classList.toggle("err", !D.imp.ok); }
     renderCleanup();
@@ -3458,7 +3526,7 @@ function bind() {
   $("#dbAddBtn").onclick = () => dbAdd();
   $("#dbAddEmail").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); dbAdd(); } });
   $("#dbSaveBtn").onclick = () => saveDbAccess();
-  $("#dbInfo").addEventListener("click", e => { if (e.target.id === "dbAddShardsBtn") addShards(); if (e.target.id === "dbImportBtn") importOwnerPatients(); if (e.target.id === "dbCleanupBtn") cleanupOldFiles(); });
+  $("#dbInfo").addEventListener("click", e => { if (e.target.id === "dbAddShardsBtn") addShards(); if (e.target.id === "dbRebuildBtn") rebuildDb(); if (e.target.id === "dbImportBtn") importOwnerPatients(); if (e.target.id === "dbCleanupBtn") cleanupOldFiles(); });
   $("#dbList").addEventListener("click", e => { const b = e.target.closest("[data-db-rm]"); if (!b) return; readDbForm(); const r = D.rows.find(x => x.email === b.dataset.dbRm); if (r) r.on = false; D.rows = D.rows.filter(x => x !== r); D.removed = (D.removed || []).concat(b.dataset.dbRm); renderDbList(); $("#dbMsg").textContent = "Removed — press “Save access” to take away access."; });
   $("#dbList").addEventListener("change", e => { if (e.target.dataset.dbOn) { readDbForm(); $("#dbMsg").textContent = "Press “Save access” to apply."; } });
   $("#signInBtn").onclick = () => signIn();
@@ -3497,7 +3565,7 @@ function init() {
   if (P.account) requestToken("silent").then(() => loadList()).then(() => loadDb()).catch(e => { console.warn("silent sign-in", e); P.account = null; renderAll(); });
   window.__prReady = true;
 }
-window.PRICING = { importOwnerPatients, collectOwnerRecords, cleanupOldFiles, addShards, CDB3, D, loadDb, createDb, saveDbAccess, syncWriters, P, HN, Pricing, buildCSV, importCSV, parseCSV, findHerb, searchHerbs, changeSummary, save, openFile, loadList, createFile, pickerAvailable, PICKER_APP_ID, signIn };
+window.PRICING = { rebuildDb, importOwnerPatients, collectOwnerRecords, cleanupOldFiles, addShards, CDB3, D, loadDb, createDb, saveDbAccess, syncWriters, P, HN, Pricing, buildCSV, importCSV, parseCSV, findHerb, searchHerbs, changeSummary, save, openFile, loadList, createFile, pickerAvailable, PICKER_APP_ID, signIn };
 init();
 </script>
 </body>

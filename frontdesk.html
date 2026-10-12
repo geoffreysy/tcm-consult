@@ -2703,7 +2703,7 @@ const CDB3 = (() => {
     return out;
   }
   // v24: fixed shards owned by the clinic owner — shard_00.json … shard_NN.json; each patient's shard number is kept in its index entry
-  const SHARD_TAG = "clinic-shard", DEFAULT_SHARDS = 100;
+  const SHARD_TAG = "clinic-shard", DEFAULT_SHARDS = 10;   // v28: 10 (Android's Picker has no select-all)
   const shardName = n => "shard_" + String(n).padStart(3, "0") + ".json";
   const hashInt = str => { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); } return h >>> 0; };
   const shardOfId = (pid, n) => hashInt(String(pid)) % Math.max(1, n);
