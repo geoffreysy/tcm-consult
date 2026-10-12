@@ -29,7 +29,8 @@ const GOOGLE_CLIENT_ID = "416895917493-3j5kk308fk420kcc2rjnfuoap45hep2s.apps.goo
    in GOOGLE_CLIENT_ID (derived automatically). */
 const GOOGLE_PICKER_API_KEY = "AIzaSyAwoxJwp1HPBfx8ZN1L-TNW06nmTwylges";   // "TCM Consult Picker" (project tcm-consult-assistant): referrer-restricted to this site, Picker API only — safe in client code
 </script>
-<style id="pageSizeStyle">@page{size:A5;margin:9mm}</style>
+<style id="pageSizeStyle">@page{size:A5;margin:9mm}.pt-list{list-style:none;margin:8px 0 0;padding:0;max-height:360px;overflow:auto}.pt-list li{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:7px 4px;border-bottom:1px solid #eee}.pt-n{min-width:0;overflow-wrap:anywhere}.pt-form{display:grid;gap:6px;margin-top:8px}.pt-form label{display:grid;gap:2px;font-size:13px}.pt-form input{font:inherit;padding:7px}
+</style>
 <style>
 :root{--bg:#f3f5f4;--panel:#fff;--ink:#1f2d2a;--muted:#6b7a76;--line:#dde4e1;--accent:#2f7d6d;--accent-2:#e7f2ef;--danger:#b54646;--warn:#b7791f;--radius:10px;--shadow:0 1px 2px rgba(20,40,35,.06),0 2px 8px rgba(20,40,35,.05);
   --cjk:"Noto Sans CJK SC","Noto Sans SC","PingFang SC","Microsoft YaHei","Hiragino Sans GB";font-size:14px}
@@ -156,7 +157,7 @@ a{color:var(--accent)}
 <div class="wrap">
   <section class="card welcome" id="welcome">
     <h1 style="color:var(--accent);margin-top:0">🧾 Front desk</h1>
-    <p>Sign in with the Google account the doctors shared their front desk slips with. This page shows only slips — patient name, Rx and charges. It never opens patient records.</p>
+    <p>Sign in with the Google account the doctors shared their front desk slips with. This page shows slips (patient name, Rx and charges) and the clinic patient list (name, date of birth, phone only). It never opens visits or clinical notes.</p>
     <button type="button" class="primary" id="signInBtn">Sign in with Google</button>
     <p class="hint" id="welcomeMsg"></p>
   </section>
@@ -171,6 +172,12 @@ a{color:var(--accent)}
           <details class="paste" id="pasteDoctor"><summary>Picker not working? Paste the doctor's slips file link</summary><div class="paste-row"><input id="pasteDoctorInput" placeholder="https://drive.google.com/file/d/…" spellcheck="false" autocomplete="off"><button type="button" id="pasteDoctorBtn">Connect</button></div></details>
         </div>
         <div class="setup-col">
+          <h2>Clinic patient list</h2>
+          <div id="ptStatus" class="hint"></div>
+          <button type="button" id="connectPtBtn">📂 Connect patient list</button>
+          <details class="paste" id="pastePt"><summary>Paste the patient list link instead</summary><div class="paste-row"><input id="pastePtInput" placeholder="https://drive.google.com/file/d/…" spellcheck="false" autocomplete="off"><button type="button" class="small" id="pastePtBtn">Connect</button></div></details>
+        </div>
+        <div class="setup-col">
           <h2>Clinic herb price list</h2>
           <div id="clinicStatus" class="hint"></div>
           <button type="button" id="connectClinicBtn">📂 Connect clinic price list</button>
@@ -179,6 +186,21 @@ a{color:var(--accent)}
       </div>
       </details>
       <div class="msg" id="setupMsg" role="status"></div>
+    </section>
+    <section class="card" id="ptCard" hidden>
+      <div class="detail-head"><h2 style="flex:1">👥 Patients <span class="muted" id="ptCount"></span></h2><button type="button" class="small primary" id="ptAddBtn">＋ Add patient</button></div>
+      <p class="hint" style="margin:2px 0 8px">Basic details only — name, date of birth, phone. Visits and clinical notes are only visible to the doctors.</p>
+      <input type="search" id="ptSearch" placeholder="Search name, phone or DOB" autocomplete="off" spellcheck="false" style="width:100%;box-sizing:border-box">
+      <form id="ptForm" hidden class="pt-form">
+        <h3 id="ptFormTitle" style="margin:10px 0 6px">Add patient</h3>
+        <label>Name<input id="ptName" autocomplete="off" required></label>
+        <label>Date of birth<input type="date" id="ptDob"></label>
+        <label>Phone<input type="tel" id="ptPhone" autocomplete="off"></label>
+        <div class="err" id="ptDup" role="status"></div>
+        <div class="actions"><button type="submit" class="primary" id="ptSaveBtn">Save patient</button><button type="button" id="ptCancelBtn">Cancel</button><span class="hint" id="ptMsg"></span></div>
+      </form>
+      <div class="err" id="ptErr"></div>
+      <ul class="pt-list" id="ptList"></ul>
     </section>
     <section class="card">
       <div class="filters">
@@ -2625,18 +2647,32 @@ const CDB3 = (() => {
   const partHash = part => hash([...part.patients, ...part.visits].map(r => r.id + "@" + T(r)).concat(Object.entries(part.deleted || {}).map(([k, t]) => k + "@" + t)).sort().join("|"));
   function entryOf(part, pid, fileId, size) {
     const p = part.patients.find(x => x.id === pid); if (!p) return null;
-    const vs = part.visits.filter(v => v.patientId === pid).sort((a, b) => (b.startedAt || "").localeCompare(a.startedAt || ""));
-    const l = vs[0], d = l && l.doctor;
-    return { id: pid, fileId, name: p.name || "", contact: p.contact || "", dob: p.dob || "", age: p.age ?? "", sex: p.sex || "", createdBy: p.createdBy || "",
-      updatedAt: T(p), fileUpdatedAt: partTime(part), h: partHash(part), w: new Date().toISOString(), nVisits: vs.length, last: l ? { at: l.startedAt || "", doctor: d ? { name: d.name || "", email: d.email || "" } : null } : null, size: +size || 0 };
+    // v25: the index is shared with the front desk → BASIC details only (no visits, diagnosis, notes, sex, age, doctor)
+    return { id: pid, fileId, name: p.name || "", contact: p.contact || "", dob: p.dob || "", bAt: p.basicsAt || T(p),
+      updatedAt: T(p), fileUpdatedAt: partTime(part), h: partHash(part), w: new Date().toISOString(), size: +size || 0 };
   }
+  const INDEX_KEYS = ["id", "fileId", "shard", "name", "contact", "dob", "bAt", "updatedAt", "fileUpdatedAt", "h", "w", "size", "by"];
+  const BASIC_KEYS = ["name", "contact", "dob"];
+  const cleanEntry = e => Object.fromEntries(INDEX_KEYS.filter(k => e[k] !== undefined).map(k => [k, e[k]]));
+  const bT = e => (e && (e.bAt || e.updatedAt)) || "";
+  // one entry from two copies: newest view wins, but the BASIC details come from whichever copy edited them last (front desk edits survive)
+  function mergeEntry(x, e) {
+    if (!x) return cleanEntry(e); if (!e) return cleanEntry(x);
+    const win = eT(e) > eT(x) ? e : x, lose = win === e ? x : e, out = { ...win };
+    if (bT(lose) > bT(win)) { for (const k of BASIC_KEYS) out[k] = lose[k] || ""; out.bAt = lose.bAt; }
+    for (const k of ["fileId", "shard", "h", "fileUpdatedAt"]) if (out[k] === undefined || out[k] === "") { if (lose[k] !== undefined && lose[k] !== "") out[k] = lose[k]; }
+    return cleanEntry(out);
+  }
+  // the front desk adds / edits basic details (writes the index only)
+  function fdEntry(cur, basics, who) { const now = new Date().toISOString(); return cleanEntry({ ...(cur || {}), ...Object.fromEntries(BASIC_KEYS.map(k => [k, String(basics[k] || "").trim()])), id: (cur && cur.id) || basics.id, bAt: now, w: now, updatedAt: cur ? cur.updatedAt || now : now, fileId: (cur && cur.fileId) || "", by: who || "frontdesk" }); }
   const eT = e => (e && (e.w || e.fileUpdatedAt || e.updatedAt)) || "";   // w = when this entry was computed from the file (newest view of the file wins)
   function mergeIndex(a, b) {   // per entry newest wins; patient tombstones win over older entries
     a = a || {}; b = b || {};
     const deleted = { ...(a.deleted || {}) };
     for (const [k, t] of Object.entries(b.deleted || {})) if (!deleted[k] || t > deleted[k]) deleted[k] = t;
     const patients = { ...(a.patients || {}) };
-    for (const [id, e] of Object.entries(b.patients || {})) { const x = patients[id]; if (!x || eT(e) > eT(x)) patients[id] = { ...e, fileId: e.fileId || (x && x.fileId) || "" }; else if (x && !x.fileId && e.fileId) patients[id] = { ...x, fileId: e.fileId }; }
+    for (const [id, e] of Object.entries(b.patients || {})) patients[id] = mergeEntry(patients[id], e);
+    for (const [id, e] of Object.entries(patients)) patients[id] = cleanEntry(e);   // never any clinical field in the index
     for (const [id, e] of Object.entries(patients)) { const t = deleted["patients/" + id]; if (t && t >= (e.updatedAt || "")) delete patients[id]; }
     return { ...a, ...b, patients, deleted };
   }
@@ -2683,7 +2719,7 @@ const CDB3 = (() => {
     for (const n of Object.values(extra)) if (n in cnt) cnt[n]++;
     return shards.reduce((best, n) => cnt[n] < cnt[best] || (cnt[n] === cnt[best] && n > best) ? n : best, shards[0]);   // ties → the newest shard
   }
-  return { SHARD_TAG, DEFAULT_SHARDS, shardName, hashInt, shardOfId, emptyShard, packShard, unpackShard, slice, pickShard, hash, partHash, stable, FOLDER, INDEX, FOLDER_TAG, INDEX_TAG, PFILE_TAG, pName, T, gz, gunzip, canGz, packVisit, unpackVisit, unpackPart, packDoc, partTime, entryOf, mergeIndex, indexContains, sameEntry, emptyIndex, splitLegacy };
+  return { SHARD_TAG, DEFAULT_SHARDS, shardName, hashInt, shardOfId, emptyShard, packShard, unpackShard, slice, pickShard, hash, partHash, stable, FOLDER, INDEX, FOLDER_TAG, INDEX_TAG, PFILE_TAG, pName, T, gz, gunzip, canGz, packVisit, unpackVisit, unpackPart, packDoc, partTime, entryOf, mergeIndex, mergeEntry, fdEntry, cleanEntry, INDEX_KEYS, BASIC_KEYS, indexContains, sameEntry, emptyIndex, splitLegacy };
 })();
 </script>
 <script>
@@ -2832,7 +2868,7 @@ async function loadConfig() {
   if (id) { try { remote = await driveDownload(id); } catch (e) { if (e.status === 404) id = null; else throw e; } }
   if (!id) { const f = (await driveList(`name='${qEsc(FDG.configName)}' and 'me' in owners and trashed=false`))[0]; if (f) { id = f.id; remote = await driveDownload(id); } }
   FD.configFileId = id;
-  if (remote && remote.kind === "frontdesk-config" && (remote.updatedAt || "") > (FD.config.updatedAt || "")) FD.config = { doctors: remote.doctors || [], clinicFileId: remote.clinicFileId || "", updatedAt: remote.updatedAt };
+  if (remote && remote.kind === "frontdesk-config" && (remote.updatedAt || "") > (FD.config.updatedAt || "")) FD.config = { doctors: remote.doctors || [], clinicFileId: remote.clinicFileId || "", indexId: remote.indexId || "", updatedAt: remote.updatedAt };
   else if ((FD.config.updatedAt || "") > ((remote && remote.updatedAt) || "")) await saveConfig(false);
   saveCache();
 }
@@ -2850,6 +2886,7 @@ async function saveConfig(touch = true) {
 function parseDriveFileId(s) { s = String(s || "").trim(); const m = /\/d\/([\w-]{20,})/.exec(s) || /[?&]id=([\w-]{20,})/.exec(s) || /^([\w-]{20,})$/.exec(s); return m ? m[1] : null; }
 const NOT_VISIBLE = "This Google account can't open that file from the page. Check that the doctor / clinic owner shared it with this e-mail, then connect it with Google Picker (the page can only open files you pick).";
 async function checkedOpen(id, want) {
+  if (want === "index") return checkedOpenIndex(id);
   let meta;
   try { meta = await driveMeta(id); } catch (e) { throw Object.assign(new Error(e.status === 404 || e.status === 403 ? NOT_VISIBLE : `Google Drive error ${e.status || ""}`), { status: e.status }); }
   const tag = (meta.appProperties || {}).tcmConsult || "";
@@ -2859,6 +2896,90 @@ async function checkedOpen(id, want) {
   const doc = await driveDownload(id);
   if (!doc || doc.kind !== (want === "slips" ? "frontdesk-slips" : "clinic-herb-prices")) throw new Error("That file was not made by TCM Consult Assistant.");
   return { meta, doc };
+}
+/* ---------- v25: clinic patient list — BASIC details only (index.json, shared WRITER by the clinic admin; never a data file) ---------- */
+async function checkedOpenIndex(id) {
+  let meta;
+  try { meta = await driveMeta(id); } catch (e) { throw Object.assign(new Error(e.status === 404 || e.status === 403 ? "This account can't open the clinic patient list — ask the clinic admin to add this e-mail under “Front desk”, then connect it with Google Picker." : `Google Drive error ${e.status || ""}`), { status: e.status }); }
+  const tag = (meta.appProperties || {}).tcmConsult || "";
+  if (meta.name !== CDB3.INDEX || tag !== CDB3.INDEX_TAG) throw new Error(`That is not the clinic patient list (${CDB3.FOLDER}/${CDB3.INDEX}).`);
+  if (meta.capabilities && meta.capabilities.canEdit === false) throw new Error("Read-only access — ask the clinic admin to add this e-mail under “Front desk” and press Save access.");
+  const doc = await driveDownload(id);
+  if (!doc || doc.kind !== "clinic-patients-index" || doc.format !== 4) throw new Error("That file is not the current clinic patient list.");
+  return { meta, doc };
+}
+async function connectPatients(input) {
+  const id = parseDriveFileId(input); if (!id) { setMsg("Paste the link of the clinic's index.json or its file ID.", true); return false; }
+  setMsg("Connecting…");
+  try {
+    const { meta, doc } = await checkedOpenIndex(id);
+    const owner = (meta.owners || [])[0] || {};
+    FD.pt = { doc, error: "", ownerName: owner.displayName || "" }; FD.config.indexId = id; await saveConfig(); renderAll();
+    setMsg("Clinic patient list connected ✓"); return true;
+  } catch (e) { setMsg(e.message, true); return false; }
+}
+async function loadPatients() {
+  if (!FD.config.indexId) return;
+  try { const doc = await driveDownload(FD.config.indexId); if (doc && doc.kind === "clinic-patients-index") FD.pt = { ...(FD.pt || {}), doc, error: "" }; }
+  catch (e) { if (e.status === 403 || e.status === 404) { FD.pt = { doc: null, error: "Access to the clinic patient list was removed — ask the clinic admin." }; } else if (FD.pt) FD.pt.error = "could not refresh (" + (e.status || "offline") + ")"; }
+}
+const ptKey = s => String(s || "").toLowerCase().normalize("NFKD").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+const ptPh = s => String(s || "").replace(/\D/g, "").slice(-9);
+function ptList() { return Object.values(((FD.pt || {}).doc || {}).patients || {}).sort((a, b) => String(a.name).localeCompare(String(b.name))); }
+function ptDupes(b, exceptId) {
+  const k = ptKey(b.name); if (!k) return [];
+  return ptList().filter(p => p.id !== exceptId && ptKey(p.name) === k).map(p => ({ p, strong: (b.dob && b.dob === p.dob) || (ptPh(b.contact) && ptPh(b.contact) === ptPh(p.contact)) }));
+}
+// re-read → merge (per entry; basic details newest-edit wins) → version check → write → verify; 6 tries — same as the doctors' app
+async function savePatientFD(id, basics) {
+  const pid = id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 8)), meta0 = id => gjson(`${FDG.drive}/files/${encodeURIComponent(id)}?fields=id,version`);
+  for (let attempt = 0; attempt < 6; attempt++) {
+    if (attempt) await new Promise(r => setTimeout(r, 120 + Math.random() * 300 * attempt));
+    const m1 = await meta0(FD.config.indexId), remote = await driveDownload(FD.config.indexId);
+    if (!remote || remote.format !== 4) throw new Error("The clinic patient list is not available right now.");
+    const mine = CDB3.fdEntry((remote.patients || {})[pid], { ...basics, id: pid }, FD.account.email);
+    const merged = CDB3.mergeIndex(remote, { patients: { [pid]: mine } });
+    const m2 = await meta0(FD.config.indexId); if (String(m2.version) !== String(m1.version)) continue;
+    await driveUpdate(FD.config.indexId, { ...merged, updatedAt: new Date().toISOString() });
+    const chk = await driveDownload(FD.config.indexId), got = chk && (chk.patients || {})[pid];
+    if (got && CDB3.BASIC_KEYS.every(k => (got[k] || "") === (mine[k] || ""))) { FD.pt = { ...(FD.pt || {}), doc: chk, error: "" }; return pid; }
+    if (got && (got.bAt || "") > mine.bAt) { FD.pt = { ...(FD.pt || {}), doc: chk }; return pid; }   // someone edited it after us
+  }
+  throw new Error("The patient list is busy (doctors are saving) — try again");
+}
+function renderPatients() {
+  const card = $("#ptCard"); if (!card) return;
+  const on = !!FD.config.indexId;
+  card.hidden = !on; if (!on) return;
+  const q = ptKey($("#ptSearch").value), qd = ptPh($("#ptSearch").value), all = ptList();
+  const hits = all.filter(p => !q || ptKey(p.name).includes(q) || (qd.length >= 3 && ptPh(p.contact).includes(qd)) || (p.dob || "").includes($("#ptSearch").value.trim())).slice(0, 60);
+  $("#ptCount").textContent = `${all.length} patient${all.length === 1 ? "" : "s"}`;
+  $("#ptErr").textContent = (FD.pt && FD.pt.error) || "";
+  $("#ptList").innerHTML = hits.map(p => `<li><span class="pt-n"><b>${esc(p.name)}</b> <span class="muted">${esc([p.dob ? "DOB " + p.dob : "", p.contact].filter(Boolean).join(" · ") || "no DOB / phone")}</span></span><button type="button" class="small" data-pt-edit="${esc(p.id)}">Edit</button></li>`).join("") || `<li class="muted">No patients${q ? " match" : " yet"}.</li>`;
+}
+function openPtForm(id) {
+  const p = id ? (((FD.pt || {}).doc || {}).patients || {})[id] : null, f = $("#ptForm");
+  f.hidden = false; f.dataset.id = id || "";
+  $("#ptFormTitle").textContent = p ? "Edit patient" : "Add patient";
+  $("#ptName").value = p ? p.name || "" : $("#ptSearch").value.trim(); $("#ptDob").value = p ? p.dob || "" : ""; $("#ptPhone").value = p ? p.contact || "" : "";
+  $("#ptDup").textContent = ""; $("#ptMsg").textContent = ""; $("#ptName").focus();
+}
+async function submitPtForm() {
+  const f = $("#ptForm"), id = f.dataset.id || null, b = { name: $("#ptName").value.trim(), dob: $("#ptDob").value, contact: $("#ptPhone").value.trim() };
+  if (!b.name) { $("#ptName").focus(); return; }
+  const cur = id ? ((FD.pt.doc || {}).patients || {})[id] : null;
+  if (!cur || ptKey(cur.name) !== ptKey(b.name) || cur.dob !== b.dob) {
+    const d = ptDupes(b, id);
+    if (d.length) {
+      const txt = d.map(x => `${x.p.name} (${[x.p.dob ? "DOB " + x.p.dob : "", x.p.contact].filter(Boolean).join(", ") || "no DOB / phone"})${x.strong ? " — same name and DOB/phone" : ""}`).join("\n");
+      $("#ptDup").textContent = `⚠ Same name already in the list: ${d.map(x => x.p.name + (x.p.dob ? " (" + x.p.dob + ")" : "")).join(", ")}`;
+      if (!confirm(`Possible duplicate patient:\n${txt}\n\nSave as ${id ? "this patient" : "a NEW patient"} anyway?`)) return;
+    }
+  }
+  $("#ptMsg").textContent = "Saving…"; $("#ptSaveBtn").disabled = true;
+  try { await savePatientFD(id, b); f.hidden = true; renderPatients(); toast(id ? "Patient updated" : "Patient added — doctors see them on their next sync"); }
+  catch (e) { $("#ptMsg").textContent = "Could not save: " + e.message; }
+  finally { $("#ptSaveBtn").disabled = false; }
 }
 function setMsg(t, err) { const m = $("#setupMsg"); m.textContent = t || ""; m.classList.toggle("err", !!err); }
 async function connectDoctor(input) {
@@ -2899,12 +3020,12 @@ async function openPicker(kind) {
   setMsg("Opening Google Drive…");
   try {
     const tok = await ensureToken(); await loadPicker();
-    const name = kind === "slips" ? FRONTDESK_SLIPS_FILE : CLINIC_PRICES_FILE;
+    const name = kind === "slips" ? FRONTDESK_SLIPS_FILE : kind === "index" ? CDB3.INDEX : CLINIC_PRICES_FILE;
     const view = new google.picker.DocsView(google.picker.ViewId.DOCS).setMimeTypes("application/json").setQuery(name).setOwnedByMe(false);
     let b = new google.picker.PickerBuilder().setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID).addView(view)
-      .setTitle(kind === "slips" ? "Select the doctors' front desk slips files (" + name + ")" : "Select the clinic herb price list (" + name + ")")
+      .setTitle(kind === "slips" ? "Select the doctors' front desk slips files (" + name + ")" : kind === "index" ? "Select the clinic patient list (" + CDB3.FOLDER + " / " + name + ")" : "Select the clinic herb price list (" + name + ")")
       .setCallback(async d => {
-        if (d.action === google.picker.Action.PICKED) { for (const doc of d.docs || []) { if (kind === "slips") await connectDoctor(doc.id); else await connectClinic(doc.id); } }
+        if (d.action === google.picker.Action.PICKED) { for (const doc of d.docs || []) { if (kind === "slips") await connectDoctor(doc.id); else if (kind === "index") await connectPatients(doc.id); else await connectClinic(doc.id); } }
         else if (d.action === google.picker.Action.CANCEL) setMsg("");
       });
     if (kind === "slips" && google.picker.Feature && google.picker.Feature.MULTISELECT_ENABLED) b = b.enableFeature(google.picker.Feature.MULTISELECT_ENABLED);
@@ -2927,6 +3048,7 @@ async function refreshAll(quiet) {
       try { const doc = await driveDownload(d.fileId); if (doc && doc.kind === "frontdesk-slips") { FD.docs[d.fileId] = { ...(FD.docs[d.fileId] || {}), doc, loadedAt: new Date().toISOString(), error: "" }; if (doc.doctor && doc.doctor.name && doc.doctor.name !== d.name) d.name = doc.doctor.name; } }
       catch (e) { FD.docs[d.fileId] = { ...(FD.docs[d.fileId] || {}), error: e.status === 404 || e.status === 403 ? "no access (unshared?)" : "offline / error " + (e.status || "") }; }
     }));
+    await loadPatients();
     if (FD.config.clinicFileId) {
       try { const doc = await driveDownload(FD.config.clinicFileId); if (doc && doc.kind === "clinic-herb-prices") FD.clinic = { ...(FD.clinic || {}), prices: Pricing.normalizeHerbPrices(doc.prices), fileId: FD.config.clinicFileId, error: "" }; if (FD.clinic && !FD.clinic.ownerName) { const m = await driveMeta(FD.config.clinicFileId); const o = (m.owners || [])[0] || {}; FD.clinic.ownerName = o.displayName || ""; FD.clinic.ownerEmail = o.emailAddress || ""; } }
       catch (e) { if (FD.clinic) FD.clinic.error = "could not refresh (" + (e.status || "offline") + ")"; }
@@ -3147,7 +3269,8 @@ function renderAuth() {
 function renderSetup() {
   $("#doctorChips").innerHTML = FD.config.doctors.map(d => { const e = FD.docs[d.fileId] || {}; return `<span class="dchip"><span class="dot" style="background:${esc(d.color || "#999")}"></span><b>${esc(d.name)}</b>${d.email ? ` <span class="muted">${esc(d.email)}</span>` : ""}${e.error ? ` <span class="err" title="${esc(e.error)}">⚠ ${esc(e.error)}</span>` : ""}<button type="button" data-remove="${esc(d.fileId)}" title="Remove" aria-label="Remove ${esc(d.name)}">×</button></span>`; }).join("") || `<span class="hint">No doctors connected yet. Each doctor sets your e-mail as “Front desk e-mail” in their app (₱ Rates); then connect their slips file here.</span>`;
   $("#connectDoctorBtn").disabled = !pickerAvailable();
-  $("#connectClinicBtn").disabled = !pickerAvailable();
+  $("#connectClinicBtn").disabled = !pickerAvailable(); $("#connectPtBtn").disabled = !pickerAvailable();
+  $("#ptStatus").innerHTML = FD.config.indexId ? (FD.pt && FD.pt.error ? `<span class="err">${esc(FD.pt.error)}</span>` : `✓ Connected · ${ptList().length} patients · name, DOB and phone only`) : "Not connected — ask the clinic admin to add this e-mail under “Front desk”, then connect <code>index.json</code>.";
   const c = FD.clinic;
   $("#clinicStatus").innerHTML = c && c.prices ? `📄 <b>${esc(c.ownerName || "Clinic owner")}</b>'s price list · read-only · ${esc(c.prices.mode === "gram" ? "per gram" : c.prices.mode === "pack" ? "per pack" : "per formula")} · updated ${esc(fmtDT(c.prices.updatedAt || c.modifiedTime))}${c.error ? ` <span style="color:#a12d22">⚠ ${esc(c.error)}</span>` : ""}`
     : "Not connected — bills use each doctor's estimate until the clinic price list is connected.";
@@ -3163,7 +3286,7 @@ function renderAll() {
   const on = !!FD.account;
   $("#welcome").hidden = on; $("#app").hidden = !on;
   if (!on) return;
-  renderSetup(); renderQueue(); renderDetail(); renderTotals();
+  renderSetup(); renderPatients(); renderQueue(); renderDetail(); renderTotals();
   $("#dayInput").value = FD.filter.day; $("#statusFilter").value = FD.filter.status;
 }
 function bind() {
@@ -3173,6 +3296,13 @@ function bind() {
   $("#setupDetails").addEventListener("toggle", () => { renderSetup._touched = true; });
   $("#connectDoctorBtn").onclick = () => openPicker("slips");
   $("#connectClinicBtn").onclick = () => openPicker("clinic");
+  $("#connectPtBtn").onclick = () => openPicker("index");
+  $("#pastePtBtn").onclick = async () => { if (await connectPatients($("#pastePtInput").value)) $("#pastePtInput").value = ""; };
+  $("#ptSearch").addEventListener("input", () => renderPatients());
+  $("#ptAddBtn").onclick = () => openPtForm(null);
+  $("#ptList").addEventListener("click", e => { const b = e.target.closest("[data-pt-edit]"); if (b) openPtForm(b.dataset.ptEdit); });
+  $("#ptForm").addEventListener("submit", e => { e.preventDefault(); submitPtForm(); });
+  $("#ptCancelBtn").onclick = () => { $("#ptForm").hidden = true; };
   $("#pasteDoctorBtn").onclick = async () => { if (await connectDoctor($("#pasteDoctorInput").value)) $("#pasteDoctorInput").value = ""; };
   $("#pasteClinicBtn").onclick = async () => { if (await connectClinic($("#pasteClinicInput").value)) $("#pasteClinicInput").value = ""; };
   $("#doctorChips").addEventListener("click", e => { const b = e.target.closest("[data-remove]"); if (b) removeDoctor(b.dataset.remove); });
@@ -3211,7 +3341,7 @@ function init() {
   else renderAll();
   window.__fdReady = true;
 }
-window.FDESK = { FD, HN, Slips, Pricing, connectDoctor, connectClinic, refreshAll, markPaid, toggleDispensed, undoPaid, writeFd, buildCSV, receiptHTML, sheetHTML, selected, queueItems, allItems, billFor, renderAll, checkedOpen, parseDriveFileId, pickerAvailable, PICKER_APP_ID, setPrintSize, signIn };
+window.FDESK = { ptDupes, connectPatients, savePatientFD, loadPatients, renderPatients, FD, HN, Slips, Pricing, connectDoctor, connectClinic, refreshAll, markPaid, toggleDispensed, undoPaid, writeFd, buildCSV, receiptHTML, sheetHTML, selected, queueItems, allItems, billFor, renderAll, checkedOpen, parseDriveFileId, pickerAvailable, PICKER_APP_ID, setPrintSize, signIn };
 init();
 </script>
 </body>

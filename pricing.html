@@ -189,17 +189,19 @@ textarea{width:100%}
     </div>
     <div id="dbOn" hidden>
       <div class="hint" id="dbInfo"></div>
-      <h2 style="margin-top:14px">Doctors with access to the patient database</h2>
-      <p class="hint">Ticked doctors can read and edit <b>all</b> patients and visits (Google Drive “editor” access to the clinic patient folder only). Untick and Save to remove access — the app then clears the shared patients from that doctor's devices.</p>
-      <div class="db-list" id="dbList"></div>
-      <div class="row db-add"><label style="flex:1 1 220px">Add a doctor's Google e-mail<input type="email" id="dbAddEmail" placeholder="dr.cruz@gmail.com" autocomplete="off" spellcheck="false"></label>
-        <label class="check"><input type="checkbox" id="dbAlsoPrice" checked> also share the price list (read-only)</label><button type="button" class="small" id="dbAddBtn">Add</button></div>
-      <label class="hint" style="display:block;margin-top:8px">Front desk e-mail(s) — <b>never</b> given access to patient records<textarea id="dbFrontDesk" rows="2" spellcheck="false" placeholder="frontdesk@clinic.ph"></textarea></label>
-      <div class="actions"><button type="button" class="primary" id="dbSaveBtn">Save access</button><span class="msg" id="dbMsg" role="status"></span></div>
     </div>
   </section>
+  <section class="card" id="accessCard" hidden>
+    <h2>👩‍⚕️ Doctors</h2>
+    <p class="hint">Tick a doctor to give them <b>both</b>: edit access to the clinic patient database (all patients and visits) <b>and</b> read-only access to the herb price list. Untick to remove both — their app then clears the clinic's patients from their devices. Changes apply when you press <b>Save access</b>.</p>
+    <div class="db-list" id="dbList"></div>
+    <div class="row db-add"><label style="flex:1 1 220px">Add a doctor's Google e-mail<input type="email" id="dbAddEmail" placeholder="dr.cruz@gmail.com" autocomplete="off" spellcheck="false"></label><button type="button" class="small" id="dbAddBtn">Add</button></div>
+    <h2 style="margin-top:16px">🧾 Front desk</h2>
+    <label class="hint" style="display:block">Front desk Google e-mail(s) — get the herb price list (read-only) and the clinic <b>patient list with basic details only</b> (name, date of birth, phone — they can add and edit these). <b>Never</b> visits, diagnoses, notes or prescriptions<textarea id="dbFrontDesk" rows="2" spellcheck="false" placeholder="frontdesk@clinic.ph"></textarea></label>
+    <div class="actions"><button type="button" class="primary" id="dbSaveBtn">Save access</button><span class="msg" id="dbMsg" role="status"></span></div>
+  </section>
   <div id="editor" hidden>
-    <section class="card"><div class="detail-head"><div style="flex:1;min-width:0"><h2>Price list</h2><div class="hint" id="fileInfo"></div></div></div></section>
+    <section class="card"><div class="detail-head"><div style="flex:1;min-width:0"><h2>💊 Herb price list</h2><div class="hint" id="fileInfo"></div></div></div></section>
     <div class="pr-grid">
       <section class="card">
         <h2>Pricing</h2>
@@ -213,10 +215,8 @@ textarea{width:100%}
         <div class="row m-formula"><label>Price per formula<span class="money"><span class="cur">₱</span><input type="number" inputmode="decimal" min="0" step="0.01" id="perFormula"></span></label><label class="check"><input type="checkbox" id="fxPacks"> × number of packs</label></div>
         <div class="row"><label>Preparation / decoction fee per pack<span class="money"><span class="cur">₱</span><input type="number" inputmode="decimal" min="0" step="0.01" id="prepFee"></span></label>
           <label>Round the total<select id="rounding"><option value="0">No rounding</option><option value="1">Nearest ₱1</option><option value="5">Nearest ₱5</option><option value="10">Nearest ₱10</option></select></label></div>
-        <h2 style="margin-top:16px">Shared read-only with</h2>
-        <label class="hint" style="display:block">Doctors' and front desk Google e-mails (one per line or comma-separated)<textarea id="shareInput" rows="4" spellcheck="false" placeholder="dr.cruz@gmail.com&#10;frontdesk@clinic.ph"></textarea></label>
-        <div class="share-st" id="shareStatus"></div>
-        <p class="hint">On Save, Google Drive sharing is updated (read-only; Google e-mails each new person once). Removed e-mails lose access. Doctors connect it in their app: ₱ Rates → Connect clinic price list.</p>
+        <textarea id="shareInput" hidden aria-hidden="true"></textarea><div class="share-st" id="shareStatus" hidden></div>
+        <p class="hint">Who can see this price list is set under <b>👩‍⚕️ Doctors</b> and <b>🧾 Front desk</b> above.</p>
         <h2 style="margin-top:16px">Last updated</h2>
         <div class="hint" id="lastUpdated"></div>
         <ul class="audit" id="auditList"></ul>
@@ -240,7 +240,7 @@ textarea{width:100%}
     </div>
   </div>
 </div>
-<div class="savebar" id="saveBar" hidden><button type="button" class="primary" id="saveBtn">Save &amp; share</button><button type="button" id="revertBtn">Discard changes</button><span class="dirty" id="dirtyNote"></span><span class="msg" id="saveMsg" role="status"></span></div>
+<div class="savebar" id="saveBar" hidden><button type="button" class="primary" id="saveBtn">Save prices</button><button type="button" id="revertBtn">Discard changes</button><span class="dirty" id="dirtyNote"></span><span class="msg" id="saveMsg" role="status"></span></div>
 <div class="toast" id="toast"></div>
 <script>
 /* =====================================================================
@@ -2662,18 +2662,32 @@ const CDB3 = (() => {
   const partHash = part => hash([...part.patients, ...part.visits].map(r => r.id + "@" + T(r)).concat(Object.entries(part.deleted || {}).map(([k, t]) => k + "@" + t)).sort().join("|"));
   function entryOf(part, pid, fileId, size) {
     const p = part.patients.find(x => x.id === pid); if (!p) return null;
-    const vs = part.visits.filter(v => v.patientId === pid).sort((a, b) => (b.startedAt || "").localeCompare(a.startedAt || ""));
-    const l = vs[0], d = l && l.doctor;
-    return { id: pid, fileId, name: p.name || "", contact: p.contact || "", dob: p.dob || "", age: p.age ?? "", sex: p.sex || "", createdBy: p.createdBy || "",
-      updatedAt: T(p), fileUpdatedAt: partTime(part), h: partHash(part), w: new Date().toISOString(), nVisits: vs.length, last: l ? { at: l.startedAt || "", doctor: d ? { name: d.name || "", email: d.email || "" } : null } : null, size: +size || 0 };
+    // v25: the index is shared with the front desk → BASIC details only (no visits, diagnosis, notes, sex, age, doctor)
+    return { id: pid, fileId, name: p.name || "", contact: p.contact || "", dob: p.dob || "", bAt: p.basicsAt || T(p),
+      updatedAt: T(p), fileUpdatedAt: partTime(part), h: partHash(part), w: new Date().toISOString(), size: +size || 0 };
   }
+  const INDEX_KEYS = ["id", "fileId", "shard", "name", "contact", "dob", "bAt", "updatedAt", "fileUpdatedAt", "h", "w", "size", "by"];
+  const BASIC_KEYS = ["name", "contact", "dob"];
+  const cleanEntry = e => Object.fromEntries(INDEX_KEYS.filter(k => e[k] !== undefined).map(k => [k, e[k]]));
+  const bT = e => (e && (e.bAt || e.updatedAt)) || "";
+  // one entry from two copies: newest view wins, but the BASIC details come from whichever copy edited them last (front desk edits survive)
+  function mergeEntry(x, e) {
+    if (!x) return cleanEntry(e); if (!e) return cleanEntry(x);
+    const win = eT(e) > eT(x) ? e : x, lose = win === e ? x : e, out = { ...win };
+    if (bT(lose) > bT(win)) { for (const k of BASIC_KEYS) out[k] = lose[k] || ""; out.bAt = lose.bAt; }
+    for (const k of ["fileId", "shard", "h", "fileUpdatedAt"]) if (out[k] === undefined || out[k] === "") { if (lose[k] !== undefined && lose[k] !== "") out[k] = lose[k]; }
+    return cleanEntry(out);
+  }
+  // the front desk adds / edits basic details (writes the index only)
+  function fdEntry(cur, basics, who) { const now = new Date().toISOString(); return cleanEntry({ ...(cur || {}), ...Object.fromEntries(BASIC_KEYS.map(k => [k, String(basics[k] || "").trim()])), id: (cur && cur.id) || basics.id, bAt: now, w: now, updatedAt: cur ? cur.updatedAt || now : now, fileId: (cur && cur.fileId) || "", by: who || "frontdesk" }); }
   const eT = e => (e && (e.w || e.fileUpdatedAt || e.updatedAt)) || "";   // w = when this entry was computed from the file (newest view of the file wins)
   function mergeIndex(a, b) {   // per entry newest wins; patient tombstones win over older entries
     a = a || {}; b = b || {};
     const deleted = { ...(a.deleted || {}) };
     for (const [k, t] of Object.entries(b.deleted || {})) if (!deleted[k] || t > deleted[k]) deleted[k] = t;
     const patients = { ...(a.patients || {}) };
-    for (const [id, e] of Object.entries(b.patients || {})) { const x = patients[id]; if (!x || eT(e) > eT(x)) patients[id] = { ...e, fileId: e.fileId || (x && x.fileId) || "" }; else if (x && !x.fileId && e.fileId) patients[id] = { ...x, fileId: e.fileId }; }
+    for (const [id, e] of Object.entries(b.patients || {})) patients[id] = mergeEntry(patients[id], e);
+    for (const [id, e] of Object.entries(patients)) patients[id] = cleanEntry(e);   // never any clinical field in the index
     for (const [id, e] of Object.entries(patients)) { const t = deleted["patients/" + id]; if (t && t >= (e.updatedAt || "")) delete patients[id]; }
     return { ...a, ...b, patients, deleted };
   }
@@ -2720,7 +2734,7 @@ const CDB3 = (() => {
     for (const n of Object.values(extra)) if (n in cnt) cnt[n]++;
     return shards.reduce((best, n) => cnt[n] < cnt[best] || (cnt[n] === cnt[best] && n > best) ? n : best, shards[0]);   // ties → the newest shard
   }
-  return { SHARD_TAG, DEFAULT_SHARDS, shardName, hashInt, shardOfId, emptyShard, packShard, unpackShard, slice, pickShard, hash, partHash, stable, FOLDER, INDEX, FOLDER_TAG, INDEX_TAG, PFILE_TAG, pName, T, gz, gunzip, canGz, packVisit, unpackVisit, unpackPart, packDoc, partTime, entryOf, mergeIndex, indexContains, sameEntry, emptyIndex, splitLegacy };
+  return { SHARD_TAG, DEFAULT_SHARDS, shardName, hashInt, shardOfId, emptyShard, packShard, unpackShard, slice, pickShard, hash, partHash, stable, FOLDER, INDEX, FOLDER_TAG, INDEX_TAG, PFILE_TAG, pName, T, gz, gunzip, canGz, packVisit, unpackVisit, unpackPart, packDoc, partTime, entryOf, mergeIndex, mergeEntry, fdEntry, cleanEntry, INDEX_KEYS, BASIC_KEYS, indexContains, sameEntry, emptyIndex, splitLegacy };
 })();
 </script>
 <script>
@@ -2849,28 +2863,24 @@ const D = { fileId: null, doc: null, size: 0, perms: [], rows: [], frontDesk: []
 const FD_HINT = /front.?desk|reception|cashier/i;
 const dbMeta = id => gjson(`${PG.drive}/files/${encodeURIComponent(id)}?fields=${encodeURIComponent("id,name,version,modifiedTime,size,parents,appProperties,owners(displayName,emailAddress,me)")}`);
 const nRec = x => Array.isArray(x) ? x.length : Object.keys(x || {}).length;
-const permTarget = () => D.layout === 2 ? D.fileId : D.folderId;   // v23+: doctors get WRITER on the FOLDER
-async function loadDb() {
+const permTarget = () => D.folderId;   // doctors get WRITER on the FOLDER (+ every file in it)
+async function loadDb() {   // v25: only the sharded database (format 4); older clinic databases are ignored and left untouched (no migration)
   D.loaded = true;
-  const idx = (await driveList(`name='${qEsc(CDB3.INDEX)}' and 'me' in owners and trashed=false`)).find(x => (x.appProperties || {}).tcmConsult === CDB3.INDEX_TAG);
-  if (idx) {
-    const meta = await dbMeta(idx.id), doc = await driveDownload(idx.id);
-    if (doc && doc.kind === "clinic-patients-index") {
-      Object.assign(D, { layout: doc.format === 4 ? 4 : 3, fileId: idx.id, folderId: doc.folderId || (meta.parents || [])[0], doc, size: +meta.size || 0, total: +meta.size || 0, idxMeta: meta });
-      if (D.layout === 4) { const sizes = await Promise.all((doc.shards || []).map(s => dbMeta(s.fileId).then(m => +m.size || 0).catch(() => 0))); D.total = D.size + sizes.reduce((a, b) => a + b, 0); }
-      readAccess(doc); await loadDbPerms(); renderDb();
-      if (D.layout === 3 && !D.migrating) setTimeout(() => migrateToShards().catch(e => console.warn(e)), 0);   // v24: automatic
-      return;
-    }
+  const cands = (await driveList(`name='${qEsc(CDB3.INDEX)}' and 'me' in owners and trashed=false`)).filter(x => (x.appProperties || {}).tcmConsult === CDB3.INDEX_TAG);
+  let old = null;
+  for (const c of cands) {
+    const doc = await driveDownload(c.id).catch(() => null);
+    if (!doc || doc.kind !== "clinic-patients-index") continue;
+    if (doc.format !== 4) { old = old || doc; continue; }
+    const meta = await dbMeta(c.id);
+    Object.assign(D, { layout: 4, fileId: c.id, folderId: doc.folderId || (meta.parents || [])[0], doc, size: +meta.size || 0, total: +meta.size || 0, idxMeta: meta });
+    const sizes = await Promise.all((doc.shards || []).map(s => dbMeta(s.fileId).then(m => +m.size || 0).catch(() => 0))); D.total = D.size + sizes.reduce((a, b) => a + b, 0);
+    readAccess(doc); await loadDbPerms(); renderDb();
+    return;
   }
-  const files = await driveList(`name='${qEsc(CLINIC_PATIENTS_FILE)}' and 'me' in owners and trashed=false`);
-  const f = files.find(x => (x.appProperties || {}).tcmConsult === "clinic-patients") || files.find(x => !(x.appProperties || {}).tcmConsult);
-  if (!f) { Object.assign(D, { fileId: null, doc: null, layout: 0 }); renderDb(); return; }
-  const meta = await dbMeta(f.id); const doc = await driveDownload(f.id);
-  if (!doc || doc.kind !== "clinic-patients") { D.fileId = null; renderDb(); return; }
-  Object.assign(D, { layout: 2, fileId: f.id, folderId: null, doc, size: +meta.size || 0, total: +meta.size || 0 });
-  readAccess(doc); await loadDbPerms(); renderDb();
-  if (!D.migrating) setTimeout(() => migrateToShards().catch(e => console.warn(e)), 0);   // v24: automatic
+  Object.assign(D, { fileId: null, doc: null, layout: 0, folderId: null });
+  if (old && !D.rows.length) readAccess(old);   // only the list of doctors' e-mails carries over to the new database
+  renderDb();
 }
 function readAccess(doc) {
   const acc = doc.access || {};
@@ -2917,10 +2927,11 @@ async function createDb() {   // v24: folder + index.json + N shards, all owned 
   const folderId = await createFolderIn(await ensureFolder(), CDB3.FOLDER, { tcmConsult: CDB3.FOLDER_TAG });
   const shards = await writeShards(folderId, 0, N, {}, (i, n) => { $("#dbMsg") && ($("#dbMsg").textContent = `Creating data files… ${i} / ${n}`); });
   const idx = { ...CDB3.emptyIndex(ownerOf(), folderId), format: 4, shards, createdBy: { email: P.account.email, name: P.account.name },
-    note: "Clinic patient database from TCM Consult Assistant (index + fixed shard files in this folder, all owned by the clinic owner). Contains patient records — shared only with the clinic's doctors. Keep private.",
-    access: { doctors: [], frontDesk: [], updatedAt: now, updatedBy: P.account.email } };
+    note: "Clinic patient database from TCM Consult Assistant (index + fixed shard files in this folder, all owned by the clinic owner). This index holds BASIC details only (name, date of birth, phone, data file number) and is shared with the clinic's doctors and front desk; visits and clinical notes are only in the data files (doctors only). Keep private.",
+    access: { doctors: D.rows.map(r => ({ email: r.email, on: r.on })), frontDesk: D.frontDesk, updatedAt: now, updatedBy: P.account.email } };
   await createIn(folderId, CDB3.INDEX, idx, { tcmConsult: CDB3.INDEX_TAG }, IDX_DESC);
   await loadDb(); toast("Clinic patient database created"); $("#dbMsg") && ($("#dbMsg").textContent = "");
+  if (D.rows.some(r => r.on) || D.frontDesk.length) await saveDbAccess();   // share the new database right away (doctors: folder; front desk: index only)
 }
 // read-modify-verify on the index (doctors write it too)
 async function updateIndex(fn) {
@@ -2946,97 +2957,6 @@ async function addShards() {
   } catch (e) { m.textContent = "Could not add data files: " + e.message; m.classList.add("err"); }
 }
 // drive.file: let the owner's app open files it didn't create (patient files added by doctors in the old layout)
-function pickFiles(folderId, ids, title) {
-  return new Promise(async (resolve, reject) => {
-    try {
-      const tok = await ensureToken(); await loadPicker();
-      const v = new google.picker.DocsView(google.picker.ViewId.DOCS).setIncludeFolders(true).setOwnedByMe(false);
-      if (v.setParent) v.setParent(folderId); if (ids.length && v.setFileIds) v.setFileIds(ids.join(","));
-      new google.picker.PickerBuilder().setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID).addView(v).enableFeature(google.picker.Feature.MULTISELECT_ENABLED).setTitle(title)
-        .setCallback(d => { if (d.action === google.picker.Action.PICKED) resolve(d.docs || []); else if (d.action === google.picker.Action.CANCEL) resolve([]); }).build().setVisible(true);
-    } catch (e) { reject(e); }
-  });
-}
-async function moveToBackup(fileIds, backupId, folderId) {   // keep old files: move into the backup subfolder (or rename in place)
-  let moved = 0, renamed = 0;
-  for (const id of fileIds) {
-    try { await patchMeta(id, { appProperties: { tcmConsult: "clinic-backup" } }, `&addParents=${encodeURIComponent(backupId)}&removeParents=${encodeURIComponent(folderId)}`); moved++; }
-    catch { try { const m = await dbMeta(id); await patchMeta(id, { name: "backup_" + m.name, appProperties: { tcmConsult: "clinic-backup" } }); renamed++; } catch {} }
-  }
-  return { moved, renamed };
-}
-// v24: automatic migration to shards — from one-file-per-patient (v23) or from the single tcm-clinic-patients.json (v21); old files are kept
-async function migrateToShards() {
-  if (D.migrating || !(D.layout === 2 || D.layout === 3)) return;
-  D.migrating = true;
-  const m = $("#dbMsg"); m.classList.remove("err"); m.textContent = "Upgrading the clinic database to shared data files (automatic)…";
-  const doctors = D.rows.filter(r => r.on && !D.frontDesk.includes(r.email)).map(r => r.email), N = CDB3.DEFAULT_SHARDS, day = new Date().toISOString().slice(0, 10);
-  const legacyId = D.layout === 2 ? D.fileId : null, idxId = D.layout === 3 ? D.fileId : null;
-  let locked = false;
-  try {
-    // 1. lock: doctors' apps see the marker and keep their changes locally until this is done
-    if (legacyId) { await patchMeta(legacyId, { appProperties: { tcmConsult: "clinic-patients-upgrading" } }); await syncWriters(legacyId, doctors, "reader"); }
-    else await patchMeta(idxId, { appProperties: { phase: "upgrading" } });
-    locked = true;
-    // 2. collect everything (newest wins, tombstones respected)
-    let all = { patients: [], visits: [], deleted: {} }; const oldFiles = [];
-    const add = part => { const x = mergeAll(all, part); all = x; };
-    let folderId = D.folderId, idx0 = null;
-    if (legacyId) add(await driveDownload(legacyId));
-    else {
-      idx0 = await driveDownload(idxId);
-      const ids = [...Object.values(idx0.patients || {}).map(e => e.fileId), ...Object.values(idx0.orphans || {})].filter(Boolean);
-      const missing = [];
-      for (const id of ids) { try { await dbMeta(id); } catch { missing.push(id); } }
-      if (missing.length) {
-        m.textContent = `${missing.length} patient file(s) were created by doctors — select them in Google Picker so this page may read them…`;
-        await pickFiles(folderId, missing, `Allow the upgrade to read ${missing.length} patient file${missing.length === 1 ? "" : "s"}: select all shown, then Select`);
-        const still = []; for (const id of missing) { try { await dbMeta(id); } catch { still.push(id); } }
-        if (still.length) throw new Error(`${still.length} patient file(s) could not be opened — run the upgrade again and select all files`);
-      }
-      for (const id of ids) { add(await CDB3.unpackPart(await driveDownload(id))); oldFiles.push(id); }
-      add({ patients: [], visits: [], deleted: idx0.deleted || {} });
-      // an older single-file backup of this clinic (renamed by the v23 upgrade) is merged too
-      for (const b of await driveList(`name contains 'tcm-clinic-patients.backup' and 'me' in owners and trashed=false`)) { try { const d = await driveDownload(b.id); if (d && d.kind === "clinic-patients") add(d); } catch {} }
-    }
-    // 3. shards (owner-created) + index
-    const parts = {}, entries = {};
-    for (const p of all.patients) { const n = CDB3.shardOfId(p.id, N); (parts[n] = parts[n] || { patients: [], visits: [], deleted: {} }).patients.push(p); }
-    for (const v of all.visits) { const n = CDB3.shardOfId(v.patientId || v.id, N); (parts[n] = parts[n] || { patients: [], visits: [], deleted: {} }).visits.push(v); }
-    for (const [k, t] of Object.entries(all.deleted)) { const [kind, id] = k.split("/"); const owner = kind === "visits" ? ((all.visits.find(v => v.id === id) || {}).patientId || id) : id; const n = CDB3.shardOfId(owner, N); (parts[n] = parts[n] || { patients: [], visits: [], deleted: {} }).deleted[k] = t; }
-    if (legacyId) folderId = await createFolderIn((((await dbMeta(legacyId)).parents) || [])[0] || await ensureFolder(), CDB3.FOLDER, { tcmConsult: CDB3.FOLDER_TAG });
-    const shards = await writeShards(folderId, 0, N, parts, (i, n) => { m.textContent = `Upgrading… data file ${i} / ${n}`; });
-    for (const s of shards) { const part = parts[s.n]; if (!part) continue; for (const p of part.patients) { const e = CDB3.entryOf(CDB3.slice(part, p.id), p.id, s.fileId, 0); if (e) entries[p.id] = { ...e, shard: s.n }; } }
-    const pDel = Object.fromEntries(Object.entries(all.deleted).filter(([k]) => k.startsWith("patients/")));
-    const base = legacyId ? { ...CDB3.emptyIndex((await driveDownload(legacyId)).owner || ownerOf(), folderId), access: D.doc.access || { doctors: [], frontDesk: [] } } : idx0;
-    const idx = { ...base, format: 4, folderId, shards, patients: entries, deleted: pDel, orphans: undefined, updatedAt: new Date().toISOString(),
-      migratedFrom: { layout: legacyId ? "single file" : "one file per patient", at: new Date().toISOString(), patients: all.patients.length, visits: all.visits.length } };
-    let indexId = idxId;
-    if (legacyId) indexId = (await createIn(folderId, CDB3.INDEX, idx, { tcmConsult: CDB3.INDEX_TAG }, IDX_DESC)).id;
-    else await driveUpdate(idxId, idx);   // in place: doctors already have this file open
-    // 4. keep the old files as a backup
-    let bk = { moved: 0, renamed: 0 };
-    if (oldFiles.length) { const bid = await createFolderIn(folderId, `Backup before shards ${day}`, { tcmConsult: "clinic-backup-folder" }); bk = await moveToBackup(oldFiles, bid, folderId); }
-    await syncWriters(folderId, doctors);
-    if (legacyId) await patchMeta(legacyId, { name: `tcm-clinic-patients.backup-${day}.json`, appProperties: { tcmConsult: "clinic-patients-backup", upgradedTo: indexId, upgradedFolder: folderId } });
-    else await patchMeta(idxId, { appProperties: { phase: "" } });
-    locked = false;
-    D.migrating = false;
-    await loadDb();
-    m.textContent = `Upgraded ✓ — ${all.patients.length} patients and ${all.visits.length} visits now in ${N} data files (all owned by this account).` + (oldFiles.length ? ` The ${oldFiles.length} old patient files were kept in “Backup before shards ${day}”${bk.renamed ? ` (${bk.renamed} renamed “backup_…” in place)` : ""}.` : legacyId ? ` The old file is kept as tcm-clinic-patients.backup-${day}.json.` : "");
-    toast("Clinic database upgraded");
-  } catch (e) {
-    console.warn("upgrade", e);
-    if (locked) { try { if (legacyId) { await patchMeta(legacyId, { appProperties: { tcmConsult: "clinic-patients" } }); await syncWriters(legacyId, doctors); } else await patchMeta(idxId, { appProperties: { phase: "" } }); } catch {} }
-    m.textContent = "Upgrade failed — nothing was changed in the existing database (" + e.message + "). Reload the page to try again."; m.classList.add("err");
-  } finally { D.migrating = false; }
-}
-function mergeAll(a, b) {   // newest wins per record; tombstones win over older records
-  b = b || {}; const del = { ...(a.deleted || {}) }; for (const [k, t] of Object.entries(b.deleted || {})) if (!del[k] || t > del[k]) del[k] = t;
-  const T = CDB3.T, out = { deleted: del };
-  for (const kind of ["patients", "visits"]) { const mm = new Map(); for (const r of [...(a[kind] || []), ...(b[kind] || [])]) { if (!r || !r.id) continue; const c = mm.get(r.id); if (!c || T(r) > T(c)) mm.set(r.id, r); } out[kind] = [...mm.values()].filter(r => !(del[kind + "/" + r.id] >= T(r))); }
-  return out;
-}
 function readDbForm() {
   D.frontDesk = parseEmails($("#dbFrontDesk").value);
   document.querySelectorAll("[data-db-on]").forEach(x => { const r = D.rows.find(y => y.email === x.dataset.dbOn); if (r) r.on = x.checked; });
@@ -3050,11 +2970,9 @@ function dbAdd() {
     if (D.frontDesk.includes(e)) { notes.push(`${e} is the front desk — never given access`); continue; }
     if (FD_HINT.test(e) && !confirm(`${e} looks like a front desk / reception address. The front desk must not get access to patient records. Add it as a DOCTOR anyway?`)) continue;
     const r = D.rows.find(x => x.email === e); if (r) r.on = true; else D.rows.push({ email: e, on: true });
-    if ($("#dbAlsoPrice").checked && P.draft) { const cur = parseEmails($("#shareInput").value); if (!cur.includes(e)) { $("#shareInput").value = [...cur, e].join("\n"); markDirty(); renderShareStatus(); notes.push(`${e} added to the price list share list — press “Save & share” below to publish`); } }
-    else if ($("#dbAlsoPrice").checked && !P.draft) notes.push("no price list yet — create it below to share prices");
   }
   $("#dbAddEmail").value = ""; renderDbList();
-  m.classList.remove("err"); m.textContent = notes.join(" · ") || "Added — press “Save access” to give access.";
+  m.classList.remove("err"); m.textContent = notes.join(" · ") || "Added — press “Save access” to give access (patient database + price list).";
 }
 async function syncWriters(fileId, emails, role = "writer", opt = {}) {
   const base = `${PG.drive}/files/${encodeURIComponent(fileId)}/permissions`;
@@ -3073,31 +2991,52 @@ async function syncWriters(fileId, emails, role = "writer", opt = {}) {
   }
   return status;
 }
-async function saveDbAccess() {
+async function saveDbAccess() {   // ONE save: patient database (writer on folder + files) AND price list (reader) for ticked doctors; front desk: price list only
   readDbForm();
   const m = $("#dbMsg"); m.classList.remove("err");
+  if (!D.fileId && !P.fileId) { m.textContent = "Create the clinic patient database or the price list first."; m.classList.add("err"); return; }
   const blocked = D.rows.filter(r => r.on && D.frontDesk.includes(r.email));
   for (const r of blocked) r.on = false;
   if (blocked.length) alert(`Not given access — front desk e-mail${blocked.length > 1 ? "s" : ""}: ${blocked.map(r => r.email).join(", ")}.\nThe front desk must never have access to patient records.`);
+  const lose = D.rows.filter(r => !r.on && /^price list only/.test(D.status[r.email] || ""));
+  if (lose.length && !confirm(`${lose.map(r => r.email).join(", ")} ${lose.length === 1 ? "has" : "have"} the price list only (older setting). Unticked doctors lose price list access on Save. Continue?`)) return;
   m.textContent = "Saving…"; $("#dbSaveBtn").disabled = true;
   try {
     const now = new Date().toISOString(), access = { doctors: D.rows.map(r => ({ email: r.email, on: r.on })), frontDesk: D.frontDesk, updatedAt: now, updatedBy: P.account.email };
-    let ok = false;
-    for (let i = 0; i < 5 && !ok; i++) {   // doctors may be writing records at the same time: re-read, change only `access`, verify
-      const meta = await dbMeta(D.fileId), doc = await driveDownload(D.fileId);
-      const m2 = await dbMeta(D.fileId); if (String(m2.version) !== String(meta.version)) continue;
-      await driveUpdate(D.fileId, { ...doc, access });
-      const chk = await driveDownload(D.fileId); ok = !!(chk.access && chk.access.updatedAt === now && nRec(chk.patients) >= nRec(doc.patients));
+    const want = D.rows.filter(r => r.on).map(r => r.email), st = {};
+    if (D.fileId) {
+      let ok = false;
+      for (let i = 0; i < 5 && !ok; i++) {   // doctors may be writing records at the same time: re-read, change only `access`, verify
+        const meta = await dbMeta(D.fileId), doc = await driveDownload(D.fileId);
+        const m2 = await dbMeta(D.fileId); if (String(m2.version) !== String(meta.version)) continue;
+        await driveUpdate(D.fileId, { ...doc, access });
+        const chk = await driveDownload(D.fileId); ok = !!(chk.access && chk.access.updatedAt === now && nRec(chk.patients) >= nRec(doc.patients));
+      }
+      if (!ok) throw new Error("the database was busy — try again");
+      Object.assign(st, await syncWriters(permTarget(), want));   // doctors: writer on the folder (→ index + every data file)
+      // front desk: writer on index.json ONLY (basic details: name, DOB, phone) — never the folder or a data file
+      const me = normEmail(P.account.email), fdW = D.frontDesk.filter(e => e !== me);
+      for (const [e, v] of Object.entries(await syncWriters(D.fileId, [...new Set([...want, ...fdW])], "writer"))) if (fdW.includes(e) || /failed|error/.test(v)) st[e] = fdW.includes(e) ? (/error/.test(v) ? v : "patient list (basic details)") : v;
+      const ids = [...(D.doc.shards || []).map(s => s.fileId)];
+      await Promise.all(Array.from({ length: 8 }, async () => { while (ids.length) { const id = ids.shift(); try { Object.assign(st, Object.fromEntries(Object.entries(await syncWriters(id, want, "writer", { removeOnly: true })).filter(([, v]) => /failed/.test(v)))); } catch {} } }));   // no direct permission on the index / data files
     }
-    if (!ok) throw new Error("the database was busy — try again");
-    const want = D.rows.filter(r => r.on).map(r => r.email);
-    const st = await syncWriters(permTarget(), want);
-    if (D.layout === 4) { const ids = [D.fileId, ...(D.doc.shards || []).map(s => s.fileId)]; await Promise.all(Array.from({ length: 8 }, async () => { while (ids.length) { const id = ids.shift(); try { Object.assign(st, Object.fromEntries(Object.entries(await syncWriters(id, want, "writer", { removeOnly: true })).filter(([, v]) => /failed/.test(v)))); } catch {} } })); }   // v24: also any direct permission on the index / data files
-    await loadDb();
+    if (P.fileId) {   // price list: read-only for ticked doctors + front desk; unticked doctors lose it
+      const me = normEmail(P.account.email), readers = [...new Set([...want, ...D.frontDesk])].filter(e => e && e !== me);
+      const cur = await driveDownload(P.fileId), doc = { ...cur, sharedWith: readers, access };
+      await driveUpdate(P.fileId, doc);
+      P.shareStatus = await syncShares(P.fileId, readers);
+      P.remote = { ...P.remote, sharedWith: readers, access, updatedAt: doc.updatedAt }; if (P.draft) P.draft.sharedWith = [...readers];
+      $("#shareInput").value = readers.join("\n");
+      for (const [e, v] of Object.entries(P.shareStatus)) if (/error|fail/.test(v)) st[e] = "price list: " + v;
+      await loadPerms();
+    }
+    D.status = {};
+    if (D.fileId) await loadDb(); else renderDb();
     for (const [e, v] of Object.entries(st)) if (/error|failed/.test(v)) D.status[e] = v;
     for (const r of blocked) D.status[r.email] = "blocked — front desk";
-    renderDb();
-    m.textContent = `Saved ✓ — ${D.rows.filter(r => r.on).length} doctor${D.rows.filter(r => r.on).length === 1 ? "" : "s"} with access.`;
+    renderAll();
+    const n = want.length;
+    m.textContent = `Saved ✓ — ${n} doctor${n === 1 ? "" : "s"} with access${D.fileId ? " to patients" : ""}${P.fileId ? (D.fileId ? " and" : "") + " to the price list" : ""}${D.frontDesk.length && P.fileId ? ` · front desk: price list only` : ""}.`;
   } catch (e) { m.textContent = "Could not save: " + e.message; m.classList.add("err"); }
   finally { $("#dbSaveBtn").disabled = false; }
 }
@@ -3106,25 +3045,32 @@ function renderDbList() {
     return `<div class="dbr"><input type="checkbox" data-db-on="${esc(r.email)}"${r.on ? " checked" : ""} aria-label="Access for ${esc(r.email)}"><span class="em">${esc(r.email)}</span><span class="st ${/^has access/.test(st) ? "ok" : /error|fail|blocked|removed/.test(st) ? "bad" : "wait"}">${esc(fd ? "blocked — front desk" : st)}</span><button type="button" class="small" data-db-rm="${esc(r.email)}" title="Remove from the list (access is removed on Save)">✕</button></div>`; }).join("")
     : `<div class="hint" style="padding:10px">No doctors yet — add their Google e-mails below.</div>`;
 }
+// v25: ONE list of doctors for both the patient database and the price list. Older price-list-only e-mails are brought into it once.
+function absorbPriceShares() {
+  if (D.absorbed || !P.loaded || !D.loaded) return;
+  D.absorbed = true;
+  if (!D.fileId && !D.rows.length && P.remote && P.remote.access) readAccess(P.remote);
+  const me = normEmail(P.account && P.account.email);
+  for (const e of (P.remote && P.remote.sharedWith) || []) {
+    const x = normEmail(e); if (!x || x === me || D.frontDesk.includes(x) || D.rows.some(r => r.email === x)) continue;
+    if (FD_HINT.test(x)) D.frontDesk.push(x);
+    else { D.rows.push({ email: x, on: false }); D.status[x] = "price list only (old setting) — tick to keep access"; }
+  }
+}
 function renderDb() {
   const on = !!P.account && D.loaded;
-  $("#dbCard").hidden = !on; if (!on) return;
+  $("#dbCard").hidden = !on; $("#accessCard").hidden = !(on && P.loaded); if (!on) return;
+  absorbPriceShares();
+  renderDbList();
+  if (document.activeElement !== $("#dbFrontDesk")) $("#dbFrontDesk").value = D.frontDesk.join("\n");
   $("#dbNone").hidden = !!D.fileId; $("#dbOn").hidden = !D.fileId;
   if (!D.fileId) return;
   const d = D.doc || {}, sz = b => b >= 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB";
   if (D.layout === 4) {
-    const nv = Object.values(d.patients || {}).reduce((s, e) => s + (+e.nVisits || 0), 0), ns = (d.shards || []).length;
-    $("#dbInfo").innerHTML = `<b>${esc(CDB3.FOLDER)}</b> · ${nRec(d.patients)} patients · ${nv} visits · ${ns} data files · index ${sz(D.size)} · total ${sz(D.total)} · all files owned by you · <a href="https://drive.google.com/drive/folders/${esc(D.folderId)}" target="_blank" rel="noopener">open in Drive</a>${D.size > 1048576 ? `<div class="db-warn">⚠ The index is over 1 MB — it is loaded on every sync.</div>` : ""}
+    const ns = (d.shards || []).length;
+    $("#dbInfo").innerHTML = `<b>${esc(CDB3.FOLDER)}</b> · ${nRec(d.patients)} patients · ${ns} data files · index ${sz(D.size)} · total ${sz(D.total)} · all files owned by you · <a href="https://drive.google.com/drive/folders/${esc(D.folderId)}" target="_blank" rel="noopener">open in Drive</a>${D.size > 1048576 ? `<div class="db-warn">⚠ The index is over 1 MB — it is loaded on every sync.</div>` : ""}
       <div class="db-upg"><label>Data files (shards) <input type="number" id="dbShardCount" min="${ns}" max="200" value="${ns}" style="width:5.5em"></label> <button type="button" class="small" id="dbAddShardsBtn">Add data files</button><div class="hint">More files = smaller downloads per save. Existing patients never move; new patients go to the emptiest files. Doctors' apps ask once to allow new files.</div></div>`;
-  } else if (D.layout === 3) {
-    const nv = Object.values(d.patients || {}).reduce((s, e) => s + (+e.nVisits || 0), 0);
-    $("#dbInfo").innerHTML = `<b>${esc(CDB3.FOLDER)}</b> (one file per patient — being upgraded to data files) · ${nRec(d.patients)} patients · ${nv} visits · index ${sz(D.size)} · total ${sz(D.total)} · <a href="https://drive.google.com/drive/folders/${esc(D.folderId)}" target="_blank" rel="noopener">open in Drive</a>${D.size > 1048576 ? `<div class="db-warn">⚠ The index is over 1 MB — it is loaded on every sync.</div>` : ""}`;
-  } else {
-    $("#dbInfo").innerHTML = `<b>${esc(CLINIC_PATIENTS_FILE)}</b> · ${nRec(d.patients)} patients · ${nRec(d.visits)} visits · ${sz(D.size)} · <a href="https://drive.google.com/file/d/${esc(D.fileId)}/view" target="_blank" rel="noopener">open in Drive</a>${D.size > 5 * 1048576 ? `<div class="db-warn">⚠ Over 5 MB — syncing slows down for every doctor. Upgrade below.</div>` : ""}
-      <div class="db-upg"><b>Upgrade:</b> this database is converted automatically to shared data files (the old file is kept as a backup). <button type="button" class="small primary" id="dbUpgradeBtn">Upgrade now</button></div>`;
   }
-  renderDbList();
-  if (document.activeElement !== $("#dbFrontDesk")) $("#dbFrontDesk").value = D.frontDesk.join("\n");
 }
 async function loadList() {
   const files = await driveList(`name='${qEsc(CLINIC_PRICES_FILE)}' and 'me' in owners and trashed=false`);
@@ -3230,10 +3176,10 @@ async function save() {
     const now = new Date().toISOString();
     const prices = { ...P.draft.prices, updatedAt: pricesChanged ? now : (remoteNow.prices || {}).updatedAt || now };
     const audit = [...(remoteNow.audit || []), ...(summary.length ? [{ at: now, by: P.account.email, summary: summary.join("; ") }] : [])].slice(-100);
-    const doc = { ...docFrom(prices, P.draft.sharedWith, audit), updatedAt: now };
+    const doc = { ...docFrom(prices, remoteNow.sharedWith || P.draft.sharedWith, audit), ...(remoteNow.access ? { access: remoteNow.access } : {}), updatedAt: now };   // sharing is set only by “Save access”
     await driveUpdate(P.fileId, doc);
-    P.shareStatus = await syncShares(P.fileId, P.draft.sharedWith);
-    P.remote = doc; P.draft = { prices: Pricing.normalizeHerbPrices(prices), sharedWith: [...P.draft.sharedWith] }; P.dirty = false;
+    P.shareStatus = await syncShares(P.fileId, doc.sharedWith);
+    P.remote = doc; P.draft = { prices: Pricing.normalizeHerbPrices(prices), sharedWith: [...doc.sharedWith] }; P.dirty = false;
     await loadPerms(); renderAll();
     msg.textContent = summary.length ? "Saved ✓ — doctors and the front desk see the new prices on their next refresh." : "Saved ✓ (no changes)";
   } catch (e) { msg.textContent = "Could not save: " + e.message; msg.classList.add("err"); }
@@ -3337,7 +3283,7 @@ function bind() {
   $("#dbAddBtn").onclick = () => dbAdd();
   $("#dbAddEmail").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); dbAdd(); } });
   $("#dbSaveBtn").onclick = () => saveDbAccess();
-  $("#dbInfo").addEventListener("click", e => { if (e.target.id === "dbUpgradeBtn") migrateToShards(); if (e.target.id === "dbAddShardsBtn") addShards(); });
+  $("#dbInfo").addEventListener("click", e => { if (e.target.id === "dbAddShardsBtn") addShards(); });
   $("#dbList").addEventListener("click", e => { const b = e.target.closest("[data-db-rm]"); if (!b) return; readDbForm(); const r = D.rows.find(x => x.email === b.dataset.dbRm); if (r) r.on = false; D.rows = D.rows.filter(x => x !== r); D.removed = (D.removed || []).concat(b.dataset.dbRm); renderDbList(); $("#dbMsg").textContent = "Removed — press “Save access” to take away access."; });
   $("#dbList").addEventListener("change", e => { if (e.target.dataset.dbOn) { readDbForm(); $("#dbMsg").textContent = "Press “Save access” to apply."; } });
   $("#signInBtn").onclick = () => signIn();
@@ -3376,7 +3322,7 @@ function init() {
   if (P.account) requestToken("silent").then(() => loadList()).then(() => loadDb()).catch(e => { console.warn("silent sign-in", e); P.account = null; renderAll(); });
   window.__prReady = true;
 }
-window.PRICING = { migrateToShards, addShards, CDB3, D, loadDb, createDb, saveDbAccess, syncWriters, P, HN, Pricing, buildCSV, importCSV, parseCSV, findHerb, searchHerbs, changeSummary, save, openFile, loadList, createFile, pickerAvailable, PICKER_APP_ID, signIn };
+window.PRICING = { addShards, CDB3, D, loadDb, createDb, saveDbAccess, syncWriters, P, HN, Pricing, buildCSV, importCSV, parseCSV, findHerb, searchHerbs, changeSummary, save, openFile, loadList, createFile, pickerAvailable, PICKER_APP_ID, signIn };
 init();
 </script>
 </body>
