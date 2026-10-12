@@ -2576,6 +2576,90 @@ const Slips = (() => {
   }
   return { emptyDoc, status, mergeSlip, merge, same, stable, bill, initials, receiptNo, ymd, totals };
 })();
+
+/* =====================================================================
+   v23 CLINIC PATIENT DATABASE — ONE FILE PER PATIENT (layout 3)
+   Owner's "TCM Consult Assistant" folder → subfolder "TCM Clinic Patients" (doctors get WRITER on the folder):
+     index.json          — small: per patient id, name, phone, DOB/age, sex, file id, last visit (date + doctor),
+                            visit count, size, updatedAt; patient tombstones; the admin's access list
+     p_<patientId>.json  — the patient record + their visits (transcripts gzip+base64) + visit tombstones
+   File names use the immutable patient id, never the name.
+   ===================================================================== */
+const CDB3 = (() => {
+  const stable = o => JSON.stringify(o, (k, v) => v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(x => [x, v[x]])) : v);
+  const FOLDER = "TCM Clinic Patients", INDEX = "index.json", FOLDER_TAG = "clinic-patients-folder", INDEX_TAG = "clinic-patients-index", PFILE_TAG = "clinic-patient";
+  const pName = id => "p_" + String(id).replace(/[^\w-]/g, "_") + ".json";
+  const T = r => (r && (r.updatedAt || r.savedAt || r.createdAt)) || "";
+  const canGz = () => typeof CompressionStream === "function" && typeof DecompressionStream === "function";
+  function b64(u8) { let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
+  const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  async function pipe(u8, stream) { return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(stream)).arrayBuffer()); }
+  async function gz(str) { return b64(await pipe(new TextEncoder().encode(str), new CompressionStream("gzip"))); }
+  async function gunzip(s) { return new TextDecoder().decode(await pipe(unb64(s), new DecompressionStream("gzip"))); }
+  // transcripts (visit.entries + visit.transcript) are stored compressed; everything else stays plain JSON
+  const ZF = ["entries", "transcript"];
+  async function packVisit(v) {
+    if (!v || !canGz() || v.gz) return v;
+    const z = {}, rest = { ...v };
+    for (const k of ZF) if (k in rest && rest[k] != null && (Array.isArray(rest[k]) ? rest[k].length : String(rest[k]).length)) { z[k] = rest[k]; delete rest[k]; }
+    if (!Object.keys(z).length) return v;
+    return { ...rest, gz: await gz(JSON.stringify(z)), gzFields: Object.keys(z), entriesN: Array.isArray(z.entries) ? z.entries.length : 0 };
+  }
+  async function unpackVisit(v) {
+    if (!v || !v.gz) return v;
+    try { const { gz: g, gzFields, entriesN, ...rest } = v; return { ...rest, ...JSON.parse(await gunzip(g)) }; }
+    catch (e) { console.warn("transcript could not be decompressed — kept as is", e); return v; }   // never drop it
+  }
+  async function unpackPart(doc) {
+    doc = doc || {};
+    return { patients: doc.patient ? [doc.patient] : [], visits: await Promise.all((doc.visits || []).map(unpackVisit)), deleted: { ...(doc.deleted || {}) } };
+  }
+  async function packDoc(part, pid, by) {
+    return { app: "tcm-consult-assistant", kind: "clinic-patient", format: 3, patientId: pid, patient: part.patients[0] || null,
+      visits: await Promise.all([...part.visits].sort((a, b) => (a.startedAt || "").localeCompare(b.startedAt || "")).map(packVisit)),
+      deleted: part.deleted || {}, updatedAt: new Date().toISOString(), updatedBy: by || null };
+  }
+  const partTime = part => [...part.patients.map(T), ...part.visits.map(T), ...Object.values(part.deleted || {})].sort().pop() || "";
+  // index entry for one patient file (null when the patient was deleted)
+  const hash = str => { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36); };
+  const partHash = part => hash([...part.patients, ...part.visits].map(r => r.id + "@" + T(r)).concat(Object.entries(part.deleted || {}).map(([k, t]) => k + "@" + t)).sort().join("|"));
+  function entryOf(part, pid, fileId, size) {
+    const p = part.patients.find(x => x.id === pid); if (!p) return null;
+    const vs = part.visits.filter(v => v.patientId === pid).sort((a, b) => (b.startedAt || "").localeCompare(a.startedAt || ""));
+    const l = vs[0], d = l && l.doctor;
+    return { id: pid, fileId, name: p.name || "", contact: p.contact || "", dob: p.dob || "", age: p.age ?? "", sex: p.sex || "", createdBy: p.createdBy || "",
+      updatedAt: T(p), fileUpdatedAt: partTime(part), h: partHash(part), w: new Date().toISOString(), nVisits: vs.length, last: l ? { at: l.startedAt || "", doctor: d ? { name: d.name || "", email: d.email || "" } : null } : null, size: +size || 0 };
+  }
+  const eT = e => (e && (e.w || e.fileUpdatedAt || e.updatedAt)) || "";   // w = when this entry was computed from the file (newest view of the file wins)
+  function mergeIndex(a, b) {   // per entry newest wins; patient tombstones win over older entries
+    a = a || {}; b = b || {};
+    const deleted = { ...(a.deleted || {}) };
+    for (const [k, t] of Object.entries(b.deleted || {})) if (!deleted[k] || t > deleted[k]) deleted[k] = t;
+    const patients = { ...(a.patients || {}) };
+    for (const [id, e] of Object.entries(b.patients || {})) { const x = patients[id]; if (!x || eT(e) > eT(x)) patients[id] = { ...e, fileId: e.fileId || (x && x.fileId) || "" }; else if (x && !x.fileId && e.fileId) patients[id] = { ...x, fileId: e.fileId }; }
+    for (const [id, e] of Object.entries(patients)) { const t = deleted["patients/" + id]; if (t && t >= (e.updatedAt || "")) delete patients[id]; }
+    return { ...a, ...b, patients, deleted };
+  }
+  // every entry / tombstone we wrote is in `remote` (same or newer)
+  function indexContains(remote, mine) {
+    for (const [id, e] of Object.entries(mine.patients || {})) { const x = (remote.patients || {})[id]; if (x ? eT(x) < eT(e) : !(remote.deleted || {})["patients/" + id]) return false; }
+    for (const [k, t] of Object.entries(mine.deleted || {})) if (!((remote.deleted || {})[k] >= t)) return false;
+    return true;
+  }
+  const noW = e => { if (!e) return null; const { w, ...r } = e; return r; };
+  const sameEntry = (a, b) => stable(noW(a)) === stable(noW(b));
+  function emptyIndex(owner, folderId) { return { app: "tcm-consult-assistant", kind: "clinic-patients-index", format: 3, owner, folderId, patients: {}, deleted: {}, access: { doctors: [], frontDesk: [] }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }; }
+  // split a legacy tcm-clinic-patients.json (layout 2) into per-patient parts
+  function splitLegacy(doc) {
+    const by = {}, del = doc.deleted || {}, out = { parts: {}, patientDeleted: {} };
+    for (const p of doc.patients || []) by[p.id] = { patients: [p], visits: [], deleted: {} };
+    for (const v of doc.visits || []) { const k = v.patientId; if (!by[k]) by[k] = { patients: [], visits: [], deleted: {} }; by[k].visits.push(v); }
+    for (const [k, t] of Object.entries(del)) if (k.startsWith("patients/")) out.patientDeleted[k] = t;
+    out.parts = by; out.visitDeleted = Object.fromEntries(Object.entries(del).filter(([k]) => k.startsWith("visits/")));
+    return out;
+  }
+  return { hash, partHash, stable, FOLDER, INDEX, FOLDER_TAG, INDEX_TAG, PFILE_TAG, pName, T, gz, gunzip, canGz, packVisit, unpackVisit, unpackPart, packDoc, partTime, entryOf, mergeIndex, indexContains, sameEntry, emptyIndex, splitLegacy };
+})();
 </script>
 <script>
 "use strict";

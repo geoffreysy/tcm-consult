@@ -148,13 +148,15 @@ a{color:var(--accent)}
 .savebar{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;z-index:15}
 .savebar .dirty{color:var(--warn);font-weight:600;font-size:12.5px}
 textarea{width:100%}
+.db-upg{margin-top:8px;padding:8px 10px;border:1px dashed #2f7d6d;border-radius:8px;background:#f2f8f6;font-size:13px}.db-upg button{margin-top:6px}
 .db-list{border:1px solid var(--line);border-radius:8px;margin-top:6px}
 .dbr{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid #eef2f0}
 .dbr .st{white-space:nowrap;flex:none}.dbr button{flex:none}
 .db-add .check{flex:1 1 200px}
 .dbr:last-child{border-bottom:0}.dbr .em{flex:1 1 0;min-width:0;overflow-wrap:anywhere;font-size:13.5px}
 .dbr input[type=checkbox]{width:18px;height:18px}
-.db-add input{width:100%}
+.db-add input:not([type=checkbox]){width:100%}
+.db-add .check{display:flex;align-items:center;gap:6px}
 .db-warn{color:#8a5a00;font-size:12.5px}
 @media (max-width:860px){.pr-grid{grid-template-columns:1fr}.money input{width:96px}.ov-list{max-height:380px}}
 </style>
@@ -182,13 +184,13 @@ textarea{width:100%}
   <section class="card" id="dbCard" hidden>
     <h2>🏥 Clinic patient database</h2>
     <div id="dbNone" hidden>
-      <p class="hint">One shared patient database for the whole clinic: <code>tcm-clinic-patients.json</code> in this account's “TCM Consult Assistant” folder. Doctors you tick below can open, add and edit all patients and visits from their app (each visit shows which doctor saw it). The front desk never gets access.</p>
+      <p class="hint">One shared patient database for the whole clinic: a <code>TCM Clinic Patients</code> folder in this account's “TCM Consult Assistant” folder, with a small <code>index.json</code> and one file per patient. Doctors you tick below can open, add and edit all patients and visits from their app (each visit shows which doctor saw it). The front desk never gets access.</p>
       <div class="actions"><button type="button" class="primary" id="dbCreateBtn">Create clinic patient database</button></div>
     </div>
     <div id="dbOn" hidden>
       <div class="hint" id="dbInfo"></div>
       <h2 style="margin-top:14px">Doctors with access to the patient database</h2>
-      <p class="hint">Ticked doctors can read and edit <b>all</b> patients and visits (Google Drive “editor” access to this one file only). Untick and Save to remove access — the app then clears the shared patients from that doctor's devices.</p>
+      <p class="hint">Ticked doctors can read and edit <b>all</b> patients and visits (Google Drive “editor” access to the clinic patient folder only). Untick and Save to remove access — the app then clears the shared patients from that doctor's devices.</p>
       <div class="db-list" id="dbList"></div>
       <div class="row db-add"><label style="flex:1 1 220px">Add a doctor's Google e-mail<input type="email" id="dbAddEmail" placeholder="dr.cruz@gmail.com" autocomplete="off" spellcheck="false"></label>
         <label class="check"><input type="checkbox" id="dbAlsoPrice" checked> also share the price list (read-only)</label><button type="button" class="small" id="dbAddBtn">Add</button></div>
@@ -2611,6 +2613,90 @@ const Slips = (() => {
   }
   return { emptyDoc, status, mergeSlip, merge, same, stable, bill, initials, receiptNo, ymd, totals };
 })();
+
+/* =====================================================================
+   v23 CLINIC PATIENT DATABASE — ONE FILE PER PATIENT (layout 3)
+   Owner's "TCM Consult Assistant" folder → subfolder "TCM Clinic Patients" (doctors get WRITER on the folder):
+     index.json          — small: per patient id, name, phone, DOB/age, sex, file id, last visit (date + doctor),
+                            visit count, size, updatedAt; patient tombstones; the admin's access list
+     p_<patientId>.json  — the patient record + their visits (transcripts gzip+base64) + visit tombstones
+   File names use the immutable patient id, never the name.
+   ===================================================================== */
+const CDB3 = (() => {
+  const stable = o => JSON.stringify(o, (k, v) => v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(x => [x, v[x]])) : v);
+  const FOLDER = "TCM Clinic Patients", INDEX = "index.json", FOLDER_TAG = "clinic-patients-folder", INDEX_TAG = "clinic-patients-index", PFILE_TAG = "clinic-patient";
+  const pName = id => "p_" + String(id).replace(/[^\w-]/g, "_") + ".json";
+  const T = r => (r && (r.updatedAt || r.savedAt || r.createdAt)) || "";
+  const canGz = () => typeof CompressionStream === "function" && typeof DecompressionStream === "function";
+  function b64(u8) { let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
+  const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  async function pipe(u8, stream) { return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(stream)).arrayBuffer()); }
+  async function gz(str) { return b64(await pipe(new TextEncoder().encode(str), new CompressionStream("gzip"))); }
+  async function gunzip(s) { return new TextDecoder().decode(await pipe(unb64(s), new DecompressionStream("gzip"))); }
+  // transcripts (visit.entries + visit.transcript) are stored compressed; everything else stays plain JSON
+  const ZF = ["entries", "transcript"];
+  async function packVisit(v) {
+    if (!v || !canGz() || v.gz) return v;
+    const z = {}, rest = { ...v };
+    for (const k of ZF) if (k in rest && rest[k] != null && (Array.isArray(rest[k]) ? rest[k].length : String(rest[k]).length)) { z[k] = rest[k]; delete rest[k]; }
+    if (!Object.keys(z).length) return v;
+    return { ...rest, gz: await gz(JSON.stringify(z)), gzFields: Object.keys(z), entriesN: Array.isArray(z.entries) ? z.entries.length : 0 };
+  }
+  async function unpackVisit(v) {
+    if (!v || !v.gz) return v;
+    try { const { gz: g, gzFields, entriesN, ...rest } = v; return { ...rest, ...JSON.parse(await gunzip(g)) }; }
+    catch (e) { console.warn("transcript could not be decompressed — kept as is", e); return v; }   // never drop it
+  }
+  async function unpackPart(doc) {
+    doc = doc || {};
+    return { patients: doc.patient ? [doc.patient] : [], visits: await Promise.all((doc.visits || []).map(unpackVisit)), deleted: { ...(doc.deleted || {}) } };
+  }
+  async function packDoc(part, pid, by) {
+    return { app: "tcm-consult-assistant", kind: "clinic-patient", format: 3, patientId: pid, patient: part.patients[0] || null,
+      visits: await Promise.all([...part.visits].sort((a, b) => (a.startedAt || "").localeCompare(b.startedAt || "")).map(packVisit)),
+      deleted: part.deleted || {}, updatedAt: new Date().toISOString(), updatedBy: by || null };
+  }
+  const partTime = part => [...part.patients.map(T), ...part.visits.map(T), ...Object.values(part.deleted || {})].sort().pop() || "";
+  // index entry for one patient file (null when the patient was deleted)
+  const hash = str => { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36); };
+  const partHash = part => hash([...part.patients, ...part.visits].map(r => r.id + "@" + T(r)).concat(Object.entries(part.deleted || {}).map(([k, t]) => k + "@" + t)).sort().join("|"));
+  function entryOf(part, pid, fileId, size) {
+    const p = part.patients.find(x => x.id === pid); if (!p) return null;
+    const vs = part.visits.filter(v => v.patientId === pid).sort((a, b) => (b.startedAt || "").localeCompare(a.startedAt || ""));
+    const l = vs[0], d = l && l.doctor;
+    return { id: pid, fileId, name: p.name || "", contact: p.contact || "", dob: p.dob || "", age: p.age ?? "", sex: p.sex || "", createdBy: p.createdBy || "",
+      updatedAt: T(p), fileUpdatedAt: partTime(part), h: partHash(part), w: new Date().toISOString(), nVisits: vs.length, last: l ? { at: l.startedAt || "", doctor: d ? { name: d.name || "", email: d.email || "" } : null } : null, size: +size || 0 };
+  }
+  const eT = e => (e && (e.w || e.fileUpdatedAt || e.updatedAt)) || "";   // w = when this entry was computed from the file (newest view of the file wins)
+  function mergeIndex(a, b) {   // per entry newest wins; patient tombstones win over older entries
+    a = a || {}; b = b || {};
+    const deleted = { ...(a.deleted || {}) };
+    for (const [k, t] of Object.entries(b.deleted || {})) if (!deleted[k] || t > deleted[k]) deleted[k] = t;
+    const patients = { ...(a.patients || {}) };
+    for (const [id, e] of Object.entries(b.patients || {})) { const x = patients[id]; if (!x || eT(e) > eT(x)) patients[id] = { ...e, fileId: e.fileId || (x && x.fileId) || "" }; else if (x && !x.fileId && e.fileId) patients[id] = { ...x, fileId: e.fileId }; }
+    for (const [id, e] of Object.entries(patients)) { const t = deleted["patients/" + id]; if (t && t >= (e.updatedAt || "")) delete patients[id]; }
+    return { ...a, ...b, patients, deleted };
+  }
+  // every entry / tombstone we wrote is in `remote` (same or newer)
+  function indexContains(remote, mine) {
+    for (const [id, e] of Object.entries(mine.patients || {})) { const x = (remote.patients || {})[id]; if (x ? eT(x) < eT(e) : !(remote.deleted || {})["patients/" + id]) return false; }
+    for (const [k, t] of Object.entries(mine.deleted || {})) if (!((remote.deleted || {})[k] >= t)) return false;
+    return true;
+  }
+  const noW = e => { if (!e) return null; const { w, ...r } = e; return r; };
+  const sameEntry = (a, b) => stable(noW(a)) === stable(noW(b));
+  function emptyIndex(owner, folderId) { return { app: "tcm-consult-assistant", kind: "clinic-patients-index", format: 3, owner, folderId, patients: {}, deleted: {}, access: { doctors: [], frontDesk: [] }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }; }
+  // split a legacy tcm-clinic-patients.json (layout 2) into per-patient parts
+  function splitLegacy(doc) {
+    const by = {}, del = doc.deleted || {}, out = { parts: {}, patientDeleted: {} };
+    for (const p of doc.patients || []) by[p.id] = { patients: [p], visits: [], deleted: {} };
+    for (const v of doc.visits || []) { const k = v.patientId; if (!by[k]) by[k] = { patients: [], visits: [], deleted: {} }; by[k].visits.push(v); }
+    for (const [k, t] of Object.entries(del)) if (k.startsWith("patients/")) out.patientDeleted[k] = t;
+    out.parts = by; out.visitDeleted = Object.fromEntries(Object.entries(del).filter(([k]) => k.startsWith("visits/")));
+    return out;
+  }
+  return { hash, partHash, stable, FOLDER, INDEX, FOLDER_TAG, INDEX_TAG, PFILE_TAG, pName, T, gz, gunzip, canGz, packVisit, unpackVisit, unpackPart, packDoc, partTime, entryOf, mergeIndex, indexContains, sameEntry, emptyIndex, splitLegacy };
+})();
 </script>
 <script>
 "use strict";
@@ -2736,34 +2822,100 @@ function signOut() {
 /* ---------- v21: clinic patient database (owner side: create + doctors' WRITER access) ---------- */
 const D = { fileId: null, doc: null, size: 0, perms: [], rows: [], frontDesk: [], loaded: false, status: {} };
 const FD_HINT = /front.?desk|reception|cashier/i;
-const dbMeta = id => gjson(`${PG.drive}/files/${encodeURIComponent(id)}?fields=${encodeURIComponent("id,name,version,modifiedTime,size,owners(displayName,emailAddress,me)")}`);
+const dbMeta = id => gjson(`${PG.drive}/files/${encodeURIComponent(id)}?fields=${encodeURIComponent("id,name,version,modifiedTime,size,parents,appProperties,owners(displayName,emailAddress,me)")}`);
+const nRec = x => Array.isArray(x) ? x.length : Object.keys(x || {}).length;
+const permTarget = () => D.layout === 3 ? D.folderId : D.fileId;   // v23: doctors get WRITER on the FOLDER (new patient files inherit it)
 async function loadDb() {
-  const files = await driveList(`name='${qEsc(CLINIC_PATIENTS_FILE)}' and 'me' in owners and trashed=false`);
-  const f = files.find(x => (x.appProperties || {}).tcmConsult === "clinic-patients") || files[0];
   D.loaded = true;
-  if (!f) { Object.assign(D, { fileId: null, doc: null }); renderDb(); return; }
+  // v23 layout first: TCM Clinic Patients/index.json
+  const idx = (await driveList(`name='${qEsc(CDB3.INDEX)}' and 'me' in owners and trashed=false`)).find(x => (x.appProperties || {}).tcmConsult === CDB3.INDEX_TAG);
+  if (idx) {
+    const meta = await dbMeta(idx.id), doc = await driveDownload(idx.id);
+    if (doc && doc.kind === "clinic-patients-index") {
+      const total = (+meta.size || 0) + Object.values(doc.patients || {}).reduce((s, e) => s + (+e.size || 0), 0);
+      Object.assign(D, { layout: 3, fileId: idx.id, folderId: doc.folderId || (meta.parents || [])[0], doc, size: +meta.size || 0, total });
+      readAccess(doc); await loadDbPerms(); renderDb(); return;
+    }
+  }
+  const files = await driveList(`name='${qEsc(CLINIC_PATIENTS_FILE)}' and 'me' in owners and trashed=false`);
+  const f = files.find(x => (x.appProperties || {}).tcmConsult === "clinic-patients") || files.find(x => !(x.appProperties || {}).tcmConsult);
+  if (!f) { Object.assign(D, { fileId: null, doc: null, layout: 0 }); renderDb(); return; }
   const meta = await dbMeta(f.id); const doc = await driveDownload(f.id);
   if (!doc || doc.kind !== "clinic-patients") { D.fileId = null; renderDb(); return; }
-  Object.assign(D, { fileId: f.id, doc, size: +meta.size || 0 });
+  Object.assign(D, { layout: 2, fileId: f.id, folderId: null, doc, size: +meta.size || 0, total: +meta.size || 0 });
+  readAccess(doc); await loadDbPerms(); renderDb();
+}
+function readAccess(doc) {
   const acc = doc.access || {};
   D.rows = (acc.doctors || []).map(d => ({ email: normEmail(d.email), on: d.on !== false }));
   D.frontDesk = (acc.frontDesk || []).map(normEmail);
-  await loadDbPerms(); renderDb();
 }
 async function loadDbPerms() {
-  try { D.perms = (await gjson(`${PG.drive}/files/${encodeURIComponent(D.fileId)}/permissions?fields=${encodeURIComponent("permissions(id,emailAddress,role,type)")}`)).permissions || []; } catch { D.perms = []; }
+  try { D.perms = (await gjson(`${PG.drive}/files/${encodeURIComponent(permTarget())}/permissions?fields=${encodeURIComponent("permissions(id,emailAddress,role,type)")}`)).permissions || []; } catch { D.perms = []; }
   D.status = {};
   for (const r of D.rows) { const p = D.perms.find(x => normEmail(x.emailAddress) === r.email); D.status[r.email] = p ? (p.role === "writer" ? "has access" : p.role === "reader" ? "read-only (fix on Save)" : p.role) : "no access"; }
 }
-async function createDb() {
-  const now = new Date().toISOString();
-  const doc = { app: "tcm-consult-assistant", kind: "clinic-patients", format: 2, createdAt: now, updatedAt: now, owner: { name: P.account.name, email: P.account.email }, createdBy: { email: P.account.email, name: P.account.name },
-    note: "Clinic patient database from TCM Consult Assistant. Contains patient records — shared only with the clinic's doctors (editor access set on the Clinic admin page). Keep private.",
-    patients: [], visits: [], deleted: {}, access: { doctors: [], frontDesk: [], updatedAt: now, updatedBy: P.account.email } };
-  const bd = "db_" + uid(), meta = { name: CLINIC_PATIENTS_FILE, mimeType: "application/json", parents: [await ensureFolder()], appProperties: { tcmConsult: "clinic-patients" }, description: "TCM Consult Assistant — clinic patient database (patient records). Managed on the Clinic admin page." };
+async function createIn(parent, name, doc, appProperties, description) {
+  const bd = "db_" + uid(), meta = { name, mimeType: "application/json", parents: [parent], appProperties, description };
   const body = `--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(doc)}\r\n--${bd}--`;
-  await gjson(`${PG.upload}/files?uploadType=multipart&fields=id`, { method: "POST", headers: { "Content-Type": `multipart/related; boundary=${bd}` }, body });
+  return gjson(`${PG.upload}/files?uploadType=multipart&fields=id`, { method: "POST", headers: { "Content-Type": `multipart/related; boundary=${bd}` }, body });
+}
+const createFolderIn = async (parent, name, appProperties) => (await gjson(`${PG.drive}/files?fields=id`, { method: "POST", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify({ name, mimeType: "application/vnd.google-apps.folder", parents: [parent], appProperties }) })).id;
+const patchMeta = (id, m) => gjson(`${PG.drive}/files/${encodeURIComponent(id)}?fields=id`, { method: "PATCH", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify(m) });
+const ownerOf = () => ({ name: P.account.name, email: P.account.email });
+async function createDb() {   // v23: a folder with index.json; patient files are added by the doctors' apps
+  const now = new Date().toISOString();
+  const folderId = await createFolderIn(await ensureFolder(), CDB3.FOLDER, { tcmConsult: CDB3.FOLDER_TAG });
+  const idx = { ...CDB3.emptyIndex(ownerOf(), folderId), createdBy: { email: P.account.email, name: P.account.name },
+    note: "Clinic patient database from TCM Consult Assistant (one file per patient in this folder). Contains patient records — shared only with the clinic's doctors (editor access set on the Clinic admin page). Keep private.",
+    access: { doctors: [], frontDesk: [], updatedAt: now, updatedBy: P.account.email } };
+  await createIn(folderId, CDB3.INDEX, idx, { tcmConsult: CDB3.INDEX_TAG }, "TCM Consult Assistant — clinic patient index. Managed on the Clinic admin page.");
   await loadDb(); toast("Clinic patient database created");
+}
+// v23: convert tcm-clinic-patients.json → TCM Clinic Patients/ (index.json + p_<id>.json); the old file is kept, renamed, as a backup
+async function upgradeDb() {
+  if (D.layout !== 2 || !D.fileId) return;
+  if (!confirm("Upgrade the clinic patient database to one file per patient?\n\n• Doctors can't save to it for the minute this takes (their apps keep changes and save them afterwards).\n• The old file is kept, renamed as a backup.\n• Each doctor then presses “Open the upgraded database” once in their app.")) return;
+  const legacyId = D.fileId, m = $("#dbMsg"); m.classList.remove("err");
+  const doctors = D.rows.filter(r => r.on && !D.frontDesk.includes(r.email)).map(r => r.email);
+  const lmeta = await dbMeta(legacyId);
+  $("#dbUpgradeBtn") && ($("#dbUpgradeBtn").disabled = true);
+  m.textContent = "Upgrading… (locking the old file)";
+  let locked = false;
+  try {
+    // 1. lock: marker + doctors read-only, so nothing is written to the old file while it is converted
+    await patchMeta(legacyId, { appProperties: { tcmConsult: "clinic-patients-upgrading" } }); locked = true;
+    await syncWriters(legacyId, doctors, "reader");
+    const doc = await driveDownload(legacyId);   // final content
+    // 2. folder + one file per patient (round-trip checked) + index
+    const folderId = await createFolderIn((lmeta.parents || [])[0] || await ensureFolder(), CDB3.FOLDER, { tcmConsult: CDB3.FOLDER_TAG });
+    const sp = CDB3.splitLegacy(doc), idx = { ...CDB3.emptyIndex(doc.owner || ownerOf(), folderId), access: doc.access || { doctors: [], frontDesk: [] }, deleted: { ...sp.patientDeleted, ...sp.visitDeleted }, orphans: {},
+      migratedFrom: { fileId: legacyId, at: new Date().toISOString(), patients: nRec(doc.patients), visits: nRec(doc.visits) }, createdBy: { email: P.account.email, name: P.account.name } };
+    const by = { email: P.account.email, name: P.account.name };
+    let n = 0;
+    for (const [pid, part] of Object.entries(sp.parts)) {
+      const fdoc = await CDB3.packDoc(part, pid, by), f = await createIn(folderId, CDB3.pName(pid), fdoc, { tcmConsult: CDB3.PFILE_TAG, patientId: String(pid) });
+      const back = await CDB3.unpackPart(await driveDownload(f.id));
+      const sig = x => CDB3.stable([x.patients, [...x.visits].sort((a, b) => String(a.id).localeCompare(String(b.id)))]);
+      if (sig(back) !== sig({ patients: part.patients, visits: part.visits })) throw new Error("verification failed for patient file " + pid);
+      const e = CDB3.entryOf(part, pid, f.id, JSON.stringify(fdoc).length);
+      if (e) idx.patients[pid] = e; else idx.orphans[pid] = f.id;   // visits of a deleted/missing patient are kept too
+      if (++n % 10 === 0) m.textContent = `Upgrading… ${n} / ${nRec(sp.parts)} patient files`;
+    }
+    const ix = await createIn(folderId, CDB3.INDEX, idx, { tcmConsult: CDB3.INDEX_TAG }, "TCM Consult Assistant — clinic patient index. Managed on the Clinic admin page.");
+    // 3. doctors: WRITER on the folder
+    await syncWriters(folderId, doctors);
+    // 4. old file → backup, pointing to the new index (doctor apps follow it)
+    const day = new Date().toISOString().slice(0, 10);
+    await patchMeta(legacyId, { name: `tcm-clinic-patients.backup-${day}.json`, appProperties: { tcmConsult: "clinic-patients-backup", upgradedTo: ix.id, upgradedFolder: folderId } });
+    await loadDb();
+    m.textContent = `Upgraded ✓ — ${nRec(idx.patients)} patient files + index.json in “${CDB3.FOLDER}”; the old file is kept as tcm-clinic-patients.backup-${day}.json.`;
+    toast("Database upgraded to one file per patient");
+  } catch (e) {
+    console.warn("upgrade", e);
+    if (locked) { try { await patchMeta(legacyId, { appProperties: { tcmConsult: "clinic-patients" } }); await syncWriters(legacyId, doctors); } catch {} }
+    m.textContent = "Upgrade failed — nothing was changed in the old database (" + e.message + ")."; m.classList.add("err");
+  } finally { $("#dbUpgradeBtn") && ($("#dbUpgradeBtn").disabled = false); }
 }
 function readDbForm() {
   D.frontDesk = parseEmails($("#dbFrontDesk").value);
@@ -2784,16 +2936,16 @@ function dbAdd() {
   $("#dbAddEmail").value = ""; renderDbList();
   m.classList.remove("err"); m.textContent = notes.join(" · ") || "Added — press “Save access” to give access.";
 }
-async function syncWriters(fileId, emails) {
+async function syncWriters(fileId, emails, role = "writer") {
   const base = `${PG.drive}/files/${encodeURIComponent(fileId)}/permissions`;
   const cur = (await gjson(`${base}?fields=${encodeURIComponent("permissions(id,emailAddress,role,type)")}`)).permissions || [];
   const want = new Set(emails), status = {};
   for (const e of want) {
     const has = cur.find(p => normEmail(p.emailAddress) === e);
     try {
-      if (has && has.role === "writer") status[e] = "has access";
-      else if (has && has.role !== "owner") { await gjson(`${base}/${encodeURIComponent(has.id)}?fields=id`, { method: "PATCH", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify({ role: "writer" }) }); status[e] = "has access"; }
-      else if (!has) { await gjson(`${base}?sendNotificationEmail=true&fields=id`, { method: "POST", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify({ type: "user", role: "writer", emailAddress: e }) }); status[e] = "has access"; }
+      if (has && has.role === role) status[e] = "has access";
+      else if (has && has.role !== "owner") { await gjson(`${base}/${encodeURIComponent(has.id)}?fields=id`, { method: "PATCH", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify({ role }) }); status[e] = "has access"; }
+      else if (!has) { await gjson(`${base}?sendNotificationEmail=${role === "writer"}&fields=id`, { method: "POST", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify({ type: "user", role, emailAddress: e }) }); status[e] = "has access"; }
     } catch (err) { status[e] = "error " + (err.status || ""); }
   }
   for (const p of cur) if (p.type === "user" && p.role !== "owner" && !want.has(normEmail(p.emailAddress))) {
@@ -2815,10 +2967,10 @@ async function saveDbAccess() {
       const meta = await dbMeta(D.fileId), doc = await driveDownload(D.fileId);
       const m2 = await dbMeta(D.fileId); if (String(m2.version) !== String(meta.version)) continue;
       await driveUpdate(D.fileId, { ...doc, access });
-      const chk = await driveDownload(D.fileId); ok = !!(chk.access && chk.access.updatedAt === now && (chk.patients || []).length >= (doc.patients || []).length);
+      const chk = await driveDownload(D.fileId); ok = !!(chk.access && chk.access.updatedAt === now && nRec(chk.patients) >= nRec(doc.patients));
     }
     if (!ok) throw new Error("the database was busy — try again");
-    const st = await syncWriters(D.fileId, D.rows.filter(r => r.on).map(r => r.email));
+    const st = await syncWriters(permTarget(), D.rows.filter(r => r.on).map(r => r.email));
     await loadDb();
     for (const [e, v] of Object.entries(st)) if (/error|failed/.test(v)) D.status[e] = v;
     for (const r of blocked) D.status[r.email] = "blocked — front desk";
@@ -2837,8 +2989,14 @@ function renderDb() {
   $("#dbCard").hidden = !on; if (!on) return;
   $("#dbNone").hidden = !!D.fileId; $("#dbOn").hidden = !D.fileId;
   if (!D.fileId) return;
-  const d = D.doc || {}, mb = D.size / 1048576;
-  $("#dbInfo").innerHTML = `<b>${esc(CLINIC_PATIENTS_FILE)}</b> · ${(d.patients || []).length} patients · ${(d.visits || []).length} visits · ${mb >= 1 ? mb.toFixed(1) + " MB" : Math.max(1, Math.round(D.size / 1024)) + " KB"} · <a href="https://drive.google.com/file/d/${esc(D.fileId)}/view" target="_blank" rel="noopener">open in Drive</a>${D.size > 5 * 1048576 ? `<div class="db-warn">⚠ Over 5 MB — syncing slows down for every doctor. Consider archiving old records.</div>` : ""}`;
+  const d = D.doc || {}, sz = b => b >= 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB";
+  if (D.layout === 3) {
+    const nv = Object.values(d.patients || {}).reduce((s, e) => s + (+e.nVisits || 0), 0);
+    $("#dbInfo").innerHTML = `<b>${esc(CDB3.FOLDER)}</b> (one file per patient) · ${nRec(d.patients)} patients · ${nv} visits · index ${sz(D.size)} · total ${sz(D.total)} · <a href="https://drive.google.com/drive/folders/${esc(D.folderId)}" target="_blank" rel="noopener">open in Drive</a>${D.size > 1048576 ? `<div class="db-warn">⚠ The index is over 1 MB — it is loaded on every sync.</div>` : ""}`;
+  } else {
+    $("#dbInfo").innerHTML = `<b>${esc(CLINIC_PATIENTS_FILE)}</b> · ${nRec(d.patients)} patients · ${nRec(d.visits)} visits · ${sz(D.size)} · <a href="https://drive.google.com/file/d/${esc(D.fileId)}/view" target="_blank" rel="noopener">open in Drive</a>${D.size > 5 * 1048576 ? `<div class="db-warn">⚠ Over 5 MB — syncing slows down for every doctor. Upgrade below.</div>` : ""}
+      <div class="db-upg"><b>Upgrade available:</b> store one file per patient (faster sync, smaller downloads; transcripts compressed). The old file is kept as a backup. <button type="button" class="small primary" id="dbUpgradeBtn">Upgrade database to one file per patient</button></div>`;
+  }
   renderDbList();
   if (document.activeElement !== $("#dbFrontDesk")) $("#dbFrontDesk").value = D.frontDesk.join("\n");
 }
@@ -3053,6 +3211,7 @@ function bind() {
   $("#dbAddBtn").onclick = () => dbAdd();
   $("#dbAddEmail").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); dbAdd(); } });
   $("#dbSaveBtn").onclick = () => saveDbAccess();
+  $("#dbInfo").addEventListener("click", e => { if (e.target.id === "dbUpgradeBtn") upgradeDb(); });
   $("#dbList").addEventListener("click", e => { const b = e.target.closest("[data-db-rm]"); if (!b) return; readDbForm(); const r = D.rows.find(x => x.email === b.dataset.dbRm); if (r) r.on = false; D.rows = D.rows.filter(x => x !== r); D.removed = (D.removed || []).concat(b.dataset.dbRm); renderDbList(); $("#dbMsg").textContent = "Removed — press “Save access” to take away access."; });
   $("#dbList").addEventListener("change", e => { if (e.target.dataset.dbOn) { readDbForm(); $("#dbMsg").textContent = "Press “Save access” to apply."; } });
   $("#signInBtn").onclick = () => signIn();
@@ -3091,7 +3250,7 @@ function init() {
   if (P.account) requestToken("silent").then(() => loadList()).then(() => loadDb()).catch(e => { console.warn("silent sign-in", e); P.account = null; renderAll(); });
   window.__prReady = true;
 }
-window.PRICING = { D, loadDb, createDb, saveDbAccess, syncWriters, P, HN, Pricing, buildCSV, importCSV, parseCSV, findHerb, searchHerbs, changeSummary, save, openFile, loadList, createFile, pickerAvailable, PICKER_APP_ID, signIn };
+window.PRICING = { upgradeDb, CDB3, D, loadDb, createDb, saveDbAccess, syncWriters, P, HN, Pricing, buildCSV, importCSV, parseCSV, findHerb, searchHerbs, changeSummary, save, openFile, loadList, createFile, pickerAvailable, PICKER_APP_ID, signIn };
 init();
 </script>
 </body>
