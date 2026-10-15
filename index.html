@@ -7540,11 +7540,13 @@ async function cdbAutoFind() {
   cdbAutoBusy = true;
   try {
     const list = await driveList(`name='${qEsc(CDB3.INDEX)}' and 'me' in owners and trashed=false`);
+    let best = null;   // v34: same rule as the admin page — if several live databases exist, the one with the most patients (others ignored)
     for (const f of list) {
-      try { const idx = await driveDownload(f.id); if (!idx || idx.kind !== "clinic-patients-index" || idx.format !== 4 || idx.supersededBy) continue; } catch { continue; }
-      await connectClinicDb(f.id, { auto: true, inSync: true }); return true;
+      try { const idx = await driveDownload(f.id); if (!idx || idx.kind !== "clinic-patients-index" || idx.format !== 4 || idx.supersededBy) continue;
+        const n = Object.keys(idx.patients || {}).length; if (!best || n > best.n) best = { id: f.id, n }; } catch { continue; }
     }
-    return false;
+    if (!best) return false;
+    await connectClinicDb(best.id, { auto: true, inSync: true }); return true;
   } finally { cdbAutoBusy = false; }
 }
 async function connectClinicDb(fileId, opt = {}) {
