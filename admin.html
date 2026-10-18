@@ -216,6 +216,8 @@ document.addEventListener("DOMContentLoaded",function(){new MutationObserver(chk
     <label class="hint" style="display:block">Front desk Google e-mail(s) — get the herb price list (read-only) and the clinic <b>patient list with basic details only</b> (name, date of birth, phone — they can add and edit these). <b>Never</b> visits, diagnoses, notes or prescriptions<textarea id="dbFrontDesk" rows="2" spellcheck="false" placeholder="frontdesk@clinic.ph"></textarea></label>
     <h2 style="margin-top:16px">🗓 Scheduler access</h2>
     <label class="hint" style="display:block">Scheduler Google e-mail(s) — use <code>scheduler.html</code> to book patients (name, optional phone / time / note) into the doctors' scheduled sessions. They get the clinic schedule (read-only) and <b>edit</b> access to the appointments list only — <b>never</b> patient records, slips or prices. An e-mail may also be on the front desk list.<textarea id="dbScheduler" rows="2" placeholder="scheduler@gmail.com" spellcheck="false"></textarea></label>
+    <h2 style="margin-top:16px">🍚 Patient food log</h2>
+    <label class="hint" style="display:block">Food log web app URL (from your Google Apps Script deployment, ends with <code>/exec</code>). Doctors create a private link per patient; patients send meals without signing in and cannot read anything back. Only doctors can see the entries.<input type="url" id="flUrl" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" spellcheck="false" style="width:100%"></label>
     <div class="actions"><button type="button" class="primary" id="dbSaveBtn">Save access</button><span class="msg" id="dbMsg" role="status"></span></div>
   </section>
   <div id="editor" hidden>
@@ -2799,6 +2801,17 @@ const Checkins = (() => {
   }
   return { save, FILE, ymd, addDays, KEYS, LABEL, UNIT, RANGE, clean, warnings, text, merge, prune, todays, forPatient };
 })();
+
+/* v35: patient food log (foodlog.html → owner's Apps Script → owner-owned JSON files). Same hash as apps-script/foodlog.gs. */
+const FoodLog = (() => {
+  const CODES = "tcm-clinic-foodlog-codes.json", PREFIX = "tcm-clinic-foodlog-", N = 10;
+  const pad = n => (n < 10 ? "0" : "") + n, shardName = n => PREFIX + pad(n) + ".json";
+  const shardOf = (id, n = N) => { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % n; };
+  const newCode = () => { const b = crypto.getRandomValues(new Uint8Array(24)); return btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };   // 32 chars, 192 bits
+  const depId = url => (String(url || "").match(/^https:\/\/script\.google\.com\/macros\/s\/([A-Za-z0-9_-]{20,120})\/exec\/?$/) || [])[1] || "";
+  const MEALS = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snack: "Snack", drink: "Drink" };
+  return { CODES, PREFIX, N, shardName, shardOf, newCode, depId, MEALS };
+})();
 </script>
 <script>
 "use strict";
@@ -2922,7 +2935,7 @@ function signOut() {
 }
 /* ---------- load / create / reuse ---------- */
 /* ---------- v21: clinic patient database (owner side: create + doctors' WRITER access) ---------- */
-var C = { ckId: null, apptId: null, fileId: null, schedule: {}, loaded: false, open: new Set() };
+var C = { fl: { codesId: null, shardIds: [] }, flUrl: "", ckId: null, apptId: null, fileId: null, schedule: {}, loaded: false, open: new Set() };
 const D = { fileId: null, doc: null, size: 0, perms: [], rows: [], frontDesk: [], loaded: false, status: {} };
 const FD_HINT = /front.?desk|reception|cashier/i;
 const dbMeta = id => gjson(`${PG.drive}/files/${encodeURIComponent(id)}?fields=${encodeURIComponent("id,name,version,modifiedTime,size,parents,appProperties,owners(displayName,emailAddress,me)")}`);
@@ -3079,6 +3092,7 @@ async function addShards() {
 }
 // drive.file: let the owner's app open files it didn't create (patient files added by doctors in the old layout)
 function readDbForm() {
+  if ($("#flUrl")) C.flUrl = $("#flUrl").value.trim();
   D.frontDesk = parseEmails($("#dbFrontDesk").value); if ($("#dbScheduler") && (D.scheduler || $("#dbScheduler").value.trim())) D.scheduler = parseEmails($("#dbScheduler").value); D.rows = D.rows.filter(r => !D.frontDesk.includes(r.email));
   document.querySelectorAll("[data-db-on]").forEach(x => { const r = D.rows.find(y => y.email === x.dataset.dbOn); if (r) r.on = x.checked; });
 }
@@ -3118,7 +3132,7 @@ const CLINIC_CONFIG_FILE = "tcm-clinic-config.json", SCHED_DAYS = ["Mon", "Tue",
 async function loadClinicConfig() {
   try {
     const f = (await driveList(`name='${qEsc(CLINIC_CONFIG_FILE)}' and 'me' in owners and trashed=false`))[0];
-    if (f) { const d = await driveDownload(f.id); C.fileId = f.id; C.schedule = (d && d.schedule) || {}; C.apptId = (d && d.appointmentsFileId) || C.apptId || null; C.ckId = (d && d.checkinsFileId) || C.ckId || null; }
+    if (f) { const d = await driveDownload(f.id); C.fileId = f.id; C.schedule = (d && d.schedule) || {}; C.apptId = (d && d.appointmentsFileId) || C.apptId || null; C.ckId = (d && d.checkinsFileId) || C.ckId || null; if (d) { C.flUrl = d.foodlogUrl || ""; if (d.foodlogCodesId) C.fl = { codesId: d.foodlogCodesId, shardIds: d.foodlogShardIds || [] }; } }
   } catch (e) { console.warn("clinic config:", e); }
   C.loaded = true; renderDbList();
 }
@@ -3126,6 +3140,16 @@ async function loadClinicConfig() {
 // READ-ONLY for ticked doctors + front desk. Free-text bookings only; no patient records.
 const APPTS_FILE = "tcm-clinic-appointments.json";
 // v33: check-in vitals file — owner-owned; WRITER for front desk + ticked doctors; never shared with scheduler-only e-mails
+// v35: food log files — codes registry (doctors: writer) + 10 data files (doctors: reader). Created here (by this app) so
+// doctors' apps can open them after selecting them once; the owner's Apps Script writes entries into them.
+async function ensureFoodlogFiles() {
+  const folder = await ensureFolder(), now = new Date().toISOString();
+  const find = async name => ((await driveList(`name='${qEsc(name)}' and 'me' in owners and trashed=false`))[0] || {}).id || null;
+  if (!C.fl.codesId) C.fl.codesId = (await find(FoodLog.CODES)) || (await createIn(folder, FoodLog.CODES, { app: "tcm-consult-assistant", kind: "clinic-foodlog-codes", format: 1, shards: FoodLog.N, codes: {}, note: "Private food log link codes → patient id. No names. Managed in the doctor app.", updatedAt: now }, { tcmConsult: "clinic-foodlog-codes" }, "TCM Consult Assistant — food log link codes.")).id;
+  const ids = [];
+  for (let n = 0; n < FoodLog.N; n++) ids.push(C.fl.shardIds[n] || (await find(FoodLog.shardName(n))) || (await createIn(folder, FoodLog.shardName(n), { app: "tcm-consult-assistant", kind: "clinic-foodlog", format: 1, shard: n, entries: {}, updatedAt: now }, { tcmConsult: "clinic-foodlog", shard: String(n) }, "TCM Consult Assistant — patient food log entries (written by the clinic's Apps Script).")).id);
+  C.fl.shardIds = ids;
+}
 async function ensureCheckinsFile() {
   if (C.ckId) return C.ckId;
   const f = (await driveList(`name='${qEsc(Checkins.FILE)}' and 'me' in owners and trashed=false`))[0];
@@ -3158,7 +3182,7 @@ async function saveClinicConfig() {
   const now = new Date().toISOString(), schedule = {};
   for (const r of D.rows) { const x = C.schedule[r.email]; if (x && Object.values(x).some(d => d && (d.am || d.pm))) schedule[r.email] = x; }
   if (!C.fileId) { const f = await createIn(await ensureFolder(), CLINIC_CONFIG_FILE, { app: "tcm-consult-assistant", kind: "clinic-config", format: 1, schedule: {}, updatedAt: now }, { tcmConsult: "clinic-config" }, "TCM Consult Assistant — clinic schedule (reference only). Shared read-only with doctors and front desk."); C.fileId = f.id; }
-  const cur = await driveDownload(C.fileId), doc = { ...cur, ...(C.apptId ? { appointmentsFileId: C.apptId } : {}), ...(C.ckId ? { checkinsFileId: C.ckId } : {}), app: "tcm-consult-assistant", kind: "clinic-config", format: 1, note: "Clinic schedule for reference (doctor e-mails + days). No patient data. Shared read-only with the clinic's doctors and front desk.", schedule, updatedAt: now, updatedBy: P.account.email };
+  const cur = await driveDownload(C.fileId), doc = { ...cur, ...(C.apptId ? { appointmentsFileId: C.apptId } : {}), ...(C.ckId ? { checkinsFileId: C.ckId } : {}), ...(C.fl.codesId ? { foodlogCodesId: C.fl.codesId, foodlogShardIds: C.fl.shardIds } : {}), foodlogUrl: C.flUrl || "", app: "tcm-consult-assistant", kind: "clinic-config", format: 1, note: "Clinic schedule for reference (doctor e-mails + days). No patient data. Shared read-only with the clinic's doctors and front desk.", schedule, updatedAt: now, updatedBy: P.account.email };
   await driveUpdate(C.fileId, doc);
   const chk = await driveDownload(C.fileId); if (JSON.stringify(chk.schedule || {}) !== JSON.stringify(schedule)) throw new Error("schedule could not be verified");
   C.schedule = schedule;
@@ -3178,6 +3202,7 @@ async function saveDbAccess() {   // ONE save: patient database (writer on folde
   readDbForm();
   const m = $("#dbMsg"); m.classList.remove("err");
   if (!D.fileId && !P.fileId) { m.textContent = "Create the clinic patient database or the price list first."; m.classList.add("err"); return; }
+  if (C.flUrl && !FoodLog.depId(C.flUrl)) { m.textContent = "The food log web app URL should look like https://script.google.com/macros/s/…/exec — copy it from Apps Script → Deploy → Manage deployments."; m.classList.add("err"); return; }
   const blocked = D.rows.filter(r => r.on && D.frontDesk.includes(r.email));
   for (const r of blocked) r.on = false;
   if (blocked.length) alert(`Not given access — front desk e-mail${blocked.length > 1 ? "s" : ""}: ${blocked.map(r => r.email).join(", ")}.\nThe front desk must never have access to patient records.`);
@@ -3208,12 +3233,18 @@ async function saveDbAccess() {   // ONE save: patient database (writer on folde
       const sched = D.scheduler || D.frontDesk; D.scheduler = sched;
       if (sched.length || C.apptId) await ensureApptsFile();
       await ensureCheckinsFile();
+      await ensureFoodlogFiles();
       await saveClinicConfig();
       const me0 = normEmail(P.account.email), rd = [...new Set([...want, ...D.frontDesk, ...sched])].filter(e => e && e !== me0);
       for (const [e, v] of Object.entries(await syncShares(C.fileId, rd))) if (/error|fail/.test(v)) st[e] = "schedule: " + v;
       if (C.apptId) {
         const roles = {}; for (const e of [...want, ...D.frontDesk]) roles[e] = "reader"; for (const e of sched) roles[e] = "writer";
         for (const [e, v] of Object.entries(await syncRoles(C.apptId, roles))) if (/error|fail/.test(v)) st[e] = "appointments: " + v;
+      }
+      if (C.fl.codesId) {   // doctors only — never front desk / scheduler
+        const w = {}, r = {}; for (const e of want) { w[e] = "writer"; r[e] = "reader"; }
+        for (const [e, v] of Object.entries(await syncRoles(C.fl.codesId, w))) if (/error|fail/.test(v)) st[e] = "food log: " + v;
+        await Promise.all(C.fl.shardIds.map(async id => { for (const [e, v] of Object.entries(await syncRoles(id, r))) if (/error|fail/.test(v)) st[e] = "food log: " + v; }));
       }
       if (C.ckId) { const roles = {}; for (const e of [...want, ...D.frontDesk]) roles[e] = "writer";
         for (const [e, v] of Object.entries(await syncRoles(C.ckId, roles))) if (/error|fail/.test(v)) st[e] = "check-ins: " + v; }
@@ -3263,6 +3294,7 @@ function renderDb() {
   absorbPriceShares();
   renderDbList();
   if (document.activeElement !== $("#dbFrontDesk")) $("#dbFrontDesk").value = D.frontDesk.join("\n");
+  if ($("#flUrl") && document.activeElement !== $("#flUrl")) $("#flUrl").value = C.flUrl || "";
   if ($("#dbScheduler") && document.activeElement !== $("#dbScheduler")) $("#dbScheduler").value = (D.scheduler || D.frontDesk).join("\n");
   $("#dbNone").hidden = !!D.fileId; $("#dbOn").hidden = !D.fileId;
   if (!D.fileId) return;

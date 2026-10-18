@@ -713,6 +713,9 @@ document.addEventListener("DOMContentLoaded",function(){new MutationObserver(chk
 .ma-half{margin-top:6px}.ma-half b.h{font-size:13px;color:#2f7a68}.myappts ul{margin:2px 0 0;padding-left:16px}.myappts li{overflow-wrap:anywhere;margin:2px 0}
 .ma-name{background:none;border:0;padding:0;color:#1d6b5a;font-weight:700;text-decoration:underline;cursor:pointer;font-size:inherit}
 .ma-by{color:#6b7a75;font-size:12px}
+.fl-box h3{margin:6px 0;font-size:15px;display:flex;gap:6px;align-items:center}.fl-hint{font-size:12px;color:#6b7a75;margin:4px 0}.fl-hint.ok{color:#1d6b5a}.fl-hint.err,.fl-box .err{color:#b3261e}
+.fl-linkbox input{width:100%;box-sizing:border-box;font-size:12px;padding:6px}.fl-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.fl-day{margin-top:8px}.fl-day ul{list-style:none;margin:2px 0 0;padding:0}.fl-day li{border-top:1px solid #e5ece9;padding:6px 0;overflow-wrap:anywhere;font-size:13px}.fl-meal{font-weight:700;color:#2f7a68}.fl-photo{display:block;max-width:100%;max-height:220px;border-radius:8px;margin-top:4px}
 .vt-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.vt-grid label{font-size:12px;color:#55645f;display:flex;flex-direction:column}.vt-grid input{width:100%;box-sizing:border-box;padding:5px}
 .vt-by{font-size:12px;color:#2f7a68;margin-top:4px}.vt-warn{font-size:12px;color:#8a5a00;margin-top:4px}.vt-trend{margin:2px 0 0;padding-left:18px;font-size:13px}
 </style>
@@ -764,6 +767,7 @@ document.addEventListener("DOMContentLoaded",function(){new MutationObserver(chk
     <input type="search" class="search" id="patientSearch" placeholder="Search name, contact, notes…">
     <ul class="patient-list" id="patientList"></ul>
     <div class="profile" id="patientProfile"></div>
+    <div class="profile fl-box" id="foodLog" hidden></div>
   </aside>
 
   <!-- CENTER: transcript -->
@@ -4184,6 +4188,17 @@ const Checkins = (() => {
   }
   return { save, FILE, ymd, addDays, KEYS, LABEL, UNIT, RANGE, clean, warnings, text, merge, prune, todays, forPatient };
 })();
+
+/* v35: patient food log (foodlog.html → owner's Apps Script → owner-owned JSON files). Same hash as apps-script/foodlog.gs. */
+const FoodLog = (() => {
+  const CODES = "tcm-clinic-foodlog-codes.json", PREFIX = "tcm-clinic-foodlog-", N = 10;
+  const pad = n => (n < 10 ? "0" : "") + n, shardName = n => PREFIX + pad(n) + ".json";
+  const shardOf = (id, n = N) => { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % n; };
+  const newCode = () => { const b = crypto.getRandomValues(new Uint8Array(24)); return btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };   // 32 chars, 192 bits
+  const depId = url => (String(url || "").match(/^https:\/\/script\.google\.com\/macros\/s\/([A-Za-z0-9_-]{20,120})\/exec\/?$/) || [])[1] || "";
+  const MEALS = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snack: "Snack", drink: "Drink" };
+  return { CODES, PREFIX, N, shardName, shardOf, newCode, depId, MEALS };
+})();
 </script>
 <script>
 "use strict";
@@ -4761,6 +4776,7 @@ function renderPatients() {
 }
 
 function renderProfile() {
+  try { renderFoodLog(); } catch (e) { console.warn(e); }
   const el = $("#patientProfile");
   const p = patientById(state.selectedPatientId);
   if (!p) { el.innerHTML = `<div class="empty">Select a patient to see their profile and past visits.<br><br>You can start listening without a patient and assign one before saving.</div>`; return; }
@@ -7441,7 +7457,7 @@ const maAdd = (ymd, n) => maYmd(new Date(new Date(ymd + "T12:00:00+08:00").getTi
 async function maTry(ids) {
   for (const id of ids) {
     try { const d = await driveDownload(id);
-      if (d && d.kind === "clinic-config") { MA.cfgId = id; if (d.appointmentsFileId && !MA.apptId) MA.apptId = d.appointmentsFileId; if (d.checkinsFileId && !MA.ckId) MA.ckId = d.checkinsFileId; }
+      if (d && d.kind === "clinic-config") { MA.cfgId = id; MA.cfgDoc = d; if (d.appointmentsFileId && !MA.apptId) MA.apptId = d.appointmentsFileId; if (d.checkinsFileId && !MA.ckId) MA.ckId = d.checkinsFileId; }
       else if (d && d.kind === "clinic-checkins") { MA.ckId = id; MA.ck = d; }
       else if (d && d.kind === "clinic-appointments") { MA.apptId = id; MA.appts = d; }
     } catch (e) { if (e.status === 401) throw e; }
@@ -7462,6 +7478,7 @@ async function syncMyAppts(acc) {
   if (MA.ckId) { try { const d = await driveDownload(MA.ckId); if (d && d.kind === "clinic-checkins") { MA.ck = d; MA.ckNeed = false; } } catch (e) { if (e.status === 401) throw e; MA.ck = null; MA.ckNeed = true; } }
   localStorage.setItem(maKey(), JSON.stringify({ cfgId: MA.cfgId, apptId: MA.apptId, ckId: MA.ckId }));
   renderMyAppts(); renderVitals();
+  try { await syncFoodLog(); } catch (e) { if (e.status === 401) throw e; console.warn("food log:", e); }
 }
 async function maPicker() {
   if (!pickerAvailable()) { toast("Google Picker isn't configured on this site."); return; }
@@ -7509,6 +7526,93 @@ document.addEventListener("input", e => {
 });
 document.addEventListener("change", e => { if (e.target.dataset && e.target.dataset.vt) { const s = state.session; if (s.vitals) s.vitals = { ...s.vitals, ...Checkins.clean(s.vitals) }; renderVitals(); renderHistory(); } });
 document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("#ckConnect"); if (b) maPicker(); });
+/* ---------- v35: patient food log (private link per patient; entries arrive via the clinic's Apps Script) ---------- */
+const FL = { codesId: "", shardIds: [], codes: null, url: "", shards: {}, need: false, busy: false, msg: "" };
+async function syncFoodLog() {
+  if (!Cloud.account) return;
+  const c = (MA.cfgId ? await driveDownload(MA.cfgId).catch(e => { if (e.status === 401) throw e; return null; }) : null) || MA.cfgDoc;
+  if (c && c.kind === "clinic-config") { MA.cfgDoc = c; FL.url = c.foodlogUrl || ""; if (c.foodlogCodesId) { FL.codesId = c.foodlogCodesId; FL.shardIds = c.foodlogShardIds || []; } }
+  if (!FL.codesId) {   // the owner's own files (created by its admin page)
+    try { const f = (await driveList(`name='${FoodLog.CODES}' and 'me' in owners and trashed=false`))[0]; if (f) FL.codesId = f.id; } catch (e) { if (e.status === 401) throw e; }
+  }
+  if (!FL.codesId) { renderFoodLog(); return; }
+  try { const d = await driveDownload(FL.codesId); if (d && d.kind === "clinic-foodlog-codes") { FL.codes = d; FL.need = false; } } catch (e) { if (e.status === 401) throw e; FL.codes = null; FL.need = true; }
+  FL.shards = {};   // re-read on open
+  renderFoodLog();
+}
+async function flShard(n) {
+  if (FL.shards[n]) return FL.shards[n];
+  const id = FL.shardIds[n]; if (!id) throw new Error("food log file missing — the clinic owner should press Save access on the admin page");
+  const d = await driveDownload(id); if (!d || d.kind !== "clinic-foodlog") throw new Error("not a food log file");
+  return (FL.shards[n] = d);
+}
+async function flSaveCodes(fn) {   // read → change → write → verify (doctors share this file)
+  for (let i = 0; i < 6; i++) {
+    const cur = await driveDownload(FL.codesId); const next = fn(JSON.parse(JSON.stringify(cur))); next.updatedAt = new Date().toISOString();
+    await driveUpdate(FL.codesId, next); const chk = await driveDownload(FL.codesId);
+    if (JSON.stringify(chk.codes) === JSON.stringify(next.codes)) { FL.codes = chk; return chk; }
+    await new Promise(r => setTimeout(r, 200 + Math.random() * 400));
+  }
+  throw new Error("the food log link list is busy — try again");
+}
+const flActive = pid => Object.entries((FL.codes || {}).codes || {}).find(([, r]) => r.patientId === pid && r.active) || null;
+const flLink = code => { const dep = FoodLog.depId(FL.url); return dep ? new URL("foodlog.html?c=" + encodeURIComponent(code) + "&s=" + dep, location.href).href : ""; };
+async function flGenerate(pid) {
+  const code = FoodLog.newCode(), me = Cloud.account.email, now = new Date().toISOString();
+  await flSaveCodes(doc => { doc.codes = doc.codes || {}; for (const r of Object.values(doc.codes)) if (r.patientId === pid && r.active) { r.active = false; r.deactivatedAt = now; r.deactivatedBy = me; }
+    doc.codes[code] = { patientId: pid, active: true, createdAt: now, createdBy: me }; return doc; });
+  FL.msg = "New private link created — send it to the patient."; renderFoodLog();
+}
+async function flTurnOff(pid) {
+  if (!confirm("Turn off this patient's food log link? The patient can no longer send entries with it. Entries already received are kept.")) return;
+  const now = new Date().toISOString(), me = Cloud.account.email;
+  await flSaveCodes(doc => { for (const r of Object.values(doc.codes || {})) if (r.patientId === pid && r.active) { r.active = false; r.deactivatedAt = now; r.deactivatedBy = me; } return doc; });
+  FL.msg = "Link turned off."; renderFoodLog();
+}
+async function flPicker() {
+  if (!pickerAvailable()) { toast("Google Picker isn't configured on this site."); return; }
+  try {
+    const tok = await ensureToken(); await loadPicker(); const P = google.picker;
+    const mk = mine => { const v = new P.DocsView(P.ViewId.DOCS).setMimeTypes("application/json").setQuery("tcm-clinic-foodlog").setOwnedByMe(mine); if (v.setLabel) v.setLabel(mine ? "My Drive" : "Shared with me"); return v; };
+    const pb = new P.PickerBuilder(); if (pb.setMaxItems) pb.setMaxItems(50);
+    pb.setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID).addView(mk(false)).addView(mk(true)).enableFeature(P.Feature.MULTISELECT_ENABLED)
+      .setTitle("Select all tcm-clinic-foodlog files").setCallback(async d => { if (d.action === P.Action.PICKED) { await syncFoodLog(); toast(FL.codes ? "Food log connected ✓" : "Select ALL the tcm-clinic-foodlog files (11)"); } }).build().setVisible(true);
+  } catch (e) { toast("Google Picker failed: " + (e.message || e)); }
+}
+let flRenderSeq = 0;
+async function renderFoodLog() {
+  const el = $("#foodLog"); if (!el) return;
+  const pid = state.selectedPatientId, p = pid && patientById(pid);
+  if (!Cloud.account || !p || (!FL.codesId && !FL.url)) { el.hidden = true; return; }
+  el.hidden = false;
+  if (!FL.codes) { setHTML(el, `<h3>🍚 Food log</h3><div class="fl-hint">Patients can send what they eat through a private link (no sign-in).</div>${FL.need || FL.codesId ? `<button type="button" class="small" id="flConnect">📂 Connect food log files</button><div class="fl-hint">Select all 11 <b>tcm-clinic-foodlog</b> files once.</div>` : `<div class="fl-hint">The clinic owner turns this on in Clinic admin (food log web app URL, then Save access).</div>`}`); return; }
+  const act = flActive(pid), link = act ? flLink(act[0]) : "", seq = ++flRenderSeq;
+  const head = `<h3>🍚 Food log <button type="button" class="small" id="flRefresh" title="Refresh">↻</button></h3>
+    <div class="fl-linkbox" id="flLinkBox">${act ? (link ? `<div class="fl-hint">Private link for ${esc(p.name)} — anyone with it can send entries (not read them).</div><input readonly id="flLinkText" value="${esc(link)}" onfocus="this.select()">
+        <div class="fl-acts"><button type="button" class="small primary" id="flCopy">Copy link</button>${navigator.share ? `<button type="button" class="small" id="flShare">Share…</button>` : ""}<button type="button" class="small" id="flRegen">Regenerate</button><button type="button" class="small danger" id="flOff">Turn off</button></div>`
+      : `<div class="fl-hint err">The clinic owner has not pasted the food log web app URL on the admin page yet.</div><button type="button" class="small danger" id="flOff">Turn off</button>`)
+      : `<button type="button" class="small primary" id="flGen">Generate food log link</button>`}${FL.msg ? `<div class="fl-hint ok">${esc(FL.msg)}</div>` : ""}</div>`;
+  setHTML(el, head + `<div id="flEntries" class="fl-hint">Loading entries…</div>`);
+  let list = [];
+  try { const d = await flShard(FoodLog.shardOf(pid, (FL.codes && FL.codes.shards) || FoodLog.N)); list = Object.values(d.entries || {}).filter(x => x.patientId === pid).sort((a, b) => b.at.localeCompare(a.at)); }
+  catch (e) { if (seq === flRenderSeq && $("#flEntries")) setHTML($("#flEntries"), `<span class="err">Could not read the food log (${esc(e.status === 403 || e.status === 404 ? "select the food log files again" : e.message)}).</span> <button type="button" class="small" id="flConnect">📂 Connect food log files</button>`); return; }
+  if (seq !== flRenderSeq || !$("#flEntries")) return;
+  const byDay = {}; for (const x of list) (byDay[fmtDate(x.at)] = byDay[fmtDate(x.at)] || []).push(x);
+  setHTML($("#flEntries"), list.length ? Object.entries(byDay).map(([day, xs]) => `<div class="fl-day"><b>${esc(day)}</b><ul>${xs.map(x => `<li><span class="fl-meal">${esc(FoodLog.MEALS[x.meal] || x.meal)}</span> <span class="muted">${esc(new Date(x.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}</span><div>${esc(x.text)}</div>${x.note ? `<div class="muted">${esc(x.note)}</div>` : ""}${x.photo && /^data:image\/(jpeg|png|webp);base64,/.test(x.photo) ? `<img class="fl-photo" alt="Photo from patient" src="${x.photo}" loading="lazy">` : ""}</li>`).join("")}</ul></div>`).join("") : `<div class="fl-hint">No entries yet.</div>`);
+}
+document.addEventListener("click", async e => {
+  const b = e.target.closest && e.target.closest("#flGen, #flRegen, #flOff, #flCopy, #flShare, #flRefresh, #flConnect"); if (!b) return;
+  const pid = state.selectedPatientId; FL.msg = "";
+  try {
+    if (b.id === "flConnect") return flPicker();
+    if (b.id === "flRefresh") { FL.shards = {}; try { const d = await driveDownload(FL.codesId); if (d && d.kind === "clinic-foodlog-codes") FL.codes = d; } catch {} return renderFoodLog(); }
+    if (b.id === "flGen" || b.id === "flRegen") { if (b.id === "flRegen" && !confirm("Make a new link? The old link stops working.")) return; b.disabled = true; return await flGenerate(pid); }
+    if (b.id === "flOff") return await flTurnOff(pid);
+    const link = $("#flLinkText") && $("#flLinkText").value;
+    if (b.id === "flCopy") { try { await navigator.clipboard.writeText(link); toast("Link copied"); } catch { $("#flLinkText").select(); document.execCommand && document.execCommand("copy"); toast("Link selected — copy it"); } }
+    if (b.id === "flShare") await navigator.share({ title: "Food log", text: "Please log your meals here (private link from the clinic):", url: link }).catch(() => {});
+  } catch (err) { toast("Food log: " + err.message, 5000); renderFoodLog(); }
+});
 function renderMyAppts() {
   const card = $("#apptCard"); if (!card) return;
   card.hidden = !Cloud.account || (!MA.appts && !MA.need);
@@ -8429,7 +8533,7 @@ async function init() {
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { MA, renderVitals, ckMarkImported, renderMyAppts, syncMyAppts,  dataPut, doctorTag, canEditVisit, deleteVisit, cdbKeepOthersVisits, CDB3, cdbTrack, cdbEnsureLoaded, cdbGrantPicker, syncClinicDb4, cdbOpenUpgraded, openPatientDialog, selectPatient, sameNamePatients, nameKey, ptIdParts, savePatientFromForm, deleteVisit, clinicDbState, clinicActive, connectClinicDb, disconnectClinicDb, syncClinicDb, cdbContains, CLINIC_PATIENTS_FILE, __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Slips, fdState, buildSlip, sendToFrontdesk, syncSlips, renderSendRow, FRONTDESK_SLIPS_FILE, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { MA, FL, renderFoodLog, syncFoodLog, renderVitals, ckMarkImported, renderMyAppts, syncMyAppts,  dataPut, doctorTag, canEditVisit, deleteVisit, cdbKeepOthersVisits, CDB3, cdbTrack, cdbEnsureLoaded, cdbGrantPicker, syncClinicDb4, cdbOpenUpgraded, openPatientDialog, selectPatient, sameNamePatients, nameKey, ptIdParts, savePatientFromForm, deleteVisit, clinicDbState, clinicActive, connectClinicDb, disconnectClinicDb, syncClinicDb, cdbContains, CLINIC_PATIENTS_FILE, __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Slips, fdState, buildSlip, sendToFrontdesk, syncSlips, renderSendRow, FRONTDESK_SLIPS_FILE, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>

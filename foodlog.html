@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<title>Food log</title>
+<style>
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#f3f6f5;color:#1e2b27}
+header{background:#fff;border-bottom:1px solid #dde5e1;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+h1{font-size:19px;margin:0;color:#2f7d6d}main{max-width:560px;margin:0 auto;padding:12px}
+.card{background:#fff;border:1px solid #dde5e1;border-radius:14px;padding:14px;margin-bottom:12px}
+label{display:block;font-size:14px;color:#4c5b56;margin:10px 0 4px}
+input,textarea,select{font:inherit;width:100%;padding:10px;border:1px solid #c9d5d0;border-radius:10px;background:#fff}
+textarea{min-height:84px}
+.meals{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.meals label{margin:0}
+.meals input{position:absolute;opacity:0;width:1px}.meals span{display:block;text-align:center;padding:9px 4px;border:1px solid #c9d5d0;border-radius:10px;font-size:14px;color:#1e2b27}
+.meals input:checked+span{background:#2f7d6d;color:#fff;border-color:#2f7d6d}.meals input:focus-visible+span{outline:3px solid #9fd3c6}
+button{font:inherit;border-radius:10px;border:1px solid #c9d5d0;background:#fff;padding:10px 14px}
+.primary{background:#2f7d6d;color:#fff;border-color:#2f7d6d;font-weight:600;width:100%;padding:13px;font-size:17px;margin-top:14px}
+.lang button{padding:5px 9px;font-size:13px}.lang .on{background:#2f7d6d;color:#fff;border-color:#2f7d6d}
+.msg{margin-top:10px;font-size:15px}.ok{color:#1d6b5a}.err{color:#b3261e}.warn{color:#8a5a00}
+.hint{font-size:13px;color:#6b7a75}.prev{max-width:100%;max-height:180px;border-radius:10px;margin-top:6px;display:block}
+ul.sent{list-style:none;padding:0;margin:0}ul.sent li{border-top:1px solid #e5ece9;padding:8px 0;font-size:14px;overflow-wrap:anywhere}
+.badge{font-size:12px;padding:1px 7px;border-radius:9px;background:#eef3f1;color:#4c5b56;margin-left:4px}.badge.q{background:#fff4dc;color:#8a5a00}
+</style></head>
+<body>
+<header><h1>🍚 <span data-t="title">Food log</span></h1><span class="lang"><button type="button" data-lang="en" class="on">English</button> <button type="button" data-lang="tl">Tagalog</button></span></header>
+<main>
+  <section class="card" id="badLink" hidden><b class="err" data-t="badLink">This link is not complete.</b><p class="hint" data-t="badLinkHelp">Please open the full link the clinic sent you, or ask the clinic for a new one.</p></section>
+  <form class="card" id="flForm" hidden novalidate>
+    <p class="hint" style="margin-top:0" data-t="intro">Write down what you eat and drink. Your clinic sees it. Only entries sent from this phone are shown here.</p>
+    <label for="flWhen" data-t="when">Date and time</label><input type="datetime-local" id="flWhen" required>
+    <label data-t="meal">Meal</label>
+    <div class="meals" id="flMeals">
+      <label><input type="radio" name="meal" value="breakfast"><span data-t="breakfast">Breakfast</span></label>
+      <label><input type="radio" name="meal" value="lunch"><span data-t="lunch">Lunch</span></label>
+      <label><input type="radio" name="meal" value="dinner"><span data-t="dinner">Dinner</span></label>
+      <label><input type="radio" name="meal" value="snack"><span data-t="snack">Snack</span></label>
+      <label><input type="radio" name="meal" value="drink"><span data-t="drink">Drink</span></label>
+    </div>
+    <label for="flText" data-t="what">What did you eat or drink?</label><textarea id="flText" maxlength="1000" required></textarea>
+    <label for="flNote" data-t="note">Note (optional) — e.g. how you felt after</label><input id="flNote" maxlength="500" autocomplete="off">
+    <label for="flPhoto" data-t="photo">Photo (optional)</label><input type="file" id="flPhoto" accept="image/*">
+    <img id="flPrev" class="prev" alt="" hidden><button type="button" id="flPhotoX" hidden data-t="removePhoto">Remove photo</button>
+    <button type="submit" class="primary" id="flSend" data-t="send">Send</button>
+    <div class="msg" id="flMsg" role="status" aria-live="polite"></div>
+  </form>
+  <section class="card" id="flSentCard" hidden><b data-t="sentTitle">Sent from this phone</b><ul class="sent" id="flSent"></ul>
+    <p class="hint" data-t="sentHint">Kept only on this phone. The clinic cannot be read from here.</p></section>
+</main>
+<script>
+"use strict";
+(function () {
+  const T = {
+    en: { title: "Food log", badLink: "This link is not complete.", badLinkHelp: "Please open the full link the clinic sent you, or ask the clinic for a new one.",
+      intro: "Write down what you eat and drink. Your clinic sees it. Only entries sent from this phone are shown here.", when: "Date and time", meal: "Meal",
+      breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snack: "Snack", drink: "Drink", what: "What did you eat or drink?", note: "Note (optional) — e.g. how you felt after",
+      photo: "Photo (optional)", removePhoto: "Remove photo", send: "Send", sentTitle: "Sent from this phone", sentHint: "Kept only on this phone. Nothing from the clinic can be read here.",
+      needMeal: "Please choose the meal.", needText: "Please write what you ate or drank.", sending: "Sending…", sent: "Sent ✓ Thank you!",
+      queued: "No internet — saved on this phone. It will be sent automatically when you are online.", waiting: "waiting to send", photoBig: "Photo could not be made small enough — try another photo.",
+      invalid_code: "This link is not valid. Please ask the clinic for a new link.", inactive_code: "This link has been turned off by the clinic. Please ask the clinic for a new link.",
+      rate_limited: "Too many entries for now. Please try again in an hour.", other: "Could not send (", photoDropped: "Sent ✓ (the photo was not kept — the clinic's storage is full)." },
+    tl: { title: "Talaan ng pagkain", badLink: "Kulang ang link na ito.", badLinkHelp: "Buksan ang buong link na ipinadala ng klinika, o humingi ng bagong link.",
+      intro: "Isulat ang mga kinain at ininom mo. Makikita ito ng iyong klinika. Ang mga ipinadala lang mula sa teleponong ito ang makikita rito.", when: "Petsa at oras", meal: "Kainan",
+      breakfast: "Almusal", lunch: "Tanghalian", dinner: "Hapunan", snack: "Meryenda", drink: "Inumin", what: "Ano ang kinain o ininom mo?", note: "Tala (opsyonal) — hal. ano ang naramdaman mo pagkatapos",
+      photo: "Larawan (opsyonal)", removePhoto: "Alisin ang larawan", send: "Ipadala", sentTitle: "Naipadala mula sa teleponong ito", sentHint: "Nasa teleponong ito lang. Walang mababasang datos ng klinika rito.",
+      needMeal: "Pumili ng kainan.", needText: "Isulat kung ano ang kinain o ininom mo.", sending: "Ipinapadala…", sent: "Naipadala ✓ Salamat!",
+      queued: "Walang internet — naka-save sa teleponong ito. Kusa itong ipapadala pag may internet na.", waiting: "naghihintay ipadala", photoBig: "Hindi napaliit ang larawan — sumubok ng ibang larawan.",
+      invalid_code: "Hindi tama ang link na ito. Humingi ng bagong link sa klinika.", inactive_code: "Pinatay na ng klinika ang link na ito. Humingi ng bagong link sa klinika.",
+      rate_limited: "Masyadong marami muna. Subukan ulit pagkalipas ng isang oras.", other: "Hindi naipadala (", photoDropped: "Naipadala ✓ (hindi naitago ang larawan — puno na ang storage ng klinika)." } };
+  const $ = s => document.querySelector(s), esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const q = new URLSearchParams(location.search), code = q.get("c") || "", dep = q.get("s") || "";
+  const okLink = /^[A-Za-z0-9_-]{24,64}$/.test(code) && /^[A-Za-z0-9_-]{20,120}$/.test(dep);
+  const URL_ = "https://script.google.com/macros/s/" + dep + "/exec";
+  const key = (() => { let h = 0; for (const ch of code) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h.toString(36); })();   // never store the code itself as a key
+  const LQ = "tcm_fl_q_" + key, LS = "tcm_fl_sent_" + key, LL = "tcm_fl_lang";
+  const get = k => { try { return JSON.parse(localStorage.getItem(k) || "[]"); } catch { return []; } }, put = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+  let lang = (() => { try { return localStorage.getItem(LL) || ((navigator.language || "").startsWith("tl") || (navigator.language || "").startsWith("fil") ? "tl" : "en"); } catch { return "en"; } })();
+  const t = k => (T[lang] || T.en)[k] || T.en[k] || k;
+  function applyLang() { document.documentElement.lang = lang === "tl" ? "tl" : "en"; document.querySelectorAll("[data-t]").forEach(el => el.textContent = t(el.dataset.t)); document.querySelectorAll("[data-lang]").forEach(b => b.classList.toggle("on", b.dataset.lang === lang)); renderSent(); }
+  const localNow = () => { const d = new Date(), p = n => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
+  let photo = "";
+  function msg(text, cls) { const m = $("#flMsg"); m.textContent = text; m.className = "msg " + (cls || ""); }
+  async function shrink(file) {   // JPEG, longest side ≤ 1024 px, < 300 KB
+    const img = await new Promise((res, rej) => { const u = URL.createObjectURL(file), i = new Image(); i.onload = () => { URL.revokeObjectURL(u); res(i); }; i.onerror = rej; i.src = u; });
+    for (const side of [1024, 800, 640, 480]) {
+      const s = Math.min(1, side / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(img.naturalWidth * s)); c.height = Math.max(1, Math.round(img.naturalHeight * s)); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      for (const qy of [0.72, 0.6, 0.5, 0.4]) { const d = c.toDataURL("image/jpeg", qy); if (d.length * 0.75 < 300 * 1024) return d; }
+    }
+    throw new Error("photoBig");
+  }
+  async function post(item) {
+    const r = await fetch(URL_, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "add", c: code, entry: item }), redirect: "follow", credentials: "omit" });
+    if (!r.ok) throw Object.assign(new Error("http " + r.status), { net: r.status >= 500 || r.status === 429 });
+    return r.json();
+  }
+  let flushing = false;
+  async function flush(show) {
+    if (flushing) return; flushing = true;
+    try {
+      let qu = get(LQ);
+      while (qu.length) {
+        const it = qu[0]; let res;
+        try { res = await post(it); } catch (e) { if (show) msg(navigator.onLine === false || e.net !== false ? t("queued") : t("other") + e.message + ")", "warn"); return; }
+        qu = get(LQ).filter(x => x.id !== it.id); put(LQ, qu);
+        if (res && res.ok) {
+          const sent = get(LS); sent.unshift({ id: it.id, at: it.at, meal: it.meal, text: it.text, note: it.note || "", photo: !!it.photo, sentAt: new Date().toISOString() }); put(LS, sent.slice(0, 50));
+          if (show) msg(res.photo === false ? t("photoDropped") : t("sent"), "ok");
+        } else {
+          const e = (res && res.error) || "error";
+          msg(T.en[e] ? t(e) : t("other") + e + ")", "err");
+          if (e === "rate_limited") { put(LQ, [it, ...qu]); return; }   // keep it; try later
+          if (e === "invalid_code" || e === "inactive_code") { put(LQ, []); break; }
+        }
+        renderSent();
+      }
+    } finally { flushing = false; renderSent(); }
+  }
+  function renderSent() {
+    const s = get(LS), qu = get(LQ), all = [...qu.map(x => ({ ...x, queued: true })), ...s];
+    $("#flSentCard").hidden = !all.length || !okLink;
+    $("#flSent").innerHTML = all.map(x => `<li><b>${esc(t(x.meal))}</b> · ${esc(new Date(x.at).toLocaleString())}${x.queued ? `<span class="badge q">${esc(t("waiting"))}</span>` : ""}${x.photo ? " 📷" : ""}<br>${esc(x.text)}${x.note ? `<br><span class="hint">${esc(x.note)}</span>` : ""}</li>`).join("");
+  }
+  document.addEventListener("click", e => { const b = e.target.closest("[data-lang]"); if (b) { lang = b.dataset.lang; try { localStorage.setItem(LL, lang); } catch {} applyLang(); } });
+  $("#flPhoto").addEventListener("change", async e => {
+    const f = e.target.files && e.target.files[0]; photo = ""; $("#flPrev").hidden = true; $("#flPhotoX").hidden = true; if (!f) return;
+    try { photo = await shrink(f); $("#flPrev").src = photo; $("#flPrev").hidden = false; $("#flPhotoX").hidden = false; msg(""); } catch (err) { e.target.value = ""; msg(t("photoBig"), "err"); }
+  });
+  $("#flPhotoX").onclick = () => { photo = ""; $("#flPhoto").value = ""; $("#flPrev").hidden = true; $("#flPhotoX").hidden = true; };
+  $("#flForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const meal = (document.querySelector("[name=meal]:checked") || {}).value, text = $("#flText").value.trim();
+    if (!meal) { msg(t("needMeal"), "err"); return; } if (!text) { msg(t("needText"), "err"); $("#flText").focus(); return; }
+    const when = $("#flWhen").value ? new Date($("#flWhen").value) : new Date();
+    const id = "fl" + Date.now().toString(36) + Array.from(crypto.getRandomValues(new Uint8Array(6)), b => b.toString(16).padStart(2, "0")).join("");
+    put(LQ, [...get(LQ), { id, at: when.toISOString(), meal, text, note: $("#flNote").value.trim(), photo }]);
+    $("#flText").value = ""; $("#flNote").value = ""; $("#flPhotoX").click(); document.querySelectorAll("[name=meal]").forEach(x => x.checked = false); $("#flWhen").value = localNow();
+    msg(t("sending")); renderSent(); await flush(true);
+  });
+  window.addEventListener("online", () => flush(true));
+  setInterval(() => { if (get(LQ).length) flush(false); }, 30000);
+  $("#badLink").hidden = okLink; $("#flForm").hidden = !okLink; $("#flWhen").value = localNow();
+  applyLang();
+  if (okLink && get(LQ).length) flush(true);
+  window.__flReady = true;
+})();
+</script>
+</body></html>

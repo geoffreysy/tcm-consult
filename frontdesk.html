@@ -2798,6 +2798,17 @@ const Checkins = (() => {
   }
   return { save, FILE, ymd, addDays, KEYS, LABEL, UNIT, RANGE, clean, warnings, text, merge, prune, todays, forPatient };
 })();
+
+/* v35: patient food log (foodlog.html → owner's Apps Script → owner-owned JSON files). Same hash as apps-script/foodlog.gs. */
+const FoodLog = (() => {
+  const CODES = "tcm-clinic-foodlog-codes.json", PREFIX = "tcm-clinic-foodlog-", N = 10;
+  const pad = n => (n < 10 ? "0" : "") + n, shardName = n => PREFIX + pad(n) + ".json";
+  const shardOf = (id, n = N) => { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % n; };
+  const newCode = () => { const b = crypto.getRandomValues(new Uint8Array(24)); return btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };   // 32 chars, 192 bits
+  const depId = url => (String(url || "").match(/^https:\/\/script\.google\.com\/macros\/s\/([A-Za-z0-9_-]{20,120})\/exec\/?$/) || [])[1] || "";
+  const MEALS = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snack: "Snack", drink: "Drink" };
+  return { CODES, PREFIX, N, shardName, shardOf, newCode, depId, MEALS };
+})();
 </script>
 <script>
 "use strict";
