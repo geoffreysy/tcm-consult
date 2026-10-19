@@ -4709,8 +4709,10 @@ function newSession(patientId) {
            lang: $("#langSel") ? $("#langSel").value : "en-PH", entries: [], overrides: {}, tongue: [], pulse: [], notes: "", notesDismiss: {}, tpDismiss: {}, diagnosis: "Date: " + dxDateText(startedAt) + "\n", dxDated: true, ai: null, dirty: false };
 }
 function sessionHasContent(s) {
-  return s && (s.entries.length || s.tongue.length || s.pulse.length || s.notes.trim() || stripDateLines(s.diagnosis).trim() || Object.keys(s.overrides).length || s.ai);
+  return s && (s.entries.length || s.tongue.length || s.pulse.length || s.notes.trim() || stripDateLines(s.diagnosis).trim() || Object.keys(s.overrides).length || s.ai || vitalsEdited(s) || !!s.billing);
 }
+// v39: vitals count as the doctor's work only when the doctor typed them (front desk check-in pre-fill alone = clean)
+function vitalsEdited(s) { const v = s && s.vitals; if (!v) return false; const has = typeof Checkins !== "undefined" ? Object.keys(Checkins.clean(v)).length > 0 : true; return has && (!v.recordedBy || !!v.editedBy); }
 function patientById(id) { return state.patients.find(p => p.id === id); }
 // v22: what tells same-name patients apart — DOB (or age if only age is known) and phone
 const fmtDob = d => { if (!/^\d{4}-\d{2}-\d{2}$/.test(d || "")) return d || ""; const x = new Date(d + "T00:00:00"); return isNaN(x) ? d : x.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }); };
@@ -4729,9 +4731,18 @@ function markDirty() {
   renderSessionInfo();
 }
 async function saveDraft() {
-  try { await DB.put("meta", { id: "draft", session: state.session, at: new Date().toISOString() }); } catch (e) { console.warn("Draft save failed", e); }
+  // v39: only real unsaved work is kept as a draft — a clean / just-saved / auto-started visit removes any old draft instead
+  const s = state.session;
+  if (!s || !s.dirty || !sessionHasContent(s)) return clearDraft();
+  try { await DB.put("meta", { id: "draft", session: s, at: new Date().toISOString() }); } catch (e) { console.warn("Draft save failed", e); }
 }
-async function clearDraft() { try { await DB.del("meta", "draft"); } catch {} }
+// v39: a stored draft is restored only if it was really unsaved (older builds also stored already-saved visits)
+function draftUsable(d) {
+  if (!d || !d.session || !d.session.dirty || !sessionHasContent(d.session)) return false;
+  const v = state.visits.find(x => x.id === d.session.id);
+  return !(v && v.savedAt && d.session.savedAt && v.savedAt >= d.session.savedAt && (d.at || "") <= v.savedAt);
+}
+async function clearDraft() { clearTimeout(draftTimer); try { await DB.del("meta", "draft"); } catch {} }
 
 /* Live (interim) speech: detection runs over "current paragraph + interim" so
    negation context carries across, but only matches inside the interim tail
@@ -8192,11 +8203,12 @@ async function switchNamespace(ns, carrySession) {
   await loadData();
   let d = null; try { d = await DB.get("meta", "draft"); } catch {}
   if (carrySession && sessionHasContent(carrySession)) state.session = carrySession;
-  else if (d && d.session && sessionHasContent(d.session)) {
+  else if (draftUsable(d)) {
     state.session = { ...newSession(null), dxDated: false, ...d.session, dirty: true };
     state.session.entries = mergeLegacyEntries(state.session.entries);
+    state.consulting = !!state.session.patientId;   // v39: a restored draft opens in the consult view (never hidden behind the start screen)
     toast("Restored unsaved session draft from " + fmtDateTime(d.at), 4000);
-  } else state.session = newSession(null);
+  } else { state.session = newSession(null); state.consulting = false; }
   const s = await DB.get("meta", "settings"); if (s && s.data) applySettings(s.data);
   state.selectedPatientId = state.session.patientId && patientById(state.session.patientId) ? state.session.patientId : null;
   state.interim = "";
@@ -8692,7 +8704,8 @@ async function init() {
   await loadData();
   try {
     const d = await DB.get("meta", "draft");
-    if (d && d.session && sessionHasContent(d.session)) {
+    if (d && !draftUsable(d)) clearDraft();
+    if (draftUsable(d)) {
       state.session = { ...newSession(null), dxDated: false, ...d.session, dirty: true };
       state.session.entries = mergeLegacyEntries(state.session.entries);
       state.selectedPatientId = state.session.patientId || null;
