@@ -2942,7 +2942,7 @@ const dbMeta = id => gjson(`${PG.drive}/files/${encodeURIComponent(id)}?fields=$
 const nRec = x => Array.isArray(x) ? x.length : Object.keys(x || {}).length;
 const permTarget = () => D.folderId;   // doctors get WRITER on the FOLDER (+ every file in it)
 async function loadDb() {   // v25: only the sharded database (format 4); older clinic databases are ignored and left untouched (no migration)
-  D.loaded = true; if (!C.loaded) { C.loaded = true; loadClinicConfig(); }
+  D.loaded = true; if (!C.loaded) { C.loaded = true; loadClinicConfig(); trashOldFoodlogFiles().catch(e => console.warn("food log cleanup:", e)); }
   const cands = (await driveList(`name='${qEsc(CDB3.INDEX)}' and 'me' in owners and trashed=false`)).filter(x => (x.appProperties || {}).tcmConsult === CDB3.INDEX_TAG);
   let old = null; const docs = [];
   for (const c of cands) { const doc = await driveDownload(c.id).catch(() => null); if (doc && doc.kind === "clinic-patients-index") docs.push({ c, doc }); }
@@ -3140,15 +3140,32 @@ async function loadClinicConfig() {
 // READ-ONLY for ticked doctors + front desk. Free-text bookings only; no patient records.
 const APPTS_FILE = "tcm-clinic-appointments.json";
 // v33: check-in vitals file — owner-owned; WRITER for front desk + ticked doctors; never shared with scheduler-only e-mails
-// v35: food log files — codes registry (doctors: writer) + 10 data files (doctors: reader). Created here (by this app) so
-// doctors' apps can open them after selecting them once; the owner's Apps Script writes entries into them.
+// v36: food log — only the code list (code → patient id; doctors: writer). Entries are written by the owner's Apps Script
+// INTO the patients' own data files (shards). The v35 tcm-clinic-foodlog-NN.json data files are moved to the Drive trash.
+// owner confirmed (v36): the 10 v35 data files tcm-clinic-foodlog-00…09.json go to the Drive trash (owner-owned only;
+// restorable 30 days). Runs on the owner's admin page load and on Save access; reports what was trashed.
+async function trashOldFoodlogFiles() {
+  const names = [];
+  for (let pass = 0; pass < 5; pass++) {
+    const old = (await driveList(`name contains '${qEsc(FoodLog.PREFIX)}' and 'me' in owners and trashed=false`)).filter(f => /^tcm-clinic-foodlog-\d\d\.json$/.test(f.name));
+    if (!old.length) break;
+    let moved = 0; for (const f of old) { try { await trashFile(f.id); names.push(f.name); moved++; } catch (e) { console.warn("trash", f.name, e); } }
+    if (!moved) break;
+  }
+  if (names.length) { C.fl.cleanMsg = `Food log: moved ${names.length} old data file${names.length === 1 ? "" : "s"} to the Drive trash (${names.sort().join(", ")}). Entries now go into each patient's own record; ${FoodLog.CODES} is kept.`; const m = $("#dbMsg"); if (m) { m.textContent = C.fl.cleanMsg; m.classList.remove("err"); } }
+  return names;
+}
 async function ensureFoodlogFiles() {
   const folder = await ensureFolder(), now = new Date().toISOString();
-  const find = async name => ((await driveList(`name='${qEsc(name)}' and 'me' in owners and trashed=false`))[0] || {}).id || null;
-  if (!C.fl.codesId) C.fl.codesId = (await find(FoodLog.CODES)) || (await createIn(folder, FoodLog.CODES, { app: "tcm-consult-assistant", kind: "clinic-foodlog-codes", format: 1, shards: FoodLog.N, codes: {}, note: "Private food log link codes → patient id. No names. Managed in the doctor app.", updatedAt: now }, { tcmConsult: "clinic-foodlog-codes" }, "TCM Consult Assistant — food log link codes.")).id;
-  const ids = [];
-  for (let n = 0; n < FoodLog.N; n++) ids.push(C.fl.shardIds[n] || (await find(FoodLog.shardName(n))) || (await createIn(folder, FoodLog.shardName(n), { app: "tcm-consult-assistant", kind: "clinic-foodlog", format: 1, shard: n, entries: {}, updatedAt: now }, { tcmConsult: "clinic-foodlog", shard: String(n) }, "TCM Consult Assistant — patient food log entries (written by the clinic's Apps Script).")).id);
-  C.fl.shardIds = ids;
+  const list = async q => await driveList(q + " and 'me' in owners and trashed=false");
+  if (!C.fl.codesId) C.fl.codesId = ((await list(`name='${qEsc(FoodLog.CODES)}'`))[0] || {}).id || (await createIn(folder, FoodLog.CODES, { app: "tcm-consult-assistant", kind: "clinic-foodlog-codes", format: 1, codes: {}, note: "Private food log link codes → patient id. No names. Managed in the doctor app.", updatedAt: now }, { tcmConsult: "clinic-foodlog-codes" }, "TCM Consult Assistant — food log link codes.")).id;
+  if (D.fileId) for (let i = 0; i < 6; i++) {   // the Apps Script finds each patient's data file through this index
+    const cur = await driveDownload(C.fl.codesId); if (cur.indexId === D.fileId) break;
+    await driveUpdate(C.fl.codesId, { ...cur, indexId: D.fileId, updatedAt: new Date().toISOString() });
+    if ((await driveDownload(C.fl.codesId)).indexId === D.fileId) break;
+  }
+  await trashOldFoodlogFiles();
+  C.fl.shardIds = [];
 }
 async function ensureCheckinsFile() {
   if (C.ckId) return C.ckId;
@@ -3182,7 +3199,7 @@ async function saveClinicConfig() {
   const now = new Date().toISOString(), schedule = {};
   for (const r of D.rows) { const x = C.schedule[r.email]; if (x && Object.values(x).some(d => d && (d.am || d.pm))) schedule[r.email] = x; }
   if (!C.fileId) { const f = await createIn(await ensureFolder(), CLINIC_CONFIG_FILE, { app: "tcm-consult-assistant", kind: "clinic-config", format: 1, schedule: {}, updatedAt: now }, { tcmConsult: "clinic-config" }, "TCM Consult Assistant — clinic schedule (reference only). Shared read-only with doctors and front desk."); C.fileId = f.id; }
-  const cur = await driveDownload(C.fileId), doc = { ...cur, ...(C.apptId ? { appointmentsFileId: C.apptId } : {}), ...(C.ckId ? { checkinsFileId: C.ckId } : {}), ...(C.fl.codesId ? { foodlogCodesId: C.fl.codesId, foodlogShardIds: C.fl.shardIds } : {}), foodlogUrl: C.flUrl || "", app: "tcm-consult-assistant", kind: "clinic-config", format: 1, note: "Clinic schedule for reference (doctor e-mails + days). No patient data. Shared read-only with the clinic's doctors and front desk.", schedule, updatedAt: now, updatedBy: P.account.email };
+  const cur = await driveDownload(C.fileId), doc = { ...cur, ...(C.apptId ? { appointmentsFileId: C.apptId } : {}), ...(C.ckId ? { checkinsFileId: C.ckId } : {}), ...(C.fl.codesId ? { foodlogCodesId: C.fl.codesId } : {}), foodlogUrl: C.flUrl || "", app: "tcm-consult-assistant", kind: "clinic-config", format: 1, note: "Clinic schedule for reference (doctor e-mails + days). No patient data. Shared read-only with the clinic's doctors and front desk.", schedule, updatedAt: now, updatedBy: P.account.email };
   await driveUpdate(C.fileId, doc);
   const chk = await driveDownload(C.fileId); if (JSON.stringify(chk.schedule || {}) !== JSON.stringify(schedule)) throw new Error("schedule could not be verified");
   C.schedule = schedule;
@@ -3244,7 +3261,6 @@ async function saveDbAccess() {   // ONE save: patient database (writer on folde
       if (C.fl.codesId) {   // doctors only — never front desk / scheduler
         const w = {}, r = {}; for (const e of want) { w[e] = "writer"; r[e] = "reader"; }
         for (const [e, v] of Object.entries(await syncRoles(C.fl.codesId, w))) if (/error|fail/.test(v)) st[e] = "food log: " + v;
-        await Promise.all(C.fl.shardIds.map(async id => { for (const [e, v] of Object.entries(await syncRoles(id, r))) if (/error|fail/.test(v)) st[e] = "food log: " + v; }));
       }
       if (C.ckId) { const roles = {}; for (const e of [...want, ...D.frontDesk]) roles[e] = "writer";
         for (const [e, v] of Object.entries(await syncRoles(C.ckId, roles))) if (/error|fail/.test(v)) st[e] = "check-ins: " + v; }
@@ -3267,6 +3283,7 @@ async function saveDbAccess() {   // ONE save: patient database (writer on folde
     const n = want.length;
     if (st["(schedule)"]) throw new Error(st["(schedule)"]);
     m.textContent = `Saved ✓ (with schedules) — ${n} doctor${n === 1 ? "" : "s"} with access${D.fileId ? " to patients" : ""}${P.fileId ? (D.fileId ? " and" : "") + " to the price list" : ""}${D.frontDesk.length && P.fileId ? ` · front desk: price list only` : ""}.`;
+    if (C.fl.cleanMsg) { m.textContent += " · " + C.fl.cleanMsg; C.fl.cleanMsg = ""; }
   } catch (e) { m.textContent = "Could not save: " + e.message; m.classList.add("err"); }
   finally { $("#dbSaveBtn").disabled = false; }
 }

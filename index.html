@@ -7304,6 +7304,14 @@ function scheduleSync(ms = GAUTH.debounceMs) {
 }
 
 /* ---------- merge (pure) ---------- */
+// v36: patient food log entries (written into the patient's record by the clinic's Apps Script, hidden by doctors):
+// union by entry id; per entry the newest updatedAt wins; {deleted:true} is a tombstone (hidden).
+function mergeFoodLog(a, b) {
+  const m = new Map(); const t = e => (e && (e.updatedAt || e.receivedAt || e.at)) || "";
+  for (const e of [...(a || []), ...(b || [])]) { if (!e || !e.id) continue; const c = m.get(e.id); if (!c || t(e) > t(c) || (t(e) === t(c) && e.deleted && !c.deleted)) m.set(e.id, e); }
+  return [...m.values()].sort((x, y) => String(x.at || "").localeCompare(String(y.at || "")) || String(x.id).localeCompare(String(y.id)));
+}
+const flContains = (remote, mine) => { const ids = new Map((remote || []).map(e => [e.id, e])); return (mine || []).every(e => { const x = ids.get(e.id); return x && (x.updatedAt || "") >= (e.updatedAt || ""); }); };
 function mergeDocs(a, b) {
   a = a || {}; b = b || {};
   const deleted = { ...(a.deleted || {}) };
@@ -7315,6 +7323,7 @@ function mergeDocs(a, b) {
       if (!r || !r.id) continue;
       const cur = m.get(r.id);
       if (!cur || recTime(r) > recTime(cur)) m.set(r.id, r);           // last write wins (ties keep the local copy)
+      if (kind === "patients" && cur && (cur.foodLog || r.foodLog)) { const w = m.get(r.id), fl = mergeFoodLog(cur.foodLog, r.foodLog); if (JSON.stringify(fl) !== JSON.stringify(w.foodLog || [])) m.set(r.id, { ...w, foodLog: fl }); }   // v36: food log entries are never lost by a patient-record merge
     }
     out[kind] = [...m.values()].filter(r => { const t = deleted[kind + "/" + r.id]; return !t || recTime(r) > t; });
     for (const r of out[kind]) delete deleted[kind + "/" + r.id];        // edited after the delete → record revived
@@ -7420,7 +7429,7 @@ const recDocOf = async st => ({ patients: await st.all("patients"), visits: awai
 // every record / tombstone we wrote must be in `remote` (same or newer) — otherwise a concurrent writer overwrote us
 function cdbContains(remote, merged) {
   const idx = {}; for (const k of ["patients", "visits"]) { idx[k] = new Map(); for (const r of remote[k] || []) idx[k].set(r.id, r); }
-  for (const k of ["patients", "visits"]) for (const r of merged[k]) { const x = idx[k].get(r.id); if (!x) { const t = (remote.deleted || {})[k + "/" + r.id]; if (!t || t < recTime(r)) return false; } else if (recTime(x) < recTime(r)) return false; }
+  for (const k of ["patients", "visits"]) for (const r of merged[k]) { const x = idx[k].get(r.id); if (!x) { const t = (remote.deleted || {})[k + "/" + r.id]; if (!t || t < recTime(r)) return false; } else if (recTime(x) < recTime(r) || (k === "patients" && !flContains(x.foodLog, r.foodLog))) return false; }
   for (const [key, t] of Object.entries(merged.deleted || {})) { const [k, id] = key.split("/"); const x = idx[k] && idx[k].get(id); if (x ? recTime(x) < t : !(remote.deleted || {})[key]) return false; }
   return true;
 }
@@ -7527,24 +7536,17 @@ document.addEventListener("input", e => {
 document.addEventListener("change", e => { if (e.target.dataset && e.target.dataset.vt) { const s = state.session; if (s.vitals) s.vitals = { ...s.vitals, ...Checkins.clean(s.vitals) }; renderVitals(); renderHistory(); } });
 document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("#ckConnect"); if (b) maPicker(); });
 /* ---------- v35: patient food log (private link per patient; entries arrive via the clinic's Apps Script) ---------- */
-const FL = { codesId: "", shardIds: [], codes: null, url: "", shards: {}, need: false, busy: false, msg: "" };
+const FL = { codesId: "", codes: null, url: "", need: false, msg: "" };
 async function syncFoodLog() {
   if (!Cloud.account) return;
   const c = (MA.cfgId ? await driveDownload(MA.cfgId).catch(e => { if (e.status === 401) throw e; return null; }) : null) || MA.cfgDoc;
-  if (c && c.kind === "clinic-config") { MA.cfgDoc = c; FL.url = c.foodlogUrl || ""; if (c.foodlogCodesId) { FL.codesId = c.foodlogCodesId; FL.shardIds = c.foodlogShardIds || []; } }
-  if (!FL.codesId) {   // the owner's own files (created by its admin page)
+  if (c && c.kind === "clinic-config") { MA.cfgDoc = c; FL.url = c.foodlogUrl || ""; if (c.foodlogCodesId) FL.codesId = c.foodlogCodesId; }
+  if (!FL.codesId) {   // the owner's own file (created by its admin page)
     try { const f = (await driveList(`name='${FoodLog.CODES}' and 'me' in owners and trashed=false`))[0]; if (f) FL.codesId = f.id; } catch (e) { if (e.status === 401) throw e; }
   }
   if (!FL.codesId) { renderFoodLog(); return; }
   try { const d = await driveDownload(FL.codesId); if (d && d.kind === "clinic-foodlog-codes") { FL.codes = d; FL.need = false; } } catch (e) { if (e.status === 401) throw e; FL.codes = null; FL.need = true; }
-  FL.shards = {};   // re-read on open
   renderFoodLog();
-}
-async function flShard(n) {
-  if (FL.shards[n]) return FL.shards[n];
-  const id = FL.shardIds[n]; if (!id) throw new Error("food log file missing — the clinic owner should press Save access on the admin page");
-  const d = await driveDownload(id); if (!d || d.kind !== "clinic-foodlog") throw new Error("not a food log file");
-  return (FL.shards[n] = d);
 }
 async function flSaveCodes(fn) {   // read → change → write → verify (doctors share this file)
   for (let i = 0; i < 6; i++) {
@@ -7558,6 +7560,8 @@ async function flSaveCodes(fn) {   // read → change → write → verify (doct
 const flActive = pid => Object.entries((FL.codes || {}).codes || {}).find(([, r]) => r.patientId === pid && r.active) || null;
 const flLink = code => { const dep = FoodLog.depId(FL.url); return dep ? new URL("foodlog.html?c=" + encodeURIComponent(code) + "&s=" + dep, location.href).href : ""; };
 async function flGenerate(pid) {
+  const p = patientById(pid);
+  if (p && p._stub) { await dataPut("patients", fromStub(p)); Cloud.pending = true; await syncNow(); }   // the patient needs a data file for the entries
   const code = FoodLog.newCode(), me = Cloud.account.email, now = new Date().toISOString();
   await flSaveCodes(doc => { doc.codes = doc.codes || {}; for (const r of Object.values(doc.codes)) if (r.patientId === pid && r.active) { r.active = false; r.deactivatedAt = now; r.deactivatedBy = me; }
     doc.codes[code] = { patientId: pid, active: true, createdAt: now, createdBy: me }; return doc; });
@@ -7569,43 +7573,49 @@ async function flTurnOff(pid) {
   await flSaveCodes(doc => { for (const r of Object.values(doc.codes || {})) if (r.patientId === pid && r.active) { r.active = false; r.deactivatedAt = now; r.deactivatedBy = me; } return doc; });
   FL.msg = "Link turned off."; renderFoodLog();
 }
+async function flHide(pid, eid) {   // tombstone in the patient record (kept so the entry never comes back from another copy)
+  if (!confirm("Delete this food log entry? It is hidden for all doctors.")) return;
+  const p = await DB.get("patients", pid); if (!p) return;
+  const now = new Date().toISOString(), me = Cloud.account ? Cloud.account.email : "";
+  const foodLog = (p.foodLog || []).map(e => e.id === eid ? { id: e.id, at: e.at, deleted: true, deletedBy: me, updatedAt: now } : e);
+  await dataPut("patients", { ...p, foodLog, updatedAt: now });
+  const i = state.patients.findIndex(x => x.id === pid); if (i >= 0) state.patients[i] = { ...state.patients[i], foodLog };
+  markDataChanged(); renderFoodLog(); toast("Entry deleted");
+}
 async function flPicker() {
   if (!pickerAvailable()) { toast("Google Picker isn't configured on this site."); return; }
   try {
     const tok = await ensureToken(); await loadPicker(); const P = google.picker;
-    const mk = mine => { const v = new P.DocsView(P.ViewId.DOCS).setMimeTypes("application/json").setQuery("tcm-clinic-foodlog").setOwnedByMe(mine); if (v.setLabel) v.setLabel(mine ? "My Drive" : "Shared with me"); return v; };
-    const pb = new P.PickerBuilder(); if (pb.setMaxItems) pb.setMaxItems(50);
-    pb.setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID).addView(mk(false)).addView(mk(true)).enableFeature(P.Feature.MULTISELECT_ENABLED)
-      .setTitle("Select all tcm-clinic-foodlog files").setCallback(async d => { if (d.action === P.Action.PICKED) { await syncFoodLog(); toast(FL.codes ? "Food log connected ✓" : "Select ALL the tcm-clinic-foodlog files (11)"); } }).build().setVisible(true);
+    const mk = mine => { const v = new P.DocsView(P.ViewId.DOCS).setMimeTypes("application/json").setQuery(FoodLog.CODES).setOwnedByMe(mine); if (v.setLabel) v.setLabel(mine ? "My Drive" : "Shared with me"); return v; };
+    new P.PickerBuilder().setOAuthToken(tok).setDeveloperKey(GOOGLE_PICKER_API_KEY.trim()).setAppId(PICKER_APP_ID).addView(mk(false)).addView(mk(true))
+      .setTitle("Select " + FoodLog.CODES).setCallback(async d => { if (d.action === P.Action.PICKED) { await syncFoodLog(); toast(FL.codes ? "Food log connected ✓" : "Could not open the food log link list"); } }).build().setVisible(true);
   } catch (e) { toast("Google Picker failed: " + (e.message || e)); }
 }
 let flRenderSeq = 0;
-async function renderFoodLog() {
+async function flReloadCurrent() { const pid = state.selectedPatientId; if (!pid) return; try { const d = await DB.get("patients", pid); const i = state.patients.findIndex(x => x.id === pid); if (d && i >= 0) state.patients[i] = { ...state.patients[i], foodLog: d.foodLog || [] }; } catch (e) {} }
+function renderFoodLog() {
   const el = $("#foodLog"); if (!el) return;
   const pid = state.selectedPatientId, p = pid && patientById(pid);
   if (!Cloud.account || !p || (!FL.codesId && !FL.url)) { el.hidden = true; return; }
   el.hidden = false;
-  if (!FL.codes) { setHTML(el, `<h3>🍚 Food log</h3><div class="fl-hint">Patients can send what they eat through a private link (no sign-in).</div>${FL.need || FL.codesId ? `<button type="button" class="small" id="flConnect">📂 Connect food log files</button><div class="fl-hint">Select all 11 <b>tcm-clinic-foodlog</b> files once.</div>` : `<div class="fl-hint">The clinic owner turns this on in Clinic admin (food log web app URL, then Save access).</div>`}`); return; }
-  const act = flActive(pid), link = act ? flLink(act[0]) : "", seq = ++flRenderSeq;
-  const head = `<h3>🍚 Food log <button type="button" class="small" id="flRefresh" title="Refresh">↻</button></h3>
-    <div class="fl-linkbox" id="flLinkBox">${act ? (link ? `<div class="fl-hint">Private link for ${esc(p.name)} — anyone with it can send entries (not read them).</div><input readonly id="flLinkText" value="${esc(link)}" onfocus="this.select()">
+  const list = (p.foodLog || []).filter(x => x && !x.deleted).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  const act = FL.codes ? flActive(pid) : null, link = act ? flLink(act[0]) : "";
+  const linkHTML = !FL.codes ? `${FL.need || FL.codesId ? `<button type="button" class="small" id="flConnect">📂 Connect food log links</button><div class="fl-hint">Select <b>${esc(FoodLog.CODES)}</b> once to create or turn off links.</div>` : `<div class="fl-hint">The clinic owner turns this on in Clinic admin (food log web app URL, then Save access).</div>`}`
+    : act ? (link ? `<div class="fl-hint">Private link for ${esc(p.name)} — anyone with it can send entries (not read them).</div><input readonly id="flLinkText" value="${esc(link)}" onfocus="this.select()">
         <div class="fl-acts"><button type="button" class="small primary" id="flCopy">Copy link</button>${navigator.share ? `<button type="button" class="small" id="flShare">Share…</button>` : ""}<button type="button" class="small" id="flRegen">Regenerate</button><button type="button" class="small danger" id="flOff">Turn off</button></div>`
       : `<div class="fl-hint err">The clinic owner has not pasted the food log web app URL on the admin page yet.</div><button type="button" class="small danger" id="flOff">Turn off</button>`)
-      : `<button type="button" class="small primary" id="flGen">Generate food log link</button>`}${FL.msg ? `<div class="fl-hint ok">${esc(FL.msg)}</div>` : ""}</div>`;
-  setHTML(el, head + `<div id="flEntries" class="fl-hint">Loading entries…</div>`);
-  let list = [];
-  try { const d = await flShard(FoodLog.shardOf(pid, (FL.codes && FL.codes.shards) || FoodLog.N)); list = Object.values(d.entries || {}).filter(x => x.patientId === pid).sort((a, b) => b.at.localeCompare(a.at)); }
-  catch (e) { if (seq === flRenderSeq && $("#flEntries")) setHTML($("#flEntries"), `<span class="err">Could not read the food log (${esc(e.status === 403 || e.status === 404 ? "select the food log files again" : e.message)}).</span> <button type="button" class="small" id="flConnect">📂 Connect food log files</button>`); return; }
-  if (seq !== flRenderSeq || !$("#flEntries")) return;
+    : `<button type="button" class="small primary" id="flGen">Generate food log link</button>`;
   const byDay = {}; for (const x of list) (byDay[fmtDate(x.at)] = byDay[fmtDate(x.at)] || []).push(x);
-  setHTML($("#flEntries"), list.length ? Object.entries(byDay).map(([day, xs]) => `<div class="fl-day"><b>${esc(day)}</b><ul>${xs.map(x => `<li><span class="fl-meal">${esc(FoodLog.MEALS[x.meal] || x.meal)}</span> <span class="muted">${esc(new Date(x.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}</span><div>${esc(x.text)}</div>${x.note ? `<div class="muted">${esc(x.note)}</div>` : ""}${x.photo && /^data:image\/(jpeg|png|webp);base64,/.test(x.photo) ? `<img class="fl-photo" alt="Photo from patient" src="${x.photo}" loading="lazy">` : ""}</li>`).join("")}</ul></div>`).join("") : `<div class="fl-hint">No entries yet.</div>`);
+  const entries = p._stub ? `<div class="fl-hint">Open the patient once to load the food log.</div>` : list.length ? Object.entries(byDay).map(([day, xs]) => `<div class="fl-day"><b>${esc(day)}</b><ul>${xs.map(x => `<li data-fl="${esc(x.id)}"><span class="fl-meal">${esc(FoodLog.MEALS[x.meal] || x.meal)}</span> <span class="muted">${esc(new Date(x.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}</span> <button type="button" class="link-btn fl-del" data-fl-del="${esc(x.id)}" title="Delete entry">✕</button><div>${esc(x.text)}</div>${x.note ? `<div class="muted">${esc(x.note)}</div>` : ""}${x.photo && /^data:image\/jpeg;base64,/.test(x.photo) ? `<img class="fl-photo" alt="Photo from patient" src="${x.photo}" loading="lazy">` : ""}</li>`).join("")}</ul></div>`).join("") : `<div class="fl-hint">No entries yet.</div>`;
+  setHTML(el, `<h3>🍚 Food log <button type="button" class="small" id="flRefresh" title="Refresh">↻</button></h3><div class="fl-linkbox" id="flLinkBox">${linkHTML}${FL.msg ? `<div class="fl-hint ok">${esc(FL.msg)}</div>` : ""}</div><div id="flEntries">${entries}</div>`);
 }
 document.addEventListener("click", async e => {
-  const b = e.target.closest && e.target.closest("#flGen, #flRegen, #flOff, #flCopy, #flShare, #flRefresh, #flConnect"); if (!b) return;
+  const b = e.target.closest && e.target.closest("#flGen, #flRegen, #flOff, #flCopy, #flShare, #flRefresh, #flConnect, [data-fl-del]"); if (!b) return;
   const pid = state.selectedPatientId; FL.msg = "";
   try {
     if (b.id === "flConnect") return flPicker();
-    if (b.id === "flRefresh") { FL.shards = {}; try { const d = await driveDownload(FL.codesId); if (d && d.kind === "clinic-foodlog-codes") FL.codes = d; } catch {} return renderFoodLog(); }
+    if (b.dataset.flDel) return await flHide(pid, b.dataset.flDel);
+    if (b.id === "flRefresh") { b.disabled = true; Cloud.pending = true; Cloud.forceShardOf = state.selectedPatientId || null; try { await syncNow(); } finally { await flReloadCurrent(); renderFoodLog(); } return; }
     if (b.id === "flGen" || b.id === "flRegen") { if (b.id === "flRegen" && !confirm("Make a new link? The old link stops working.")) return; b.disabled = true; return await flGenerate(pid); }
     if (b.id === "flOff") return await flTurnOff(pid);
     const link = $("#flLinkText") && $("#flLinkText").value;
@@ -7832,7 +7842,7 @@ function localShard(n, patients, visits, tomb, track) {
 // write a merged shard into the local cache (newer wins; a loaded record replaces a stub; tombstones delete)
 async function cdbApplyShard(st, merged, n, track) {
   let changed = false;
-  for (const p of merged.patients) { track.shardOf[p.id] = n; const cur = await st.get("patients", p.id); if (!cur || cur._stub || recTime(p) > recTime(cur)) { await st.put("patients", clean(p)); changed = true; } }
+  for (const p of merged.patients) { track.shardOf[p.id] = n; const cur = await st.get("patients", p.id); if (!cur || cur._stub || recTime(p) > recTime(cur)) { await st.put("patients", clean(p)); changed = true; } else if (JSON.stringify(p.foodLog || []) !== JSON.stringify(cur.foodLog || [])) { await st.put("patients", { ...cur, foodLog: p.foodLog || [] }); changed = true; } }
   for (const v of merged.visits) { track.vp[v.id] = v.patientId; if (!(v.patientId in track.shardOf)) track.shardOf[v.patientId] = n; const cur = await st.get("visits", v.id); if (!cur || recTime(v) > recTime(cur)) { await st.put("visits", v); changed = true; } }
   for (const [k, t] of Object.entries(merged.deleted || {})) {
     const [kind, id] = k.split("/"); const cur = await st.get(kind, id);
@@ -7909,6 +7919,8 @@ async function syncClinicDb4(acc) {
   let changed = false;
   // 1. index → local: shard numbers, stubs for patients whose shard isn't loaded, deletions
   const refresh = new Set();
+  // v36: the food-log script writes shards without touching index.json → re-read the open patient's shard on refresh / open
+  if (Cloud.forceShardOf) { const fe = (idx.patients || {})[Cloud.forceShardOf]; if (fe && typeof fe.shard === "number") refresh.add(fe.shard); Cloud.forceShardOf = null; }
   for (const [pid, e] of Object.entries(idx.patients || {})) {
     const hasShard = typeof e.shard === "number";
     if (hasShard) track.shardOf[pid] = e.shard;

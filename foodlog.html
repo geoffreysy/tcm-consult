@@ -58,7 +58,7 @@ ul.sent{list-style:none;padding:0;margin:0}ul.sent li{border-top:1px solid #e5ec
       needMeal: "Please choose the meal.", needText: "Please write what you ate or drank.", sending: "Sending…", sent: "Sent ✓ Thank you!",
       queued: "No internet — saved on this phone. It will be sent automatically when you are online.", waiting: "waiting to send", photoBig: "Photo could not be made small enough — try another photo.",
       invalid_code: "This link is not valid. Please ask the clinic for a new link.", inactive_code: "This link has been turned off by the clinic. Please ask the clinic for a new link.",
-      rate_limited: "Too many entries for now. Please try again in an hour.", other: "Could not send (", photoDropped: "Sent ✓ (the photo was not kept — the clinic's storage is full)." },
+      rate_limited: "Too many entries for now. Please try again in an hour.", not_ready: "The clinic is still setting up your food log. Please try again later.", busy: "The clinic's records are busy — it will be sent again shortly.", photo_too_big: "The photo is too big — please choose another photo.", other: "Could not send (", photoDropped: "Sent ✓ (the photo was not kept — the clinic's storage is full)." },
     tl: { title: "Talaan ng pagkain", badLink: "Kulang ang link na ito.", badLinkHelp: "Buksan ang buong link na ipinadala ng klinika, o humingi ng bagong link.",
       intro: "Isulat ang mga kinain at ininom mo. Makikita ito ng iyong klinika. Ang mga ipinadala lang mula sa teleponong ito ang makikita rito.", when: "Petsa at oras", meal: "Kainan",
       breakfast: "Almusal", lunch: "Tanghalian", dinner: "Hapunan", snack: "Meryenda", drink: "Inumin", what: "Ano ang kinain o ininom mo?", note: "Tala (opsyonal) — hal. ano ang naramdaman mo pagkatapos",
@@ -66,7 +66,7 @@ ul.sent{list-style:none;padding:0;margin:0}ul.sent li{border-top:1px solid #e5ec
       needMeal: "Pumili ng kainan.", needText: "Isulat kung ano ang kinain o ininom mo.", sending: "Ipinapadala…", sent: "Naipadala ✓ Salamat!",
       queued: "Walang internet — naka-save sa teleponong ito. Kusa itong ipapadala pag may internet na.", waiting: "naghihintay ipadala", photoBig: "Hindi napaliit ang larawan — sumubok ng ibang larawan.",
       invalid_code: "Hindi tama ang link na ito. Humingi ng bagong link sa klinika.", inactive_code: "Pinatay na ng klinika ang link na ito. Humingi ng bagong link sa klinika.",
-      rate_limited: "Masyadong marami muna. Subukan ulit pagkalipas ng isang oras.", other: "Hindi naipadala (", photoDropped: "Naipadala ✓ (hindi naitago ang larawan — puno na ang storage ng klinika)." } };
+      rate_limited: "Masyadong marami muna. Subukan ulit pagkalipas ng isang oras.", not_ready: "Inihahanda pa ng klinika ang iyong talaan. Subukan ulit mamaya.", busy: "Abala ang talaan ng klinika — ipapadala ulit ito maya-maya.", photo_too_big: "Masyadong malaki ang larawan — pumili ng iba.", other: "Hindi naipadala (", photoDropped: "Naipadala ✓ (hindi naitago ang larawan — puno na ang storage ng klinika)." } };
   const $ = s => document.querySelector(s), esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const q = new URLSearchParams(location.search), code = q.get("c") || "", dep = q.get("s") || "";
   const okLink = /^[A-Za-z0-9_-]{24,64}$/.test(code) && /^[A-Za-z0-9_-]{20,120}$/.test(dep);
@@ -80,12 +80,12 @@ ul.sent{list-style:none;padding:0;margin:0}ul.sent li{border-top:1px solid #e5ec
   const localNow = () => { const d = new Date(), p = n => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
   let photo = "";
   function msg(text, cls) { const m = $("#flMsg"); m.textContent = text; m.className = "msg " + (cls || ""); }
-  async function shrink(file) {   // JPEG, longest side ≤ 1024 px, < 300 KB
+  async function shrink(file) {   // JPEG, longest side ≤ 800 px, quality ~0.6, ≤ 80 KB (else refused)
     const img = await new Promise((res, rej) => { const u = URL.createObjectURL(file), i = new Image(); i.onload = () => { URL.revokeObjectURL(u); res(i); }; i.onerror = rej; i.src = u; });
-    for (const side of [1024, 800, 640, 480]) {
+    for (const side of [800, 640, 480]) {
       const s = Math.min(1, side / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement("canvas");
       c.width = Math.max(1, Math.round(img.naturalWidth * s)); c.height = Math.max(1, Math.round(img.naturalHeight * s)); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      for (const qy of [0.72, 0.6, 0.5, 0.4]) { const d = c.toDataURL("image/jpeg", qy); if (d.length * 0.75 < 300 * 1024) return d; }
+      for (const qy of [0.6, 0.5, 0.4]) { const d = c.toDataURL("image/jpeg", qy); if (d.length * 0.75 <= 80 * 1024) return d; }
     }
     throw new Error("photoBig");
   }
@@ -109,7 +109,7 @@ ul.sent{list-style:none;padding:0;margin:0}ul.sent li{border-top:1px solid #e5ec
         } else {
           const e = (res && res.error) || "error";
           msg(T.en[e] ? t(e) : t("other") + e + ")", "err");
-          if (e === "rate_limited") { put(LQ, [it, ...qu]); return; }   // keep it; try later
+          if (e === "rate_limited" || e === "busy" || e === "server_error" || e === "not_ready") { put(LQ, [it, ...qu]); return; }   // keep it; try later
           if (e === "invalid_code" || e === "inactive_code") { put(LQ, []); break; }
         }
         renderSent();
