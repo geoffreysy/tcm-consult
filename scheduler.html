@@ -145,7 +145,8 @@ async function signIn() {
     if (!(SC.cfg && SC.appts)) await autoFind();
   } catch (e) { $("#welcomeMsg").textContent = "Sign-in did not complete (" + e.message + ")."; renderAll(); }
 }
-function signOut() { SC.account = null; SC.token = null; SC.cfg = SC.appts = null; lsSet(LS_ACC, null); renderAll(); }
+function signOut() { if (SC.token) { try { google.accounts.oauth2.revoke(SC.token, () => {}); } catch (e) {} }   // v38: revoke the Google token too
+  SC.account = null; SC.token = null; SC.cfg = SC.appts = null; lsSet(LS_ACC, null); renderAll(); }
 
 /* ---------- files ---------- */
 async function connect(ids) {

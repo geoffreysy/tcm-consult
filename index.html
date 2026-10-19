@@ -720,7 +720,12 @@ body.st-consult #leftPanel > .panel-head, body.st-consult #patientSearch, body.s
 .pt-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;background:#f6f2e8;border:1px solid #e3ddd0;border-radius:12px;padding:10px 12px;margin-bottom:10px}
 .ph-main{display:flex;flex-direction:column;min-width:0;flex:1 1 200px}
 .ph-name{font-size:18px;overflow-wrap:anywhere}.ph-id,.ph-last{font-size:12.5px;color:#555;overflow-wrap:anywhere}
-.ph-btns{display:flex;gap:6px}
+.ph-btns{display:flex;gap:6px;flex-wrap:wrap}
+/* v38 sign out */
+.st-acct{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:#fff;border:1px solid #e3ddd0;border-radius:12px;padding:8px 10px 8px 14px;margin-bottom:12px;font-size:14px}
+.st-acct-em{min-width:0;overflow-wrap:anywhere}
+#stSignOut,#ptHeadSignOut{color:#9a2b1f;border-color:#d9b3ac}
+#stSignOut{min-height:40px;padding:6px 16px;font-size:15px}
 </style>
 <style>/* v27: Google Picker always on top of the app (sticky banners, bottom bars, dialogs) */
 .picker-dialog-bg{z-index:2147482999!important}.picker-dialog,.picker.picker-dialog{z-index:2147483000!important}
@@ -874,7 +879,7 @@ document.addEventListener("DOMContentLoaded",function(){new MutationObserver(chk
 
 <footer>
   <span>Speech is transcribed by the browser's speech service; no audio is saved.</span>
-  <span><span id="storageStatus">Records are stored only in this browser.</span> · <a href="privacy.html" target="_blank" rel="noopener" id="privacyLink">Privacy</a></span>
+  <span><span id="storageStatus">Patients and visits are saved only to the clinic patient database, after you sign in.</span> · <a href="privacy.html" target="_blank" rel="noopener" id="privacyLink">Privacy</a></span>
 </footer>
 
 <!-- Google account / Drive sync -->
@@ -8283,13 +8288,26 @@ async function signOut(clearCache) {
   Cloud.account = null; Cloud.token = null; Cloud.tokenExp = 0; Cloud.pending = false; Cloud.lastSyncAt = null; Cloud.folderId = null;
   clearTimeout(Cloud.timer); clearTimeout(Cloud.retryTimer);
   if (tok) { try { google.accounts.oauth2.revoke(tok, () => {}); } catch {} }
-  lsSet(LS_ACCOUNT, null);
-  await switchNamespace("", null);                   // never carry one practitioner's session into another's space
+  try { google.accounts.id && google.accounts.id.disableAutoSelect(); } catch {}
+  lsSet(LS_ACCOUNT, null); lsSet(LS_CHOICE, null);
+  clinicMemoryClear();                               // v38: nothing from the clinic database stays in memory
+  await switchNamespace("", null);
+  clinicMemoryClear();                   // never carry one practitioner's session into another's space
   if (clearCache) { const cdb = await clinicCachesOf(acc); for (const ns of cdb) await DB.destroy(ns); await DB.destroy(nsFor(acc)); lsSet("tcm_xai_key::" + nsFor(acc), null); }
-  setSync(Cloud.configured ? "local" : "notconfigured");
+  try { renderMyAppts(); } catch (e) {}
+  setSync(Cloud.configured ? "local" : "notconfigured"); renderStart();
   toast(`Signed out ${acc.email}${clearCache ? " and removed its cached records from this device" : ""}.`, 4000);
 }
 
+function clinicMemoryClear() {
+  state.patients = []; state.visits = []; state.selectedPatientId = null; state.consulting = false; state.search = "";
+  if (state.session && state.session.patientId && !patientById(state.session.patientId)) state.session.patientId = null;
+  DB.rec = null; clinicDbState.conf = null; clinicDbState.error = ""; clinicDbState.autoTried = new Set();
+  try { Object.assign(MA, { ckId: "", ck: null, ckNeed: false, cfgId: "", cfgDoc: null, apptId: "", appts: null, day: "", error: "", need: false }); } catch (e) {}
+  try { Object.assign(FL, { codesId: "", codes: null, url: "", need: false, msg: "" }); } catch (e) {}
+  try { ST.q = ""; ST.mode = ""; } catch (e) {}
+  try { const ps = document.querySelector("#patientSearch"); if (ps) ps.value = ""; } catch (e) {}
+}
 /* ---------- UI ---------- */
 const SYNC_TEXT = { local: "Local only", notconfigured: "Google sign-in not configured yet", connecting: "Connecting…", saving: "Saving…", synced: "Synced", offline: "Offline, will sync", reauth: "Sign in again", error: "Sync error — will retry" };
 function setSync(st, detail = "") { Cloud.status = st; Cloud.detail = detail; renderAuth(); if ($("#accountDialog").open) renderAccountDialog(); }
@@ -8303,8 +8321,8 @@ function syncTitle() {
   if (Cloud.status === "synced" && Cloud.lastSyncAt) return "Saved in your Google Drive · last sync " + fmtDateTime(Cloud.lastSyncAt);
   if (Cloud.status === "offline") return "No connection — changes are kept on this device and uploaded when you are back online";
   if (Cloud.status === "reauth") return "Google access expired or was blocked — click Reconnect Google. Your work is kept on this device.";
-  if (Cloud.status === "notconfigured") return Cloud.fileCopy ? "This copy was opened from a file — Google sign-in works only on the web app (https://geoffreysy.github.io/tcm-consult/). Records are stored only in this browser." : "Google sign-in is not configured yet — records are stored only in this browser";
-  if (Cloud.status === "local") return "Not signed in — records are stored only in this browser";
+  if (Cloud.status === "notconfigured") return Cloud.fileCopy ? "This copy was opened from a file — Google sign-in works only on the web app (https://geoffreysy.github.io/tcm-consult/). Patients can't be saved here." : "Google sign-in is not configured yet — patients can't be saved";
+  if (Cloud.status === "local") return "Not signed in — sign in to use the clinic patient database (nothing is saved in this browser)";
   return Cloud.detail || "";
 }
 function renderAuth() {
@@ -8321,9 +8339,7 @@ function updateStorageStatus(mode = DB.mode) {
   const el = $("#storageStatus"); if (!el) return;
   if (Cloud.account && clinicActive()) el.textContent = `Signed in as ${Cloud.account.email} — patients and visits are in the clinic patient database (owner ${clinicOwnerLabel(clinicDbState.conf)}), with an offline copy in this browser.`;
   else if (Cloud.account) el.textContent = `Signed in as ${Cloud.account.email} — records saved in your Google Drive (folder “${GAUTH.folderName}”) with an offline copy in this browser.`;
-  else el.textContent = mode === "indexeddb" ? "Records stored locally in this browser (IndexedDB) — export regularly as backup."
-    : mode === "localstorage" ? "IndexedDB unavailable — records stored in localStorage (limited size). Export regularly."
-    : "⚠ Browser storage unavailable — records will be lost when the page closes. Use Export.";
+  else el.textContent = "Not signed in — patients and visits are saved only to the clinic patient database, after you sign in and connect.";   // v38
 }
 function renderAccountDialog() {
   const b = $("#accountBody");
@@ -8577,9 +8593,10 @@ function renderStart() {
   if (!on) { el.hidden = true; if (card && home && card.parentNode !== home) home.insertBefore(card, $("#patientSearch")); renderPtHead(); return; }
   el.hidden = false;
   let html;
+  const acctBar = Cloud.account ? `<div class="st-acct" id="stAcct"><span class="st-acct-em">Signed in as <b id="stAcctEmail">${esc(Cloud.account.email)}</b></span><button type="button" class="small" id="stSignOut">Sign out</button></div>` : "";   // v38
   if (!Cloud.account) html = `<div class="st-card st-signin"><h2>TCM Consult Assistant</h2><p>Sign in with your clinic Google account to start.</p><button type="button" class="gbtn st-big" data-signin id="stSignIn">${G_LOGO}<span>Sign in with Google</span></button></div>`;
-  else if (!clinicActive()) html = `<div class="st-card st-connect"><h2>Connect the clinic patient database</h2><p>Signed in as <b>${esc(Cloud.account.email)}</b>.${Cloud.status === "connecting" || Cloud.status === "syncing" ? " Connecting…" : ""}</p><button type="button" class="primary st-big" id="stConnect">Connect…</button></div>`;
-  else html = `<div class="st-card"><h2>Start a consultation</h2><p class="st-who">${esc(/^dr\.?\s/i.test(Cloud.account.name || "") ? Cloud.account.name : "Dr. " + (Cloud.account.name || Cloud.account.email))}</p>
+  else if (!clinicActive()) html = acctBar + `<div class="st-card st-connect"><h2>Connect the clinic patient database</h2><p>Pick the clinic patient database files your clinic owner shared with you.${Cloud.status === "connecting" || Cloud.status === "syncing" ? " Connecting…" : ""}</p><button type="button" class="primary st-big" id="stConnect">Connect…</button></div>`;
+  else html = acctBar + `<div class="st-card"><h2>Start a consultation</h2><p class="st-who">${esc(/^dr\.?\s/i.test(Cloud.account.name || "") ? Cloud.account.name : "Dr. " + (Cloud.account.name || Cloud.account.email))}</p>
       <div class="st-choices"><button type="button" class="primary st-big" id="stNew">➕ New patient</button><button type="button" class="st-big${ST.mode === "find" ? " on" : ""}" id="stFind">🔎 Existing patient</button></div>
       <div class="st-search" id="stSearchBox"${ST.mode === "find" ? "" : " hidden"}><input type="search" id="stSearch" placeholder="Name, phone or date of birth…" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="search" value="${esc(ST.q)}"><div id="stResults">${stResultsHTML()}</div></div></div>
     <div id="stAppts"></div>`;
@@ -8604,14 +8621,23 @@ function changePatient() {
   state.session = newSession(null); clearDraft(); state.selectedPatientId = null; state.consulting = false;
   renderAll(); renderStart(); window.scrollTo(0, 0); return true;
 }
+// v38: one-tap Sign out (start screen + consult view). Unsaved visit → same warning as Change patient; Cancel keeps everything.
+async function quickSignOut() {
+  if (!Cloud.account) return false;
+  if (state.session.dirty && sessionHasContent(state.session) && !confirm("The current session has unsaved changes. Discard them and sign out?")) return false;
+  if (state.listening) { try { stopListening(); } catch (e) {} }
+  state.session = newSession(null); state.interim = ""; state.selectedPatientId = null; state.consulting = false; await clearDraft();
+  await signOut(false);
+  return true;
+}
 function renderPtHead() {
   const el = $("#ptHead"); if (!el) return;
   const s = state.session, p = s && s.patientId && patientById(s.patientId);
-  if (!startEnabled() || !state.consulting || !p) { el.hidden = true; return; }
+  if (!startEnabled() || !state.consulting || !p || !Cloud.account) { el.hidden = true; return; }
   const pr = priorVisits(s), l = pr[0] || stLast(p.id), d = l && l.doctor, dx = l ? (dxLinesOf(l.diagnosis || "")[0] || "") : "";
   const last = l ? `Last visit ${fmtDate(l.startedAt)}${d ? " · " + (d.name || d.email) : ""}${dx ? " · " + dx : ""}` : "First visit";
   const html = `<div class="ph-main"><b class="ph-name" id="ptHeadName">${esc(p.name)}</b><span class="ph-id">${esc([...ptIdParts(p), p.sex].filter(Boolean).join(" · "))}</span><span class="ph-last" id="ptHeadLast">${esc(last)}</span></div>
-    <div class="ph-btns"><button type="button" class="small" id="ptHeadHist">History</button><button type="button" class="small" id="ptHeadChange">Change patient</button></div>`;
+    <div class="ph-btns"><button type="button" class="small" id="ptHeadHist">History</button><button type="button" class="small" id="ptHeadChange">Change patient</button><button type="button" class="small" id="ptHeadSignOut" title="${esc(Cloud.account ? "Sign out " + Cloud.account.email : "Sign out")}">Sign out</button></div>`;
   if (el.__html !== html) { el.innerHTML = html; el.__html = html; }
   el.hidden = false;
 }
@@ -8637,6 +8663,7 @@ document.addEventListener("click", e => {
   else if (t.id === "stFind") { ST.mode = ST.mode === "find" ? "" : "find"; renderStart(); if (ST.mode) setTimeout(() => $("#stSearch") && $("#stSearch").focus(), 20); }
   else if (t.dataset.stStart) startFor(t.dataset.stStart);
   else if (t.id === "ptHeadChange") changePatient();
+  else if (t.id === "stSignOut" || t.id === "ptHeadSignOut") quickSignOut();
   else if (t.id === "ptHeadHist") { const h = $("#historySection"); if (h && !h.hidden) h.scrollIntoView({ behavior: "smooth", block: "start" }); else toast("No earlier visits for this patient"); }
 });
 document.addEventListener("input", e => { if (e.target.id === "stSearch") { ST.q = e.target.value; const r = $("#stResults"); if (r) setHTML(r, stResultsHTML()); } });
@@ -8683,7 +8710,7 @@ async function init() {
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { startFor, changePatient, renderStart, flFreshen, ST, MA, FL, renderFoodLog, syncFoodLog, renderVitals, ckMarkImported, renderMyAppts, syncMyAppts,  dataPut, doctorTag, canEditVisit, deleteVisit, cdbKeepOthersVisits, CDB3, cdbTrack, cdbEnsureLoaded, cdbGrantPicker, syncClinicDb4, cdbOpenUpgraded, openPatientDialog, selectPatient, sameNamePatients, nameKey, ptIdParts, savePatientFromForm, deleteVisit, clinicDbState, clinicActive, connectClinicDb, disconnectClinicDb, syncClinicDb, cdbContains, CLINIC_PATIENTS_FILE, __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Slips, fdState, buildSlip, sendToFrontdesk, syncSlips, renderSendRow, FRONTDESK_SLIPS_FILE, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { quickSignOut, clinicMemoryClear, startFor, changePatient, renderStart, flFreshen, ST, MA, FL, renderFoodLog, syncFoodLog, renderVitals, ckMarkImported, renderMyAppts, syncMyAppts,  dataPut, doctorTag, canEditVisit, deleteVisit, cdbKeepOthersVisits, CDB3, cdbTrack, cdbEnsureLoaded, cdbGrantPicker, syncClinicDb4, cdbOpenUpgraded, openPatientDialog, selectPatient, sameNamePatients, nameKey, ptIdParts, savePatientFromForm, deleteVisit, clinicDbState, clinicActive, connectClinicDb, disconnectClinicDb, syncClinicDb, cdbContains, CLINIC_PATIENTS_FILE, __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Slips, fdState, buildSlip, sendToFrontdesk, syncSlips, renderSendRow, FRONTDESK_SLIPS_FILE, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>
