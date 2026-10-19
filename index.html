@@ -731,6 +731,9 @@ body.st-consult #leftPanel > .panel-head, body.st-consult #patientSearch, body.s
 .ph-save[data-st=saving]{color:#666;font-weight:400}
 .ph-save[data-st=retrying],.ph-save[data-st=error],.ph-save[data-st=readonly]{color:#9a2b1f}
 .ph-save[data-st=offline]{color:#8a4b00}
+#ptExtras{margin:-2px 0 10px;border:1px solid #e3ddd0;border-radius:12px;background:#fff;padding:4px 2px;max-height:60vh;overflow:auto}
+#ptExtras[data-panel=food] #patientProfile,#ptExtras[data-panel=rec] #foodLog{display:none!important}
+#ptHeadFood.on,#ptHeadRec.on{outline:2px solid #2f6f4f}
 body.as-busy #ptHeadChange,body.as-busy #ptHeadSignOut{opacity:.6;pointer-events:none}
 </style>
 <style>/* v27: Google Picker always on top of the app (sticky banners, bottom bars, dialogs) */
@@ -769,7 +772,6 @@ document.addEventListener("DOMContentLoaded",function(){new MutationObserver(chk
       <option value="zh-CN">中文 (普通话)</option>
     </select>
     <button id="micBtn" class="mic" title="Start / stop live transcription"><span class="dot"></span><span class="lbl">Start listening</span></button>
-    <button id="newSessionBtn" title="Start a new, empty session">New session</button>
     <button id="jumpPatientsBtn" class="mobile-only" title="Go to patient list">Patients</button>
     <button id="saveBtn" class="primary" title="Save session to patient record (Ctrl+S)">Save session</button>
     <div class="menu" id="menu">
@@ -809,6 +811,7 @@ document.addEventListener("DOMContentLoaded",function(){new MutationObserver(chk
   <!-- CENTER: transcript -->
   <section class="panel" id="centerPanel">
     <div class="pt-head" id="ptHead" hidden aria-label="Patient"></div>
+    <div class="pt-extras" id="ptExtras" hidden></div>
     <div class="pt-link" id="ptLink">
       <div class="pt-linked" id="ptLinked" hidden></div>
       <div class="pt-find" id="ptFind">
@@ -885,7 +888,7 @@ document.addEventListener("DOMContentLoaded",function(){new MutationObserver(chk
 
 <footer>
   <span>Speech is transcribed by the browser's speech service; no audio is saved.</span>
-  <span><span id="storageStatus">Patients and visits are saved only to the clinic patient database, after you sign in.</span> · <a href="privacy.html" target="_blank" rel="noopener" id="privacyLink">Privacy</a> · <span id="appVersion" title="App version">v41</span></span>
+  <span><span id="storageStatus">Patients and visits are saved only to the clinic patient database, after you sign in.</span> · <a href="privacy.html" target="_blank" rel="noopener" id="privacyLink">Privacy</a> · <span id="appVersion" title="App version">v42</span></span>
 </footer>
 
 <!-- Google account / Drive sync -->
@@ -4719,7 +4722,7 @@ function sessionHasContent(s) {
 }
 // v40: “unsaved changes” = the visit's doctor-editable content differs from its baseline (empty for a new visit, the saved
 // version for a saved / reopened one). Programmatic prefill (date line, check-in vitals, re-reads) never changes the baseline result.
-const APP_VERSION = "v41";
+const APP_VERSION = "v42";
 const SIG_PARTS = ["transcript", "tongue", "pulse", "notes", "diagnosis", "symptoms", "AI", "vitals", "charges"];
 function sigParts(s) {
   const v = vitalsEdited(s) ? Checkins.clean(s.vitals) : null, ov = s.overrides || {};
@@ -4833,6 +4836,7 @@ function renderSessionInfo() {
   const ex = state.visits.find(v => v.id === s.id), ro = !!ex && !canEditVisit(ex);
   if (ro) $("#sessionInfo").innerHTML += ` · <span class="ro-note" id="roNote">🔒 ${esc(readOnlyNote(ex))}</span>`;
   const sb = $("#saveBtn"); if (sb) { sb.hidden = ro; }
+  renderNewSessionBtns();
 }
 
 function renderPatients() {
@@ -4865,7 +4869,6 @@ function renderProfile() {
       <dt>Notes</dt><dd>${esc(p.notes || "—")}</dd>
     </dl>
     <div class="btn-row">
-      <button class="small primary" id="startForPatientBtn">▶ New session</button>
       <button class="small" id="editPatientBtn">Edit</button>
       <button class="small danger" id="deletePatientBtn">Delete</button>
     </div>
@@ -5549,8 +5552,13 @@ function mergeLegacyEntries(entries) {
 function confirmDiscard() {
   return !sessionEdited(state.session) || confirm("The current session has unsaved changes. Discard them?");
 }
-function startNewSession(patientId) {
-  if (!confirmDiscard()) return false;
+// v42: a fresh visit = not saved yet and no doctor content (pre-filled check-in vitals don't count) → no “New session” button
+function freshVisit(s = state.session) { return !!s && !state.visits.some(v => v.id === s.id) && !sessionHasContent(s); }
+function renderNewSessionBtns() {}   // v42: the New session button was removed (start screen + Change patient start visits)
+async function startNewSession(patientId) {
+  if (state.leaving) return false;
+  state.leaving = true;   // v42: auto-save the current visit first (v41); asks only if it can't be saved
+  try { if (!(await leaveSave("new"))) return false; } finally { state.leaving = false; }
   state.session = newSession(patientId ?? state.selectedPatientId);
   state.interim = "";
   state.ptChanging = false;
@@ -5784,7 +5792,7 @@ async function leaveSave(what = "leave") {
   const s = state.session; if (!s) return true;
   const edited = sessionEdited(s), pendingUp = AS.sid === s.id && /^(retrying|offline|saving|error)$/.test(AS.st);
   if (!edited && !pendingUp) return true;
-  const verb = what === "signout" ? "Sign out" : "Leave";
+  const verb = what === "signout" ? "Sign out" : what === "new" ? "Start a new visit" : "Leave";
   if (edited && !asOwnVisit(s)) return confirm(`${readOnlyNote(state.visits.find(v => v.id === s.id))} — your changes can't be saved. Discard them and ${verb.toLowerCase()} anyway?`);
   if (edited && !asEligible(s)) return confirm(`Couldn't save to the clinic database. Discard and ${verb.toLowerCase()} anyway?`);
   document.body.classList.add("as-busy");
@@ -5875,14 +5883,14 @@ function selectPatient(id) {
 async function deletePatient(id) {
   const p = patientById(id); if (!p) return;
   const vs = state.visits.filter(v => v.patientId === id);
-  if (!confirm(`Delete patient “${p.name}” and ${vs.length} visit record(s)? This cannot be undone.\n\nTip: export a JSON backup first.`)) return;
+  if (!confirm(`Delete patient “${p.name}” and ${vs.length} visit record(s)? This cannot be undone.`)) return;
   await dataDel("patients", id);
   for (const v of vs) await dataDel("visits", v.id);
   state.patients = state.patients.filter(x => x.id !== id);
   state.visits = state.visits.filter(v => v.patientId !== id);
-  if (state.session.patientId === id) { state.session = newSession(null); clearDraft(); }
+  if (state.session.patientId === id) { clearTimeout(AS.timer); state.session = newSession(null); clearDraft(); state.consulting = false; }   // v42: back to the start screen
   state.selectedPatientId = null;
-  renderAll();
+  renderAll(); renderStart();
   toast("Patient deleted");
 }
 async function deleteVisit(vid) {
@@ -7767,7 +7775,12 @@ async function flReloadCurrent() { const pid = state.selectedPatientId; if (!pid
 function renderFoodLog() {
   const el = $("#foodLog"); if (!el) return;
   const pid = state.selectedPatientId, p = pid && patientById(pid);
-  if (!Cloud.account || !p || (!FL.codesId && !FL.url)) { el.hidden = true; return; }
+  if (!Cloud.account || !p) { el.hidden = true; return; }
+  if (!FL.codesId && !FL.url) {   // v42: inside the consult view say why instead of showing nothing
+    if (el.parentNode && el.parentNode.id === "ptExtras") { el.hidden = false; setHTML(el, `<h3>🍚 Food log</h3><div class="fl-hint" id="flNotSetUp">The patient food log isn't set up for this clinic yet — the clinic owner turns it on on the Clinic admin page (Food log).</div>`); }
+    else el.hidden = true;
+    return;
+  }
   el.hidden = false;
   const list = (p.foodLog || []).filter(x => x && !x.deleted).sort((a, b) => String(b.at).localeCompare(String(a.at)));
   const act = FL.codes ? flActive(pid) : null, link = act ? flLink(act[0]) : "";
@@ -8583,7 +8596,6 @@ function bindEvents() {
     if (state.listening && recognizer) { try { recognizer.stop(); } catch {} }  // onend restarts with the new language
     setListeningUI();
   };
-  $("#newSessionBtn").onclick = () => startNewSession();
   $("#saveBtn").onclick = saveSession;
   $("#menuBtn").onclick = e => { e.stopPropagation(); $("#menu").classList.toggle("open"); };
   document.addEventListener("click", () => $("#menu").classList.remove("open"));
@@ -8625,8 +8637,7 @@ function bindEvents() {
   $("#patientList").onclick = e => { const li = e.target.closest("li[data-id]"); if (li) selectPatient(li.dataset.id); };
   $("#patientProfile").onclick = e => {
     const t = e.target;
-    if (t.id === "startForPatientBtn") startNewSession(state.selectedPatientId);
-    else if (t.id === "editPatientBtn") openPatientDialog(patientById(state.selectedPatientId));
+    if (t.id === "editPatientBtn") openPatientDialog(patientById(state.selectedPatientId));
     else if (t.id === "deletePatientBtn") deletePatient(state.selectedPatientId);
     else if (t.dataset.delvid) { e.stopPropagation(); deleteVisit(t.dataset.delvid); }
     else { const li = t.closest("li[data-vid]"); if (li) openVisit(li.dataset.vid); }
@@ -8718,7 +8729,7 @@ function bindEvents() {
    Choosing a patient always starts a NEW visit for them (today, treating doctor = me on save, today's check-in vitals).
    Then the consult view shows a compact patient header; the patient list / link picker are hidden; “Change patient” returns here.
    ===================================================================== */
-const ST = { q: "", mode: "" };
+const ST = { q: "", mode: "", panel: "" };
 function startEnabled() { try { if (localStorage.getItem("tcm_test_nostart") === "1") return false; } catch (e) {} return !!Cloud.configured; }
 const startShown = () => startEnabled() && (!Cloud.account || !clinicActive() || !state.consulting);
 function stMatches(q) {
@@ -8740,6 +8751,7 @@ function renderStart() {
   document.body.classList.toggle("st-on", on);
   document.body.classList.toggle("st-consult", startEnabled() && !on);
   document.body.classList.toggle("st-signedout", !Cloud.account);
+  renderNewSessionBtns(); placeExtras();
   const card = $("#apptCard"), home = $("#leftPanel"), slot = $("#stAppts");
   if (!on) { el.hidden = true; if (card && home && card.parentNode !== home) home.insertBefore(card, $("#patientSearch")); renderPtHead(); return; }
   el.hidden = false;
@@ -8805,13 +8817,40 @@ async function quickSignOut() {
 function renderPtHead() {
   const el = $("#ptHead"); if (!el) return;
   const s = state.session, p = s && s.patientId && patientById(s.patientId);
-  if (!startEnabled() || !state.consulting || !p || !Cloud.account) { el.hidden = true; return; }
+  if (!startEnabled() || !state.consulting || !p || !Cloud.account) { el.hidden = true; placeExtras(); return; }
   const pr = priorVisits(s), l = pr[0] || stLast(p.id, s.id), d = l && l.doctor, dx = l ? (dxLinesOf(l.diagnosis || "")[0] || "") : "";
   const last = l ? `Last visit ${fmtDate(l.startedAt)}${d ? " · " + (d.name || d.email) : ""}${dx ? " · " + dx : ""}` : "First visit";
   const html = `<div class="ph-main"><b class="ph-name" id="ptHeadName">${esc(p.name)}</b><span class="ph-id">${esc([...ptIdParts(p), p.sex].filter(Boolean).join(" · "))}</span><span class="ph-last" id="ptHeadLast">${esc(last)}</span><span class="ph-save" id="asStatus" hidden aria-live="polite"></span></div>
-    <div class="ph-btns"><button type="button" class="small" id="ptHeadHist">History</button><button type="button" class="small" id="ptHeadChange">Change patient</button><button type="button" class="small" id="ptHeadSignOut" title="${esc(Cloud.account ? "Sign out " + Cloud.account.email : "Sign out")}">Sign out</button></div>`;
+    <div class="ph-btns"><button type="button" class="small" id="ptHeadHist">History</button><button type="button" class="small${ST.panel === "food" ? " on" : ""}" id="ptHeadFood" aria-expanded="${ST.panel === "food"}">🍚 Food log</button><button type="button" class="small${ST.panel === "rec" ? " on" : ""}" id="ptHeadRec" aria-expanded="${ST.panel === "rec"}">👤 Record</button><button type="button" class="small" id="ptHeadChange">Change patient</button><button type="button" class="small" id="ptHeadSignOut" title="${esc(Cloud.account ? "Sign out " + Cloud.account.email : "Sign out")}">Sign out</button></div>`;
   if (el.__html !== html) { el.innerHTML = html; el.__html = html; }
-  el.hidden = false; renderAS();
+  el.hidden = false; renderAS(); placeExtras();
+}
+// v42: the patient record (details, Edit / Delete, past visits) and the Food log live in the left panel, which the v37 consult
+// view pushed to the very bottom on a phone (and its “Patients” jump button was hidden) → shown under the patient header instead
+function placeExtras() {
+  const box = $("#ptExtras"), prof = $("#patientProfile"), fl = $("#foodLog"), home = $("#leftPanel"); if (!box || !prof || !fl || !home) return;
+  const consult = startEnabled() && state.consulting && !startShown() && !!patientById(state.session.patientId);
+  if (consult) {
+    if (prof.parentNode !== box) box.appendChild(prof);
+    if (fl.parentNode !== box) box.appendChild(fl);
+    box.dataset.panel = ST.panel || ""; box.hidden = !ST.panel;
+  } else {
+    if (prof.parentNode !== home) home.appendChild(prof);
+    if (fl.parentNode !== home) home.appendChild(fl);
+    box.hidden = true; ST.panel = "";
+  }
+}
+async function togglePanel(which) {
+  ST.panel = ST.panel === which ? "" : which;
+  renderPtHead();
+  if (!ST.panel) return;
+  const pid = state.session.patientId;
+  if (which === "food") {
+    renderFoodLog();
+    try { if (!FL.url && !FL.codesId && Cloud.account) await syncFoodLog(); } catch (e) { console.warn("food log:", e); }
+    await flFreshen(pid); renderFoodLog();
+  } else renderProfile();
+  const box = $("#ptExtras"); if (box && !box.hidden) box.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 // v37: opening a patient re-reads that patient's data file (read only) so food-log entries the Apps Script added show up
 async function flFreshen(pid) {
@@ -8835,6 +8874,8 @@ document.addEventListener("click", e => {
   else if (t.id === "stFind") { ST.mode = ST.mode === "find" ? "" : "find"; renderStart(); if (ST.mode) setTimeout(() => $("#stSearch") && $("#stSearch").focus(), 20); }
   else if (t.dataset.stStart) startFor(t.dataset.stStart);
   else if (t.id === "ptHeadChange") changePatient();
+  else if (t.id === "ptHeadFood") togglePanel("food");
+  else if (t.id === "ptHeadRec") togglePanel("rec");
   else if (t.id === "stKeptDiscard") { if (confirm("Discard these unsaved notes? They can't be recovered.")) { ST.kept = null; DB.del("meta", "draftKept").catch(() => {}); renderStart(); } }
   else if (t.id === "stKeptCopy") { const k = ST.kept; if (k) copyText(keptText(k.session)).then(() => toast("Copied")).catch(() => toast("Copy failed")); }
   else if (t.id === "stKeptResume") { const k = ST.kept; if (!k || !patientById(k.session.patientId)) return; state.session = { ...newSession(null), ...k.session, dirty: true }; state.selectedPatientId = k.session.patientId; state.consulting = true; ST.kept = null; DB.del("meta", "draftKept").catch(() => {}); saveDraft(); cdbEnsureLoaded(k.session.patientId); renderAll(); renderHistory(); renderStart(); }
@@ -8889,7 +8930,7 @@ async function init() {
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { AS, autosave, asEligible, leaveSave, APP_VERSION, sessionEdited, dirtyWhy, editSig, setBaseline, keepAside, loadKept, quickSignOut, clinicMemoryClear, startFor, changePatient, renderStart, flFreshen, ST, MA, FL, renderFoodLog, syncFoodLog, renderVitals, ckMarkImported, renderMyAppts, syncMyAppts,  dataPut, doctorTag, canEditVisit, deleteVisit, cdbKeepOthersVisits, CDB3, cdbTrack, cdbEnsureLoaded, cdbGrantPicker, syncClinicDb4, cdbOpenUpgraded, openPatientDialog, selectPatient, sameNamePatients, nameKey, ptIdParts, savePatientFromForm, deleteVisit, clinicDbState, clinicActive, connectClinicDb, disconnectClinicDb, syncClinicDb, cdbContains, CLINIC_PATIENTS_FILE, __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Slips, fdState, buildSlip, sendToFrontdesk, syncSlips, renderSendRow, FRONTDESK_SLIPS_FILE, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { placeExtras, togglePanel, freshVisit, renderNewSessionBtns, AS, autosave, asEligible, leaveSave, APP_VERSION, sessionEdited, dirtyWhy, editSig, setBaseline, keepAside, loadKept, quickSignOut, clinicMemoryClear, startFor, changePatient, renderStart, flFreshen, ST, MA, FL, renderFoodLog, syncFoodLog, renderVitals, ckMarkImported, renderMyAppts, syncMyAppts,  dataPut, doctorTag, canEditVisit, deleteVisit, cdbKeepOthersVisits, CDB3, cdbTrack, cdbEnsureLoaded, cdbGrantPicker, syncClinicDb4, cdbOpenUpgraded, openPatientDialog, selectPatient, sameNamePatients, nameKey, ptIdParts, savePatientFromForm, deleteVisit, clinicDbState, clinicActive, connectClinicDb, disconnectClinicDb, syncClinicDb, cdbContains, CLINIC_PATIENTS_FILE, __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Slips, fdState, buildSlip, sendToFrontdesk, syncSlips, renderSendRow, FRONTDESK_SLIPS_FILE, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>
