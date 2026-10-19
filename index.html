@@ -726,6 +726,12 @@ body.st-consult #leftPanel > .panel-head, body.st-consult #patientSearch, body.s
 .st-acct-em{min-width:0;overflow-wrap:anywhere}
 #stSignOut,#ptHeadSignOut{color:#9a2b1f;border-color:#d9b3ac}
 #stSignOut{min-height:40px;padding:6px 16px;font-size:15px}
+/* v41 auto-save indicator */
+.ph-save{font-size:12.5px;color:#2f6f4f;font-weight:600}
+.ph-save[data-st=saving]{color:#666;font-weight:400}
+.ph-save[data-st=retrying],.ph-save[data-st=error],.ph-save[data-st=readonly]{color:#9a2b1f}
+.ph-save[data-st=offline]{color:#8a4b00}
+body.as-busy #ptHeadChange,body.as-busy #ptHeadSignOut{opacity:.6;pointer-events:none}
 </style>
 <style>/* v27: Google Picker always on top of the app (sticky banners, bottom bars, dialogs) */
 .picker-dialog-bg{z-index:2147482999!important}.picker-dialog,.picker.picker-dialog{z-index:2147483000!important}
@@ -879,7 +885,7 @@ document.addEventListener("DOMContentLoaded",function(){new MutationObserver(chk
 
 <footer>
   <span>Speech is transcribed by the browser's speech service; no audio is saved.</span>
-  <span><span id="storageStatus">Patients and visits are saved only to the clinic patient database, after you sign in.</span> · <a href="privacy.html" target="_blank" rel="noopener" id="privacyLink">Privacy</a> · <span id="appVersion" title="App version">v40</span></span>
+  <span><span id="storageStatus">Patients and visits are saved only to the clinic patient database, after you sign in.</span> · <a href="privacy.html" target="_blank" rel="noopener" id="privacyLink">Privacy</a> · <span id="appVersion" title="App version">v41</span></span>
 </footer>
 
 <!-- Google account / Drive sync -->
@@ -4713,7 +4719,7 @@ function sessionHasContent(s) {
 }
 // v40: “unsaved changes” = the visit's doctor-editable content differs from its baseline (empty for a new visit, the saved
 // version for a saved / reopened one). Programmatic prefill (date line, check-in vitals, re-reads) never changes the baseline result.
-const APP_VERSION = "v40";
+const APP_VERSION = "v41";
 const SIG_PARTS = ["transcript", "tongue", "pulse", "notes", "diagnosis", "symptoms", "AI", "vitals", "charges"];
 function sigParts(s) {
   const v = vitalsEdited(s) ? Checkins.clean(s.vitals) : null, ov = s.overrides || {};
@@ -4753,6 +4759,7 @@ function markDirty() {
   if (dirtyDebug()) { const why = dirtyWhy(); (window.__dirtyLog = window.__dirtyLog || []).push({ at: new Date().toISOString(), why, stack: new Error().stack.split("\n").slice(2, 5).map(x => x.trim()).join(" < ") }); console.info("[dirty] markDirty:", why.join(", ") || "(no content change)", new Error().stack); }
   clearTimeout(draftTimer);
   draftTimer = setTimeout(saveDraft, 1200);
+  if (typeof AS !== "undefined" && AS.delay) asSchedule();   // v41
   renderSessionInfo();
 }
 async function saveDraft() {
@@ -5652,8 +5659,8 @@ function onNotesChanged() {
 }
 const flushNotes = () => { if (onNotesChanged._t) onNotesChanged(); };
 
-function buildVisitRecord() {
-  const s = state.session, a = analyzeSession(s);
+function buildVisitRecord(s = state.session) {
+  const a = analyzeSession(s);
   const rec = {
     id: s.id, patientId: s.patientId, startedAt: s.startedAt, savedAt: new Date().toISOString(), lang: s.lang,
     transcript: s.entries.map(e => e.text).join("\n\n"),
@@ -5687,20 +5694,113 @@ async function saveSession() {
     if (state.selectedPatientId && confirm(`Save this session to ${patientById(state.selectedPatientId).name}?`)) s.patientId = state.selectedPatientId;
     else { alert("Please select or create a patient first, then save."); return; }
   }
-  const rec = buildVisitRecord();
-  { const ex = state.visits.find(v => v.id === rec.id); if (ex && !canEditVisit(ex)) { toast(readOnlyNote(ex) + ". Use “Carry forward Rx” or start a new visit to record your own.", 6000); return; } }
+  { const ex = state.visits.find(v => v.id === s.id); if (ex && !canEditVisit(ex)) { toast(readOnlyNote(ex) + ". Use “Carry forward Rx” or start a new visit to record your own.", 6000); return; } }
+  clearTimeout(AS.timer);
+  return asQueue(async () => {   // v41: the Save button = “save now” (same serialized path as auto-save)
+  if (state.session !== s) return;
+  const rec = buildVisitRecord(s);
   try {
-    await dataPut("visits", rec);
-    const i = state.visits.findIndex(v => v.id === rec.id);
-    if (i >= 0) state.visits[i] = rec; else state.visits.push(rec);
-    s.savedAt = rec.savedAt; s.dirty = false; setBaseline(s);
+    const sig = editSig(s);
+    await asPutLocal(s, rec, sig);
     state.selectedPatientId = s.patientId;
-    await clearDraft();
     renderSessionInfo(); renderPatients(); renderProfile(); renderHistory();
     toast("Session saved to " + patientById(s.patientId).name);
-    if (rec.vitals && rec.vitals.checkinId) ckMarkImported(rec.vitals.checkinId).catch(e => console.warn("check-in import:", e));
-  } catch (e) { console.error(e); alert("Could not save: " + e.message); }
+    asUpload(s.id);   // upload in the background; the indicator shows the result
+  } catch (e) { console.error(e); setAS("error", e.message, s.id); alert("Could not save: " + e.message); }
+  });
 }
+
+/* =====================================================================
+   v41 AUTO-SAVE — real edits (v40 baseline check) are saved ~5 s after the last change, and right away when leaving
+   the patient / signing out / the page is hidden. Same path as the Save button: local clinic cache → shard sync
+   (merge, verify, retries). One save at a time (queue), edits coalesce, same visit id updated in place.
+   Never: untouched visits (only pre-filled vitals), another doctor's visit, signed out / not connected.
+   ===================================================================== */
+const AS = { timer: null, chain: Promise.resolve(), st: "", at: "", err: "", sid: "", need: 0, delay: 5000 };
+try { const v = parseInt(localStorage.getItem("tcm_autosave_ms"), 10); if (v > 0) AS.delay = v; } catch (e) {}
+function asQueue(fn) { const p = AS.chain.then(fn, fn); AS.chain = p.then(() => {}, () => {}); return p; }
+function asOwnVisit(s) { const ex = state.visits.find(v => v.id === s.id); return !ex || canEditVisit(ex); }
+function asEligible(s) {
+  return !!(s && Cloud.account && clinicActive() && canSavePatients() && s.patientId && patientById(s.patientId) && sessionEdited(s) && asOwnVisit(s));
+}
+async function asPutLocal(s, rec, sig) {
+  await dataPut("visits", rec);
+  const i = state.visits.findIndex(v => v.id === rec.id);
+  if (i >= 0) state.visits[i] = rec; else state.visits.push(rec);
+  s.savedAt = rec.savedAt; s._base = sig; s.dirty = editSig(s) !== sig;   // edits typed while saving stay unsaved
+  s.pendingUpload = false;
+  if (!s.dirty && s === state.session) await clearDraft();
+  AS.need = Cloud.changeSeq; AS.sid = s.id;
+  if (rec.vitals && rec.vitals.checkinId && !s._ckMarked) { s._ckMarked = true; ckMarkImported(rec.vitals.checkinId).catch(e => console.warn("check-in import:", e)); }
+}
+async function asUpload(sid) {   // push the local save to the clinic database; true when Drive has it
+  const need = AS.need;
+  if (!navigator.onLine) { setAS("offline", "", sid); return false; }
+  setAS("saving", "", sid);
+  for (let i = 0; i < 3; i++) {
+    while (Cloud.running) { try { await Cloud.running; } catch (e) {} }
+    if ((Cloud.syncedSeq || 0) >= need) break;
+    try { await syncNow({ quick: true }); } catch (e) {}
+    if ((Cloud.syncedSeq || 0) >= need) break;
+    if (/^(error|offline|reauth)$/.test(Cloud.status)) break;
+  }
+  const ok = (Cloud.syncedSeq || 0) >= need;
+  setAS(ok ? "saved" : navigator.onLine ? "retrying" : "offline", ok ? "" : Cloud.detail || "", sid);
+  return ok;
+}
+function autosave(reason = "idle", s = state.session) {
+  clearTimeout(AS.timer);
+  return asQueue(async () => {
+    if (s === state.session) flushNotes();
+    if (!asEligible(s)) {
+      if (s && sessionEdited(s) && !asOwnVisit(s)) setAS("readonly", "", s.id);
+      return { ok: !sessionEdited(s), skipped: true };
+    }
+    const sig = editSig(s), rec = buildVisitRecord(s);
+    setAS("saving", "", s.id);
+    try { await asPutLocal(s, rec, sig); }
+    catch (e) { console.warn("auto-save:", e); setAS("error", e.message, s.id); if (s === state.session) saveDraft(); return { ok: false, local: false, err: e }; }
+    if (s === state.session) { renderSessionInfo(); if (reason !== "hidden") { renderHistory(); } }
+    const ok = await asUpload(s.id);
+    if (s === state.session && s.dirty) asSchedule();   // more edits arrived meanwhile
+    return { ok, local: true };
+  });
+}
+function asSchedule() { clearTimeout(AS.timer); AS.timer = setTimeout(() => autosave("idle"), AS.delay); }
+function asTime(iso) { try { return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; } }
+function setAS(st, err = "", sid = AS.sid) { AS.st = st; AS.err = err; AS.sid = sid; if (st === "saved") AS.at = new Date().toISOString(); renderAS(); }
+function renderAS() {
+  const el = $("#asStatus"); if (!el) return;
+  const s = state.session;
+  // a failed upload that the background sync (backoff / back online) later completed
+  if ((AS.st === "retrying" || AS.st === "offline" || AS.st === "saving") && AS.need && (Cloud.syncedSeq || 0) >= AS.need && !Cloud.running) { AS.st = "saved"; AS.at = new Date().toISOString(); }
+  if (Cloud.status === "offline" && AS.st === "retrying") AS.st = "offline";
+  const mine = s && AS.sid === s.id;
+  const txt = !mine ? "" : AS.st === "saving" ? "Saving…" : AS.st === "saved" ? "Saved " + asTime(AS.at) : AS.st === "retrying" ? "Not saved – retrying" : AS.st === "offline" ? "Offline – saved on this phone" : AS.st === "error" ? "Not saved – " + (AS.err || "error") : AS.st === "readonly" ? "Read only – not saved" : "";
+  el.textContent = txt; el.dataset.st = mine ? AS.st : ""; el.hidden = !txt;
+}
+// leaving the patient (Change patient / Sign out): wait for the save; ask only if it can't be saved
+async function leaveSave(what = "leave") {
+  const s = state.session; if (!s) return true;
+  const edited = sessionEdited(s), pendingUp = AS.sid === s.id && /^(retrying|offline|saving|error)$/.test(AS.st);
+  if (!edited && !pendingUp) return true;
+  const verb = what === "signout" ? "Sign out" : "Leave";
+  if (edited && !asOwnVisit(s)) return confirm(`${readOnlyNote(state.visits.find(v => v.id === s.id))} — your changes can't be saved. Discard them and ${verb.toLowerCase()} anyway?`);
+  if (edited && !asEligible(s)) return confirm(`Couldn't save to the clinic database. Discard and ${verb.toLowerCase()} anyway?`);
+  document.body.classList.add("as-busy");
+  let r;
+  try { r = await Promise.race([edited ? autosave("leave", s) : asQueue(() => asUpload(s.id)).then(ok => ({ ok, local: true })), new Promise(res => setTimeout(() => res({ ok: false, local: !edited, timeout: true }), 25000))]); }
+  finally { document.body.classList.remove("as-busy"); }
+  if (r && r.ok) return true;
+  if (r && r.local) return confirm(`Couldn't save to the clinic database right now. The visit is kept on this phone and is uploaded automatically when the connection works. ${verb} anyway?`);
+  return confirm(`Couldn't save to the clinic database. Discard and ${verb.toLowerCase()} anyway?`);
+}
+function asOnHidden() {
+  const s = state.session;
+  if (s && sessionEdited(s)) { saveDraft(); if (asEligible(s)) autosave("hidden", s); }
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") asOnHidden(); });
+window.addEventListener("pagehide", asOnHidden);
 
 /* ---------- patients ---------- */
 let editingPatientId = null;
@@ -8151,10 +8251,11 @@ async function cdbSwitchToIndex(indexMeta, folderId) {
 }
 
 /* ---------- sync ---------- */
-function syncNow() {
+function syncNow(opt = {}) {
   if (!Cloud.account) return Promise.resolve();
   clearTimeout(Cloud.timer);
   if (Cloud.running) { Cloud.again = true; return Cloud.running; }
+  const quick = !!opt.quick && !!Cloud.lastSyncAt && clinicActive();   // v41: auto-save → only the clinic patient database part
   Cloud.running = (async () => {
     if (!navigator.onLine) { setSync("offline"); return; }
     const acc = Cloud.account, seq = Cloud.changeSeq;
@@ -8162,6 +8263,15 @@ function syncNow() {
     try {
       const meta = (await DB.get("meta", "sync")) || { id: "sync" };
       let fileId = meta.fileId || null, remote = null, folderId = meta.folderId || null;
+      if (quick) {
+        await syncClinicDb(acc);
+        if (Cloud.account !== acc) return;
+        Cloud.retryDelay = 0; clearTimeout(Cloud.retryTimer);
+        Cloud.syncedSeq = Math.max(Cloud.syncedSeq || 0, seq);
+        if (Cloud.changeSeq === seq) { Cloud.pending = false; await DB.put("meta", { id: "syncPending", pending: false, at: new Date().toISOString() }); }
+        setSync(Cloud.pending ? "saving" : "synced");
+        return;
+      }
       if (fileId) { try { remote = await driveDownload(fileId); } catch (e) { if (e.status === 404) fileId = null; else throw e; } }
       if (!fileId) { const f = await driveFindDataFile(); if (f) { fileId = f.id; folderId = (f.parents || [])[0] || folderId; remote = await driveDownload(fileId); } }
       if (Cloud.account !== acc) return;                     // signed out / switched meanwhile
@@ -8196,11 +8306,13 @@ function syncNow() {
       Object.assign(meta, { fileId, folderId, lastSyncAt: new Date().toISOString() });
       await DB.put("meta", meta);
       Cloud.folderId = folderId; Cloud.lastSyncAt = meta.lastSyncAt; Cloud.retryDelay = 0; clearTimeout(Cloud.retryTimer);
+      Cloud.syncedSeq = Math.max(Cloud.syncedSeq || 0, seq);   // v41: every change up to `seq` is in Drive
       if (Cloud.changeSeq === seq) { Cloud.pending = false; await DB.put("meta", { id: "syncPending", pending: false, at: meta.lastSyncAt }); }
       setSync(Cloud.pending ? "saving" : "synced");
     } catch (e) { if (Cloud.account === acc) handleSyncError(e); }
   })().finally(() => {
     Cloud.running = null;
+    try { renderAS(); } catch (e) {}   // v41: a background retry may have completed an auto-save
     if (Cloud.again) { Cloud.again = false; scheduleSync(200); }
     else if (Cloud.pending && Cloud.status === "saving") scheduleSync(300);
   });
@@ -8349,7 +8461,7 @@ function clinicMemoryClear() {
 }
 /* ---------- UI ---------- */
 const SYNC_TEXT = { local: "Local only", notconfigured: "Google sign-in not configured yet", connecting: "Connecting…", saving: "Saving…", synced: "Synced", offline: "Offline, will sync", reauth: "Sign in again", error: "Sync error — will retry" };
-function setSync(st, detail = "") { Cloud.status = st; Cloud.detail = detail; renderAuth(); if ($("#accountDialog").open) renderAccountDialog(); }
+function setSync(st, detail = "") { Cloud.status = st; Cloud.detail = detail; renderAuth(); try { renderAS(); } catch (e) {} if ($("#accountDialog").open) renderAccountDialog(); }
 const G_LOGO = `<svg class="g" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.2l7.9 6.2C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.8c4.3-4 6.9-9.9 6.9-17.2z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.2C1 16.6 0 20.2 0 24s1 7.4 2.7 10.8l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.8c-2.1 1.4-4.8 2.3-8.5 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.2C6.6 42.6 14.6 48 24 48z"/></svg>`;
 function avatarHTML(acc, lg) {
   const ini = esc(((acc.name || acc.email || "?").trim()[0] || "?").toUpperCase());
@@ -8596,7 +8708,7 @@ function bindEvents() {
   $("#pickerList").onclick = e => { const li = e.target.closest("li[data-add]"); if (li) { addSymptomManually(li.dataset.add); renderPicker(); } };
 
   document.addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveSession(); } });
-  window.addEventListener("beforeunload", e => { if (state.session.dirty && sessionHasContent(state.session)) { saveDraft(); e.preventDefault(); e.returnValue = ""; } });
+  window.addEventListener("beforeunload", e => { if (sessionEdited(state.session)) { saveDraft(); if (asEligible(state.session)) autosave("hidden"); e.preventDefault(); e.returnValue = ""; } });
 }
 
 
@@ -8615,7 +8727,7 @@ function stMatches(q) {
   return state.patients.filter(p => f(p.name).includes(qq) || (dig.length >= 3 && String(p.contact || "").replace(/\D/g, "").includes(dig)) || (p.dob && (p.dob.includes(q.trim()) || f(fmtDob(p.dob)).includes(qq))))
     .sort((a, b) => String(a.name).localeCompare(String(b.name))).slice(0, 30);
 }
-function stLast(pid) { const vs = state.visits.filter(v => v.patientId === pid).sort((a, b) => (b.startedAt || "").localeCompare(a.startedAt || "")); const p = patientById(pid) || {}; return vs[0] || (p._last ? { startedAt: p._last.at, doctor: p._last.doctor } : null); }
+function stLast(pid, exceptId) { const vs = state.visits.filter(v => v.patientId === pid && v.id !== exceptId).sort((a, b) => (b.startedAt || "").localeCompare(a.startedAt || "")); const p = patientById(pid) || {}; return vs[0] || (p._last && !(exceptId && p._last.at === ((state.visits.find(v => v.id === exceptId) || {}).startedAt || (state.session && state.session.id === exceptId ? state.session.startedAt : ""))) ? { startedAt: p._last.at, doctor: p._last.doctor } : null); }
 function stResultsHTML() {
   const q = ST.q.trim(); if (!q) return `<p class="st-hint">Type a name, phone number or date of birth.</p>`;
   const hits = stMatches(q); if (!hits.length) return `<p class="st-hint">No patient matches “${esc(q)}”.</p>`;
@@ -8672,15 +8784,19 @@ function keptHTML() {
     <p class="st-hint" id="stKeptText">${esc(txt.slice(0, 160))}${txt.length > 160 ? "…" : ""}</p>
     <div class="ph-btns">${p ? `<button type="button" class="small primary" id="stKeptResume">Resume</button>` : ""}<button type="button" class="small" id="stKeptCopy">Copy text</button><button type="button" class="small" id="stKeptDiscard">Discard</button></div></div>`;
 }
-function changePatient() {
-  if (!confirmDiscard()) return false;
+async function changePatient() {
+  if (state.leaving) return false;
+  state.leaving = true;
+  try { if (!(await leaveSave("leave"))) return false; } finally { state.leaving = false; }   // v41: saved first; asks only if it can't be saved
   state.session = newSession(null); clearDraft(); state.selectedPatientId = null; state.consulting = false;
   renderAll(); renderStart(); window.scrollTo(0, 0); return true;
 }
 // v38: one-tap Sign out (start screen + consult view). Unsaved visit → same warning as Change patient; Cancel keeps everything.
 async function quickSignOut() {
   if (!Cloud.account) return false;
-  if (sessionEdited(state.session) && !confirm("The current session has unsaved changes. Discard them and sign out?")) return false;
+  if (state.leaving) return false;
+  state.leaving = true;
+  try { if (!(await leaveSave("signout"))) return false; } finally { state.leaving = false; }   // v41
   if (state.listening) { try { stopListening(); } catch (e) {} }
   state.session = newSession(null); state.interim = ""; state.selectedPatientId = null; state.consulting = false; await clearDraft();
   await signOut(false);
@@ -8690,12 +8806,12 @@ function renderPtHead() {
   const el = $("#ptHead"); if (!el) return;
   const s = state.session, p = s && s.patientId && patientById(s.patientId);
   if (!startEnabled() || !state.consulting || !p || !Cloud.account) { el.hidden = true; return; }
-  const pr = priorVisits(s), l = pr[0] || stLast(p.id), d = l && l.doctor, dx = l ? (dxLinesOf(l.diagnosis || "")[0] || "") : "";
+  const pr = priorVisits(s), l = pr[0] || stLast(p.id, s.id), d = l && l.doctor, dx = l ? (dxLinesOf(l.diagnosis || "")[0] || "") : "";
   const last = l ? `Last visit ${fmtDate(l.startedAt)}${d ? " · " + (d.name || d.email) : ""}${dx ? " · " + dx : ""}` : "First visit";
-  const html = `<div class="ph-main"><b class="ph-name" id="ptHeadName">${esc(p.name)}</b><span class="ph-id">${esc([...ptIdParts(p), p.sex].filter(Boolean).join(" · "))}</span><span class="ph-last" id="ptHeadLast">${esc(last)}</span></div>
+  const html = `<div class="ph-main"><b class="ph-name" id="ptHeadName">${esc(p.name)}</b><span class="ph-id">${esc([...ptIdParts(p), p.sex].filter(Boolean).join(" · "))}</span><span class="ph-last" id="ptHeadLast">${esc(last)}</span><span class="ph-save" id="asStatus" hidden aria-live="polite"></span></div>
     <div class="ph-btns"><button type="button" class="small" id="ptHeadHist">History</button><button type="button" class="small" id="ptHeadChange">Change patient</button><button type="button" class="small" id="ptHeadSignOut" title="${esc(Cloud.account ? "Sign out " + Cloud.account.email : "Sign out")}">Sign out</button></div>`;
   if (el.__html !== html) { el.innerHTML = html; el.__html = html; }
-  el.hidden = false;
+  el.hidden = false; renderAS();
 }
 // v37: opening a patient re-reads that patient's data file (read only) so food-log entries the Apps Script added show up
 async function flFreshen(pid) {
@@ -8773,7 +8889,7 @@ async function init() {
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { APP_VERSION, sessionEdited, dirtyWhy, editSig, setBaseline, keepAside, loadKept, quickSignOut, clinicMemoryClear, startFor, changePatient, renderStart, flFreshen, ST, MA, FL, renderFoodLog, syncFoodLog, renderVitals, ckMarkImported, renderMyAppts, syncMyAppts,  dataPut, doctorTag, canEditVisit, deleteVisit, cdbKeepOthersVisits, CDB3, cdbTrack, cdbEnsureLoaded, cdbGrantPicker, syncClinicDb4, cdbOpenUpgraded, openPatientDialog, selectPatient, sameNamePatients, nameKey, ptIdParts, savePatientFromForm, deleteVisit, clinicDbState, clinicActive, connectClinicDb, disconnectClinicDb, syncClinicDb, cdbContains, CLINIC_PATIENTS_FILE, __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Slips, fdState, buildSlip, sendToFrontdesk, syncSlips, renderSendRow, FRONTDESK_SLIPS_FILE, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { AS, autosave, asEligible, leaveSave, APP_VERSION, sessionEdited, dirtyWhy, editSig, setBaseline, keepAside, loadKept, quickSignOut, clinicMemoryClear, startFor, changePatient, renderStart, flFreshen, ST, MA, FL, renderFoodLog, syncFoodLog, renderVitals, ckMarkImported, renderMyAppts, syncMyAppts,  dataPut, doctorTag, canEditVisit, deleteVisit, cdbKeepOthersVisits, CDB3, cdbTrack, cdbEnsureLoaded, cdbGrantPicker, syncClinicDb4, cdbOpenUpgraded, openPatientDialog, selectPatient, sameNamePatients, nameKey, ptIdParts, savePatientFromForm, deleteVisit, clinicDbState, clinicActive, connectClinicDb, disconnectClinicDb, syncClinicDb, cdbContains, CLINIC_PATIENTS_FILE, __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Slips, fdState, buildSlip, sendToFrontdesk, syncSlips, renderSendRow, FRONTDESK_SLIPS_FILE, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>
