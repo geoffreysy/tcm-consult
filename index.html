@@ -879,7 +879,7 @@ document.addEventListener("DOMContentLoaded",function(){new MutationObserver(chk
 
 <footer>
   <span>Speech is transcribed by the browser's speech service; no audio is saved.</span>
-  <span><span id="storageStatus">Patients and visits are saved only to the clinic patient database, after you sign in.</span> · <a href="privacy.html" target="_blank" rel="noopener" id="privacyLink">Privacy</a></span>
+  <span><span id="storageStatus">Patients and visits are saved only to the clinic patient database, after you sign in.</span> · <a href="privacy.html" target="_blank" rel="noopener" id="privacyLink">Privacy</a> · <span id="appVersion" title="App version">v40</span></span>
 </footer>
 
 <!-- Google account / Drive sync -->
@@ -4711,6 +4711,30 @@ function newSession(patientId) {
 function sessionHasContent(s) {
   return s && (s.entries.length || s.tongue.length || s.pulse.length || s.notes.trim() || stripDateLines(s.diagnosis).trim() || Object.keys(s.overrides).length || s.ai || vitalsEdited(s) || !!s.billing);
 }
+// v40: “unsaved changes” = the visit's doctor-editable content differs from its baseline (empty for a new visit, the saved
+// version for a saved / reopened one). Programmatic prefill (date line, check-in vitals, re-reads) never changes the baseline result.
+const APP_VERSION = "v40";
+const SIG_PARTS = ["transcript", "tongue", "pulse", "notes", "diagnosis", "symptoms", "AI", "vitals", "charges"];
+function sigParts(s) {
+  const v = vitalsEdited(s) ? Checkins.clean(s.vitals) : null, ov = s.overrides || {};
+  return [(s.entries || []).map(e => String(e.text || "").trim()).filter(Boolean), [...(s.tongue || [])].sort(), [...(s.pulse || [])].sort(), String(s.notes || "").trim(),
+    stripDateLines(s.diagnosis || "").trim(), Object.keys(ov).sort().map(k => k + ":" + ov[k]), s.ai ? (s.ai.at || "ai") : null, v, s.billing || null].map(x => JSON.stringify(x));
+}
+const editSig = s => s ? sigParts(s).join("\u0001") : "";
+let EMPTY_SIG_V = null;
+const emptySig = () => EMPTY_SIG_V || (EMPTY_SIG_V = editSig({ entries: [], tongue: [], pulse: [], notes: "", diagnosis: "", overrides: {}, ai: null }));
+function setBaseline(s = state.session) { if (s) s._base = editSig(s); }
+const dirtyDebug = () => { try { return localStorage.getItem("tcm_debug_dirty") === "1"; } catch (e) { return false; } };
+function dirtyWhy(s = state.session) {   // which parts differ from the baseline
+  if (!s) return []; const cur = sigParts(s), base = s._base != null ? s._base.split("\u0001") : emptySig().split("\u0001");
+  return SIG_PARTS.filter((n, i) => cur[i] !== base[i]);
+}
+function sessionEdited(s = state.session) {
+  if (!s || !s.dirty || !sessionHasContent(s)) return false;
+  const why = dirtyWhy(s);
+  if (dirtyDebug()) { (window.__dirtyLog = window.__dirtyLog || []).push({ at: new Date().toISOString(), check: true, why }); console.info("[dirty] check:", why.length ? why.join(", ") : "clean (matches baseline)"); }
+  return why.length > 0;
+}
 // v39: vitals count as the doctor's work only when the doctor typed them (front desk check-in pre-fill alone = clean)
 function vitalsEdited(s) { const v = s && s.vitals; if (!v) return false; const has = typeof Checkins !== "undefined" ? Object.keys(Checkins.clean(v)).length > 0 : true; return has && (!v.recordedBy || !!v.editedBy); }
 function patientById(id) { return state.patients.find(p => p.id === id); }
@@ -4726,6 +4750,7 @@ function ageOf(p) {
 let draftTimer = null;
 function markDirty() {
   state.session.dirty = true;
+  if (dirtyDebug()) { const why = dirtyWhy(); (window.__dirtyLog = window.__dirtyLog || []).push({ at: new Date().toISOString(), why, stack: new Error().stack.split("\n").slice(2, 5).map(x => x.trim()).join(" < ") }); console.info("[dirty] markDirty:", why.join(", ") || "(no content change)", new Error().stack); }
   clearTimeout(draftTimer);
   draftTimer = setTimeout(saveDraft, 1200);
   renderSessionInfo();
@@ -4733,12 +4758,12 @@ function markDirty() {
 async function saveDraft() {
   // v39: only real unsaved work is kept as a draft — a clean / just-saved / auto-started visit removes any old draft instead
   const s = state.session;
-  if (!s || !s.dirty || !sessionHasContent(s)) return clearDraft();
+  if (!sessionEdited(s)) return clearDraft();
   try { await DB.put("meta", { id: "draft", session: s, at: new Date().toISOString() }); } catch (e) { console.warn("Draft save failed", e); }
 }
 // v39: a stored draft is restored only if it was really unsaved (older builds also stored already-saved visits)
 function draftUsable(d) {
-  if (!d || !d.session || !d.session.dirty || !sessionHasContent(d.session)) return false;
+  if (!d || !d.session || !sessionEdited(d.session)) return false;
   const v = state.visits.find(x => x.id === d.session.id);
   return !(v && v.savedAt && d.session.savedAt && v.savedAt >= d.session.savedAt && (d.at || "") <= v.savedAt);
 }
@@ -5515,7 +5540,7 @@ function mergeLegacyEntries(entries) {
   return out;
 }
 function confirmDiscard() {
-  return !(state.session.dirty && sessionHasContent(state.session)) || confirm("The current session has unsaved changes. Discard them?");
+  return !sessionEdited(state.session) || confirm("The current session has unsaved changes. Discard them?");
 }
 function startNewSession(patientId) {
   if (!confirmDiscard()) return false;
@@ -5543,6 +5568,7 @@ function openVisit(vid) {
   state.session.entries = mergeLegacyEntries(state.session.entries);
   state.session.overrides = state.session.overrides || {};
   state.selectedPatientId = v.patientId; state.ptChanging = false;
+  setBaseline(state.session);   // v40: the saved version is the baseline
   clearDraft();
   renderAll();
   toast("Opened visit from " + fmtDateTime(v.startedAt));
@@ -5667,7 +5693,7 @@ async function saveSession() {
     await dataPut("visits", rec);
     const i = state.visits.findIndex(v => v.id === rec.id);
     if (i >= 0) state.visits[i] = rec; else state.visits.push(rec);
-    s.savedAt = rec.savedAt; s.dirty = false;
+    s.savedAt = rec.savedAt; s.dirty = false; setBaseline(s);
     state.selectedPatientId = s.patientId;
     await clearDraft();
     renderSessionInfo(); renderPatients(); renderProfile(); renderHistory();
@@ -7550,7 +7576,7 @@ function renderVitals() {
   const s = state.session; sec.hidden = !s.patientId; if (!s.patientId) return;
   if (!s.vitals && !s.savedAt && !state.visits.some(v => v.id === s.id) && MA.ck) {   // prefill from today's front desk check-in
     const e = Checkins.forPatient(MA.ck, s.patientId);
-    if (e) s.vitals = { ...Checkins.clean(e.vitals), recordedBy: e.recordedBy, recordedAt: e.recordedAt, checkinId: e.id };
+    if (e) { s.vitals = { ...Checkins.clean(e.vitals), recordedBy: e.recordedBy, recordedAt: e.recordedAt, checkinId: e.id }; if (!s.dirty) setBaseline(s); }
   }
   const v = s.vitals || {}, ex = state.visits.find(x => x.id === s.id), ro = !!ex && !canEditVisit(ex);
   const w = Checkins.warnings(v);
@@ -8203,12 +8229,13 @@ async function switchNamespace(ns, carrySession) {
   await loadData();
   let d = null; try { d = await DB.get("meta", "draft"); } catch {}
   if (carrySession && sessionHasContent(carrySession)) state.session = carrySession;
-  else if (draftUsable(d)) {
+  else if (draftUsable(d) && !(startEnabled() && !d.session.patientId)) {
     state.session = { ...newSession(null), dxDated: false, ...d.session, dirty: true };
     state.session.entries = mergeLegacyEntries(state.session.entries);
     state.consulting = !!state.session.patientId;   // v39: a restored draft opens in the consult view (never hidden behind the start screen)
     toast("Restored unsaved session draft from " + fmtDateTime(d.at), 4000);
-  } else { state.session = newSession(null); state.consulting = false; }
+  } else { if (draftUsable(d)) await keepAside(d.session, d.at); else if (d) await clearDraft(); state.session = newSession(null); state.consulting = false; }
+  loadKept();
   const s = await DB.get("meta", "settings"); if (s && s.data) applySettings(s.data);
   state.selectedPatientId = state.session.patientId && patientById(state.session.patientId) ? state.session.patientId : null;
   state.interim = "";
@@ -8317,7 +8344,7 @@ function clinicMemoryClear() {
   DB.rec = null; clinicDbState.conf = null; clinicDbState.error = ""; clinicDbState.autoTried = new Set();
   try { Object.assign(MA, { ckId: "", ck: null, ckNeed: false, cfgId: "", cfgDoc: null, apptId: "", appts: null, day: "", error: "", need: false }); } catch (e) {}
   try { Object.assign(FL, { codesId: "", codes: null, url: "", need: false, msg: "" }); } catch (e) {}
-  try { ST.q = ""; ST.mode = ""; } catch (e) {}
+  try { ST.q = ""; ST.mode = ""; ST.kept = null; } catch (e) {}
   try { const ps = document.querySelector("#patientSearch"); if (ps) ps.value = ""; } catch (e) {}
 }
 /* ---------- UI ---------- */
@@ -8611,7 +8638,7 @@ function renderStart() {
   else html = acctBar + `<div class="st-card"><h2>Start a consultation</h2><p class="st-who">${esc(/^dr\.?\s/i.test(Cloud.account.name || "") ? Cloud.account.name : "Dr. " + (Cloud.account.name || Cloud.account.email))}</p>
       <div class="st-choices"><button type="button" class="primary st-big" id="stNew">➕ New patient</button><button type="button" class="st-big${ST.mode === "find" ? " on" : ""}" id="stFind">🔎 Existing patient</button></div>
       <div class="st-search" id="stSearchBox"${ST.mode === "find" ? "" : " hidden"}><input type="search" id="stSearch" placeholder="Name, phone or date of birth…" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="search" value="${esc(ST.q)}"><div id="stResults">${stResultsHTML()}</div></div></div>
-    <div id="stAppts"></div>`;
+    ${keptHTML()}<div id="stAppts"></div>`;
   const focused = document.activeElement && document.activeElement.id === "stSearch", pos = focused ? document.activeElement.selectionStart : 0;
   if (el.__html !== html) { if (card && card.parentNode !== home && home) home.insertBefore(card, $("#patientSearch")); el.innerHTML = html; el.__html = html; }
   const s2 = $("#stAppts"); if (s2 && card && card.parentNode !== s2) s2.appendChild(card);
@@ -8619,7 +8646,10 @@ function renderStart() {
 }
 function startFor(pid) {
   if (!patientById(pid)) return false;
-  if (!confirmDiscard()) return false;
+  // v40: picking on the start screen never asks about a visit the doctor can't see. Any hidden unsaved work
+  // (e.g. a draft typed without a patient in an older version) is kept aside and offered on the start screen instead.
+  if (startShown()) { if (sessionEdited(state.session)) keepAside(state.session); }
+  else if (!confirmDiscard()) return false;
   state.session = newSession(pid); state.interim = ""; state.ptChanging = false; clearDraft();
   state.selectedPatientId = pid; state.consulting = true; ST.q = ""; ST.mode = "";
   cdbEnsureLoaded(pid);
@@ -8627,6 +8657,20 @@ function startFor(pid) {
   flFreshen(pid);
   window.scrollTo(0, 0);
   return true;
+}
+// v40: unsaved work that can't be shown (no patient, or the patient isn't loaded) — kept on this device, shown on the start screen
+async function keepAside(sess, at) {
+  try { const s2 = JSON.parse(JSON.stringify(sess)); s2.dirty = true; ST.kept = { id: "draftKept", session: s2, at: at || new Date().toISOString() }; await DB.put("meta", ST.kept); await DB.del("meta", "draft"); } catch (e) { console.warn("keep aside", e); }
+  renderStart();
+}
+async function loadKept() { try { const k = await DB.get("meta", "draftKept"); ST.kept = k && k.session ? k : null; } catch (e) { ST.kept = null; } renderStart(); }
+function keptText(s) { return [(s.entries || []).map(e => e.text).join("\n"), s.notes && "Notes: " + s.notes, stripDateLines(s.diagnosis || "").trim() && "Dx: " + stripDateLines(s.diagnosis || "").trim()].filter(x => x && String(x).trim()).join("\n"); }
+function keptHTML() {
+  const k = ST.kept; if (!k || !k.session) return "";
+  const s = k.session, p = s.patientId && patientById(s.patientId), txt = keptText(s);
+  return `<div class="st-card st-kept" id="stKept"><b>Unsaved notes from ${esc(fmtDateTime(k.at || s.startedAt))}${p ? " · " + esc(p.name) : " (no patient)"}</b>
+    <p class="st-hint" id="stKeptText">${esc(txt.slice(0, 160))}${txt.length > 160 ? "…" : ""}</p>
+    <div class="ph-btns">${p ? `<button type="button" class="small primary" id="stKeptResume">Resume</button>` : ""}<button type="button" class="small" id="stKeptCopy">Copy text</button><button type="button" class="small" id="stKeptDiscard">Discard</button></div></div>`;
 }
 function changePatient() {
   if (!confirmDiscard()) return false;
@@ -8636,7 +8680,7 @@ function changePatient() {
 // v38: one-tap Sign out (start screen + consult view). Unsaved visit → same warning as Change patient; Cancel keeps everything.
 async function quickSignOut() {
   if (!Cloud.account) return false;
-  if (state.session.dirty && sessionHasContent(state.session) && !confirm("The current session has unsaved changes. Discard them and sign out?")) return false;
+  if (sessionEdited(state.session) && !confirm("The current session has unsaved changes. Discard them and sign out?")) return false;
   if (state.listening) { try { stopListening(); } catch (e) {} }
   state.session = newSession(null); state.interim = ""; state.selectedPatientId = null; state.consulting = false; await clearDraft();
   await signOut(false);
@@ -8675,6 +8719,9 @@ document.addEventListener("click", e => {
   else if (t.id === "stFind") { ST.mode = ST.mode === "find" ? "" : "find"; renderStart(); if (ST.mode) setTimeout(() => $("#stSearch") && $("#stSearch").focus(), 20); }
   else if (t.dataset.stStart) startFor(t.dataset.stStart);
   else if (t.id === "ptHeadChange") changePatient();
+  else if (t.id === "stKeptDiscard") { if (confirm("Discard these unsaved notes? They can't be recovered.")) { ST.kept = null; DB.del("meta", "draftKept").catch(() => {}); renderStart(); } }
+  else if (t.id === "stKeptCopy") { const k = ST.kept; if (k) copyText(keptText(k.session)).then(() => toast("Copied")).catch(() => toast("Copy failed")); }
+  else if (t.id === "stKeptResume") { const k = ST.kept; if (!k || !patientById(k.session.patientId)) return; state.session = { ...newSession(null), ...k.session, dirty: true }; state.selectedPatientId = k.session.patientId; state.consulting = true; ST.kept = null; DB.del("meta", "draftKept").catch(() => {}); saveDraft(); cdbEnsureLoaded(k.session.patientId); renderAll(); renderHistory(); renderStart(); }
   else if (t.id === "stSignOut" || t.id === "ptHeadSignOut") quickSignOut();
   else if (t.id === "ptHeadHist") { const h = $("#historySection"); if (h && !h.hidden) h.scrollIntoView({ behavior: "smooth", block: "start" }); else toast("No earlier visits for this patient"); }
 });
@@ -8705,16 +8752,19 @@ async function init() {
   try {
     const d = await DB.get("meta", "draft");
     if (d && !draftUsable(d)) clearDraft();
-    if (draftUsable(d)) {
+    else if (d && startEnabled() && !d.session.patientId) await keepAside(d.session, d.at);   // v40: no patient to show it with → kept aside, never hidden behind the start screen
+    else if (d) {
       state.session = { ...newSession(null), dxDated: false, ...d.session, dirty: true };
       state.session.entries = mergeLegacyEntries(state.session.entries);
       state.selectedPatientId = state.session.patientId || null;
       state.consulting = !!state.session.patientId;
       toast("Restored unsaved session draft from " + fmtDateTime(d.at), 4000);
     }
+    loadKept();
   } catch (e) { console.warn(e); }
   if (!SR) banner("Live speech recognition is not available in this browser — use Chrome or Edge for live transcription. Typing/pasting notes still works.");
   try { const st = await DB.get("meta", "settings"); if (st && st.data) applySettings(st.data); } catch {}
+  { const av = $("#appVersion"); if (av) av.textContent = APP_VERSION; }
   renderAll(); renderStart();
   setListeningUI();
   window.__tcmReady = true;
@@ -8723,7 +8773,7 @@ async function init() {
 
 // Exposed for testing / console use
 window.speechDebug = speech;
-window.TCM = { quickSignOut, clinicMemoryClear, startFor, changePatient, renderStart, flFreshen, ST, MA, FL, renderFoodLog, syncFoodLog, renderVitals, ckMarkImported, renderMyAppts, syncMyAppts,  dataPut, doctorTag, canEditVisit, deleteVisit, cdbKeepOthersVisits, CDB3, cdbTrack, cdbEnsureLoaded, cdbGrantPicker, syncClinicDb4, cdbOpenUpgraded, openPatientDialog, selectPatient, sameNamePatients, nameKey, ptIdParts, savePatientFromForm, deleteVisit, clinicDbState, clinicActive, connectClinicDb, disconnectClinicDb, syncClinicDb, cdbContains, CLINIC_PATIENTS_FILE, __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Slips, fdState, buildSlip, sendToFrontdesk, syncSlips, renderSendRow, FRONTDESK_SLIPS_FILE, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
+window.TCM = { APP_VERSION, sessionEdited, dirtyWhy, editSig, setBaseline, keepAside, loadKept, quickSignOut, clinicMemoryClear, startFor, changePatient, renderStart, flFreshen, ST, MA, FL, renderFoodLog, syncFoodLog, renderVitals, ckMarkImported, renderMyAppts, syncMyAppts,  dataPut, doctorTag, canEditVisit, deleteVisit, cdbKeepOthersVisits, CDB3, cdbTrack, cdbEnsureLoaded, cdbGrantPicker, syncClinicDb4, cdbOpenUpgraded, openPatientDialog, selectPatient, sameNamePatients, nameKey, ptIdParts, savePatientFromForm, deleteVisit, clinicDbState, clinicActive, connectClinicDb, disconnectClinicDb, syncClinicDb, cdbContains, CLINIC_PATIENTS_FILE, __applySettings: s => applySettings(s), startNewSession, openVisit, currentSettings, HN, HERB_ZH, HERB_ALT: hasAlt() ? HERB_ALT : {}, HERB_POPUP_ONLY: typeof HERB_POPUP_ONLY !== "undefined" ? HERB_POPUP_ONLY : new Set(), herbAltList, herbAltForms, herbTip, herbMatches, Slips, fdState, buildSlip, sendToFrontdesk, syncSlips, renderSendRow, FRONTDESK_SLIPS_FILE, Pricing, rxChargeInput, billingState, estimateFor, renderEstimate, openRates, saveRates, loadBilling, saveBillingLocal, saveClinicLocal, clinicFetch, connectClinicById, parseDriveFileId, parseEmails, syncClinicPrices, loadPicker, connectClinicPicker, pickerAvailable, PICKER_APP_ID, notesDetections, detectTP, sessionTP, effTongue, effPulse, reconcileNotesDismiss, onNotesChanged, flushNotes, renderNotesDetect, buildVisitRecord, removeSymptom, toggleTP, openFormulas, renderFormulaList, formulasFiltered, formulaMatches, formulaHerbHits, FORMULA_CATEGORIES: FX_CATS(),  HERB_ZH_UNSURE, FORMULA_ZH_S, herbZh, herbLabel, formulaZh, rxItems, rxIdSet, convertRxLine, convertRxText, setHerbNames, ensureDxDate, dxDateText, dxCopyText, copyDiagnosis, stripDateLines, sessionHasContent, HERB_DOSE, HERB_DOSE_SRC, herbDoseInfo, herbFxRange, herbsFiltered, openHerbs, renderHerbList, herbJump, herbInRx, addHerb, linkPatient, searchPatients, priorVisits, progressCompare, patternTrend, visitPct, carryForwardRx, buildHistorySummary, buildCopyPrompt, copyText, copyForAI, openCopyAI, relAgo, renderHistory, Cloud, GAUTH, mergeDocs, syncNow, signIn, signOut, FORMULAS, HERBS, HERB_FLAGS, HERB_CATEGORIES, RX_DISCLAIMER, rxText, useFormula, formulaHTML, AI, AI_SYSTEM_PROMPT, AI_REQUEST_LINE, openPatternsRef, buildAICaseSummary, renderMarkdownSafe, deidentify, askAI, detectText, refreshAnalysis, mergeTokens, computeSymptoms, scorePatterns, analyzeSession, state, DB, addEntry, saveSession, loadData, renderAll, SYMPTOMS, PATTERNS, Matcher };
 init();
 </script>
 </body>
